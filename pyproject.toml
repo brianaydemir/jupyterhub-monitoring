@@ -1,0 +1,79 @@
+# Project requirements (PEP 518, https://python-poetry.org/).
+
+
+[build-system]
+build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.0.0"]
+
+
+[tool.black]
+line-length = 96
+target-version = ["py310", "py311", "py312", "py313", "py314"]
+
+
+[tool.isort]
+line_length = 96
+profile = "black"
+
+
+[tool.mypy]
+namespace_packages = true
+explicit_package_bases = true
+follow_untyped_imports = true
+
+check_untyped_defs = true
+strict_optional = true
+no_implicit_optional = true
+
+warn_no_return = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+warn_unused_ignores = true
+
+color_output = false
+pretty = true
+show_error_codes = true
+
+incremental = true
+sqlite_cache = true
+
+
+[tool.poetry]
+name = "jupyterhub_monitoring"
+version = "0.0.1"
+description = "Monitor and report on a JupyterHub's users' activity"
+license = "Apache-2.0"
+authors = [
+    "Brian Aydemir <baydemir@morgridge.org>",
+]
+repository = "https://github.com/brianaydemir/jupyterhub-monitoring"
+packages = [
+    { "include" = "app" },
+]
+package-mode = false
+
+
+[tool.poetry.dependencies]
+python = "^3.14"
+elasticsearch = "~9.2"
+requests = "~2.32"
+
+
+[tool.poetry.group.dev.dependencies]
+bandit      = "~1.9"
+black       = "~25.12"
+isort       = "~7.0"
+mypy        = "~1.19"
+pre-commit  = "~4.5"
+pylint      = "~4.0"
+typos       = "~1.42"
+
+
+[tool.poetry.requires-plugins]
+poetry-plugin-export = ">=1.0.0"
+
+
+[tool.pylint.messages-control]
+max-line-length = 96
+disable = "invalid-name,missing-class-docstring,missing-function-docstring"
