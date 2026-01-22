@@ -46,12 +46,12 @@ def create_message(
 
     # Read and attach plain text content
     if text_file:
-        text_content = text_file.read_text()
+        text_content = text_file.read_text(encoding="utf-8")
         msg.attach(MIMEText(text_content, "plain"))
 
     # Read and attach HTML content
     if html_file:
-        html_content = html_file.read_text()
+        html_content = html_file.read_text(encoding="utf-8")
         msg.attach(MIMEText(html_content, "html"))
 
     return msg
