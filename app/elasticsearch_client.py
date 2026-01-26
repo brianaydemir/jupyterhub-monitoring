@@ -2,7 +2,7 @@
 Elasticsearch client wrapper for querying and uploading documents.
 """
 
-from typing import Any, Dict, Iterator, Optional, cast
+from typing import Any, Dict, Iterator, List, Optional, cast
 
 from elasticsearch import Elasticsearch
 
@@ -84,7 +84,7 @@ class ElasticsearchClient:
         self,
         index: str,
         documents: Iterator[Dict[str, Any]],
-    ) -> list[Dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:
         """
         Upload multiple documents to an Elasticsearch index from an iterator.
 
