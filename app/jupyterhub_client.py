@@ -60,13 +60,8 @@ class JupyterHubClient:
                 raise ValueError(
                     f"Access forbidden - API key may not have sufficient permissions"
                 )
-            elif response.status_code >= 400:
-                raise ConnectionError(
-                    f"Failed to connect to JupyterHub at {endpoint}: "
-                    f"HTTP {response.status_code}"
-                )
 
-            # Verify we got a valid response
+            # Verify we got a valid response (handles any other error status codes)
             response.raise_for_status()
 
         except requests.exceptions.SSLError as e:
@@ -136,5 +131,8 @@ class JupyterHubClient:
             # Parse and return the JSON response
             return response.json()
 
+        except ValueError:
+            # Re-raise ValueError for authentication/authorization errors
+            raise
         except requests.exceptions.RequestException as e:
-            raise Exception(f"Failed to list users: {str(e)}") from e
+            raise ConnectionError(f"Failed to list users: {str(e)}") from e
