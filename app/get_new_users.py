@@ -19,7 +19,8 @@ def filter_new_users(
 
     Args:
         users: List of user dictionaries from JupyterHub API
-        duration_seconds: Duration in seconds to look back from now
+        duration_seconds: Duration to look back from now (int/float as seconds,
+                          or timedelta object)
 
     Returns:
         List of usernames that were created within the specified duration
