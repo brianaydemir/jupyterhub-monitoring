@@ -55,12 +55,14 @@ package-mode = false
 
 
 [tool.poetry.scripts]
+get-new-users = "app.get_new_users:main"
 send-email = "app.send_email:main"
 
 
 [tool.poetry.dependencies]
 python = "^3.14"
 elasticsearch = "~9.2"
+pytimeparse2 = "~1.7"
 requests = "~2.32"
 
 
