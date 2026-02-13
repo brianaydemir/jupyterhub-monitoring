@@ -1,6 +1,7 @@
 """Command-line tool for listing new JupyterHub users."""
 
 import argparse
+import html
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -78,13 +79,8 @@ def format_output_html(usernames: List[str]) -> str:
 
     html_lines = ["<ul>"]
     for username in usernames:
-        # Escape HTML special characters
-        escaped_username = (
-            username.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-        )
+        # Escape HTML special characters using standard library
+        escaped_username = html.escape(username)
         html_lines.append(f"  <li>{escaped_username}</li>")
     html_lines.append("</ul>")
 
