@@ -136,3 +136,74 @@ class JupyterHubClient:
             raise
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"Failed to list users: {str(e)}") from e
+
+    def list_active_servers(self) -> List[Dict[str, Any]]:
+        """
+        Get a list of currently active servers from JupyterHub.
+
+        This method retrieves all users and extracts their active servers,
+        flattening nested dictionaries by concatenating keys with ".".
+        Includes both ready and pending servers.
+
+        Returns:
+            A list of dictionaries containing active server information.
+            Each dictionary has flattened keys (e.g., "user.name", "server.state").
+
+        Raises:
+            Exception: If the API request fails
+
+        Example:
+            active_servers = client.list_active_servers()
+            for server in active_servers:
+                print(f"User: {server['user.name']}, State: {server.get('server.state')}")
+        """
+        users = self.list_users()
+        active_servers = []
+
+        for user in users:
+            # Check if user has any servers
+            servers = user.get("servers", {})
+            if not servers:
+                continue
+
+            # Process each server for this user
+            for server_name, server_info in servers.items():
+                # Include servers that are ready or pending
+                if server_info and (server_info.get("ready") or server_info.get("pending")):
+                    server_data = self._flatten_dict(
+                        {
+                            "user": {
+                                "name": user.get("name"),
+                            },
+                            "server": {
+                                "name": server_name,
+                                **server_info,
+                            },
+                        }
+                    )
+                    active_servers.append(server_data)
+
+        return active_servers
+
+    def _flatten_dict(
+        self, d: Dict[str, Any], parent_key: str = "", sep: str = "."
+    ) -> Dict[str, Any]:
+        """
+        Flatten a nested dictionary by concatenating keys with a separator.
+
+        Args:
+            d: Dictionary to flatten
+            parent_key: Parent key for recursion
+            sep: Separator to use between keys (default: ".")
+
+        Returns:
+            Flattened dictionary with concatenated keys
+        """
+        items: List[tuple] = []
+        for k, v in d.items():
+            new_key = f"{parent_key}{sep}{k}" if parent_key else k
+            if isinstance(v, dict):
+                items.extend(self._flatten_dict(v, new_key, sep=sep).items())
+            else:
+                items.append((new_key, v))
+        return dict(items)
