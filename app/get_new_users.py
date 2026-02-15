@@ -63,6 +63,9 @@ def format_output_text(usernames: List[str]) -> str:
     Returns:
         Plain text formatted string
     """
+    if not usernames:
+        return "No new users found."
+
     return "\n".join(usernames)
 
 
