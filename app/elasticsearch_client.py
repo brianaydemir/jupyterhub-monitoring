@@ -4,7 +4,9 @@ Elasticsearch client wrapper for querying and uploading documents.
 
 from typing import Any, Dict, Iterator, List, Optional, cast
 
+import requests
 from elasticsearch import Elasticsearch
+from requests.auth import HTTPBasicAuth
 
 
 class ElasticsearchClient:
@@ -221,3 +223,104 @@ class ElasticsearchClient:
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Support for context manager protocol."""
         self.close()
+
+    @classmethod
+    def create_api_key_with_basic_auth(
+        cls,
+        endpoint: str,
+        username: str,
+        password: str,
+        ca_cert: Optional[str] = None,
+        key_name: Optional[str] = None,
+        expiration: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create an Elasticsearch API key using basic authentication.
+
+        This method uses the user's credentials to create an API key with the same
+        permissions as the user (based on their assigned roles).
+
+        Args:
+            endpoint: The Elasticsearch API endpoint URL (e.g., "https://localhost:9200")
+            username: The username for basic authentication
+            password: The password for basic authentication
+            ca_cert: Optional path to the CA certificate file for TLS verification
+            key_name: Optional name for the API key (defaults to "api-key-{username}")
+            expiration: Optional expiration time (e.g., "1d", "7d", "30d").
+                       If not provided, the key never expires.
+
+        Returns:
+            A dictionary containing the API key information with these keys:
+            - id: The API key ID
+            - name: The name of the API key
+            - api_key: The API key secret (base64 encoded)
+            - encoded: The complete encoded API key (id:api_key)
+            - expiration: The expiration timestamp (if set)
+
+        Raises:
+            requests.exceptions.HTTPError: If the API request fails
+            requests.exceptions.ConnectionError: If unable to connect to Elasticsearch
+            ValueError: If authentication fails or the response is invalid
+
+        Example:
+            result = ElasticsearchClient.create_api_key_with_basic_auth(
+                endpoint="https://localhost:9200",
+                username="myuser",
+                password="mypassword",
+                key_name="my-api-key",
+                expiration="7d"
+            )
+            print(result["encoded"])  # Use this for authentication
+        """
+        # Build the API key request body
+        # Note: By not specifying role_descriptors, the API key will
+        # automatically inherit all the user's permissions
+        api_key_body: Dict[str, Any] = {
+            "metadata": {
+                "created_by": username,
+            },
+        }
+
+        # Set the API key name
+        if key_name:
+            api_key_body["name"] = key_name
+        else:
+            api_key_body["name"] = f"api-key-{username}"
+
+        # Set the expiration if provided
+        if expiration:
+            api_key_body["expiration"] = expiration
+
+        # Build the URL for the API key creation endpoint
+        url = f"{endpoint.rstrip('/')}/_security/api_key"
+
+        # Set up TLS verification
+        verify: bool | str = True
+        if ca_cert:
+            verify = ca_cert
+
+        # Make the request to create the API key
+        try:
+            response = requests.post(
+                url,
+                json=api_key_body,
+                auth=HTTPBasicAuth(username, password),
+                verify=verify,
+                headers={"Content-Type": "application/json"},
+                timeout=30,
+            )
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            raise ValueError(f"Failed to create API key: {str(e)}") from e
+
+        # Parse the response
+        try:
+            result = response.json()
+        except ValueError as e:
+            raise ValueError(f"Invalid JSON response from Elasticsearch: {str(e)}") from e
+
+        # Validate that we got the expected fields
+        if "id" not in result or "api_key" not in result:
+            raise ValueError("Unexpected response from Elasticsearch: missing required fields")
+
+        return cast(Dict[str, Any], result)
