@@ -14,7 +14,7 @@ from app.jupyterhub_client import JupyterHubClient
 
 def filter_new_users(
     users: List[dict], duration_seconds: Union[int, float, timedelta]
-) -> List[str]:
+) -> List[dict]:
     """Filter users created within the specified duration.
 
     Args:
@@ -23,7 +23,8 @@ def filter_new_users(
                           or timedelta object)
 
     Returns:
-        List of usernames that were created within the specified duration
+        List of user dictionaries (with 'name' and 'created' keys) that were
+        created within the specified duration
     """
     now = datetime.now(timezone.utc)
 
@@ -46,7 +47,10 @@ def filter_new_users(
         try:
             created_dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
             if created_dt >= cutoff_time:
-                new_users.append(user.get("name", ""))
+                new_users.append({
+                    "name": user.get("name", ""),
+                    "created": created_str
+                })
         except (ValueError, AttributeError):
             # Skip users with invalid timestamps
             continue
@@ -54,39 +58,50 @@ def filter_new_users(
     return new_users
 
 
-def format_output_text(usernames: List[str]) -> str:
-    """Format usernames as plain text output.
+def format_output_text(users: List[dict], duration_str: str) -> str:
+    """Format users as plain text output.
 
     Args:
-        usernames: List of usernames
+        users: List of user dictionaries with 'name' and 'created' keys
+        duration_str: Human-readable duration string (e.g., "7 days", "12h")
 
     Returns:
-        Plain text formatted string
+        Plain text formatted string with heading and creation dates
     """
-    if not usernames:
-        return "No new users found."
+    lines = [f"New users created in the last {duration_str}:", ""]
+    
+    if not users:
+        lines.append("No new users found.")
+    else:
+        for user in users:
+            name = user.get("name", "")
+            created = user.get("created", "")
+            lines.append(f"{name} (created: {created})")
+    
+    return "\n".join(lines)
 
-    return "\n".join(usernames)
 
-
-def format_output_html(usernames: List[str]) -> str:
-    """Format usernames as HTML output suitable for email body.
+def format_output_html(users: List[dict], duration_str: str) -> str:
+    """Format users as HTML output suitable for email body.
 
     Args:
-        usernames: List of usernames
+        users: List of user dictionaries with 'name' and 'created' keys
+        duration_str: Human-readable duration string (e.g., "7 days", "12h")
 
     Returns:
-        HTML formatted string (body content only)
+        HTML formatted string (body content only) with heading and creation dates
     """
-    if not usernames:
-        return "<p>No new users found.</p>"
-
-    html_lines = ["<ul>"]
-    for username in usernames:
-        # Escape HTML special characters using standard library
-        escaped_username = html.escape(username)
-        html_lines.append(f"  <li>{escaped_username}</li>")
-    html_lines.append("</ul>")
+    html_lines = [f"<p>New users created in the last {html.escape(duration_str)}:</p>"]
+    
+    if not users:
+        html_lines.append("<p>No new users found.</p>")
+    else:
+        html_lines.append("<ul>")
+        for user in users:
+            name = html.escape(user.get("name", ""))
+            created = html.escape(user.get("created", ""))
+            html_lines.append(f"  <li>{name} (created: {created})</li>")
+        html_lines.append("</ul>")
 
     return "\n".join(html_lines)
 
@@ -190,21 +205,21 @@ def main() -> int:
             return 1
 
         # Filter for new users within the specified duration
-        new_usernames = filter_new_users(users, duration_seconds)
+        new_users = filter_new_users(users, duration_seconds)
 
         # Output to stdout by default
         if not args.text_file and not args.html_file:
-            print(format_output_text(new_usernames))
+            print(format_output_text(new_users, args.duration))
 
         # Output to text file if specified
         if args.text_file:
-            text_content = format_output_text(new_usernames)
+            text_content = format_output_text(new_users, args.duration)
             args.text_file.write_text(text_content + "\n", encoding="utf-8")
             print(f"Plain text output written to: {args.text_file}", file=sys.stderr)
 
         # Output to HTML file if specified
         if args.html_file:
-            html_content = format_output_html(new_usernames)
+            html_content = format_output_html(new_users, args.duration)
             args.html_file.write_text(html_content + "\n", encoding="utf-8")
             print(f"HTML output written to: {args.html_file}", file=sys.stderr)
 
