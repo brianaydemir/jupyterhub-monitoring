@@ -55,6 +55,7 @@ package-mode = true
 
 
 [tool.poetry.scripts]
+get-es-api-key = "app.get_es_api_key:main"
 get-new-users = "app.get_new_users:main"
 push-active-servers = "app.push_active_servers:main"
 send-email = "app.send_email:main"
