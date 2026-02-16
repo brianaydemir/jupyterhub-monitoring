@@ -234,7 +234,7 @@ def main() -> int:
             elasticsearch_index=args.elasticsearch_index if not args.debug else "",
             limit=args.limit,
             debug=args.debug,
-            metadata=metadata or None,
+            metadata=metadata,
         )
 
         # Clean up
