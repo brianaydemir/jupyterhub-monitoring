@@ -121,15 +121,18 @@ charset-normalizer==3.4.4 ; python_version >= "3.14" and python_version < "4.0" 
 elastic-transport==9.2.1 ; python_version >= "3.14" and python_version < "4.0" \
     --hash=sha256:39e1a25e486af34ce7aa1bc9005d1c736f1b6fb04c9b64ea0604ded5a61fc1d4 \
     --hash=sha256:97d9abd638ba8aa90faa4ca1bf1a18bde0fe2088fbc8757f2eb7b299f205773d
-elasticsearch==9.2.1 ; python_version >= "3.14" and python_version < "4.0" \
-    --hash=sha256:8665f5a0b4d29a7c2772851c05ea8a09279abb7928b7d727524613bd61d75958 \
-    --hash=sha256:97f473418e8976611349757287ac982acf12f4e305182863d985d5a031c36830
+elasticsearch==9.3.0 ; python_version >= "3.14" and python_version < "4.0" \
+    --hash=sha256:67bd2bb4f0800f58c2847d29cd57d6e7bf5bc273483b4f17421f93e75ba09f39 \
+    --hash=sha256:f76e149c0a22d5ccbba58bdc30c9f51cf894231b359ef4fd7e839b558b59f856
 idna==3.11 ; python_version >= "3.14" and python_version < "4.0" \
     --hash=sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea \
     --hash=sha256:795dafcc9c04ed0c1fb032c2aa73654d8e8c5023a7df64a53f39190ada629902
 python-dateutil==2.9.0.post0 ; python_version >= "3.14" and python_version < "4.0" \
     --hash=sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
+pytimeparse2==1.7.1 ; python_version >= "3.14" and python_version < "4.0" \
+    --hash=sha256:98668cdcba4890e1789e432e8ea0059ccf72402f13f5d52be15bdfaeb3a8b253 \
+    --hash=sha256:a162ea6a7707fd0bb82dd99556efb783935f51885c8bdced0fce3fffe85ab002
 requests==2.32.5 ; python_version >= "3.14" and python_version < "4.0" \
     --hash=sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6 \
     --hash=sha256:dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf

@@ -51,7 +51,7 @@ repository = "https://github.com/brianaydemir/jupyterhub-monitoring"
 packages = [
     { "include" = "app" },
 ]
-package-mode = false
+package-mode = true
 
 
 [tool.poetry.scripts]
@@ -62,19 +62,19 @@ send-email = "app.send_email:main"
 
 [tool.poetry.dependencies]
 python = "^3.14"
-elasticsearch = "~9.2"
+elasticsearch = "~9.3"
 pytimeparse2 = "~1.7"
 requests = "~2.32"
 
 
 [tool.poetry.group.dev.dependencies]
 bandit      = "~1.9"
-black       = "~25.12"
+black       = "~26.1"
 isort       = "~7.0"
 mypy        = "~1.19"
 pre-commit  = "~4.5"
 pylint      = "~4.0"
-typos       = "~1.42"
+typos       = "~1.43"
 
 
 [tool.poetry.requires-plugins]
