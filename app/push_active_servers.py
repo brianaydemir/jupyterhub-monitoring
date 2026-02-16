@@ -91,12 +91,12 @@ def push_active_servers(
     return (successful, errors)
 
 
-def parse_arguments() -> argparse.Namespace:
+def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
     """
     Parse command-line arguments.
 
     Returns:
-        Parsed command-line arguments
+        A tuple of (parsed arguments, metadata dictionary)
     """
     parser = argparse.ArgumentParser(
         description="Push JupyterHub active servers to Elasticsearch",
@@ -183,7 +183,6 @@ def parse_arguments() -> argparse.Namespace:
             if not key:
                 parser.error(f"Invalid metadata format '{item}': key cannot be empty")
             metadata_dict[key] = value
-    args.metadata_dict = metadata_dict
 
     # Validate CA cert files exist if provided
     if args.jupyterhub_ca_cert and not args.jupyterhub_ca_cert.exists():
@@ -193,7 +192,7 @@ def parse_arguments() -> argparse.Namespace:
             f"Elasticsearch CA certificate file not found: {args.elasticsearch_ca_cert}"
         )
 
-    return args
+    return args, metadata_dict
 
 
 def main() -> int:
@@ -204,7 +203,7 @@ def main() -> int:
         Exit code (0 for success, non-zero for error)
     """
     try:
-        args = parse_arguments()
+        args, metadata = parse_arguments()
 
         # Initialize JupyterHub client
         print("Connecting to JupyterHub...")
@@ -235,7 +234,7 @@ def main() -> int:
             elasticsearch_index=args.elasticsearch_index if not args.debug else "",
             limit=args.limit,
             debug=args.debug,
-            metadata=args.metadata_dict if args.metadata_dict else None,
+            metadata=metadata or None,
         )
 
         # Clean up
