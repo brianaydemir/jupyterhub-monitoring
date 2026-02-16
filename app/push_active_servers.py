@@ -16,6 +16,7 @@ def push_active_servers(
     elasticsearch_index: str,
     limit: Optional[int] = None,
     debug: bool = False,
+    metadata: Optional[dict[str, str]] = None,
 ) -> tuple[int, int]:
     """
     Fetch active servers from JupyterHub and push them to Elasticsearch.
@@ -26,6 +27,7 @@ def push_active_servers(
         elasticsearch_index: The Elasticsearch index name
         limit: Maximum number of servers to process (None for unlimited)
         debug: If True, print documents without pushing to Elasticsearch
+        metadata: Optional metadata key-value pairs to add to documents
 
     Returns:
         A tuple of (successful_count, error_count)
@@ -53,6 +55,11 @@ def push_active_servers(
 
     for i, server in enumerate(active_servers, 1):
         try:
+            # Add metadata fields to the document
+            if metadata:
+                for key, value in metadata.items():
+                    server[f"meta.{key}"] = value
+
             if debug:
                 # In debug mode, just print the document
                 print(f"\n--- Document {i}/{total_servers} ---")
@@ -84,12 +91,12 @@ def push_active_servers(
     return (successful, errors)
 
 
-def parse_arguments() -> argparse.Namespace:
+def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
     """
     Parse command-line arguments.
 
     Returns:
-        Parsed command-line arguments
+        A tuple of (parsed arguments, metadata dictionary)
     """
     parser = argparse.ArgumentParser(
         description="Push JupyterHub active servers to Elasticsearch",
@@ -144,6 +151,12 @@ def parse_arguments() -> argparse.Namespace:
         metavar="N",
         help="Process only N servers (for testing or limiting scope)",
     )
+    parser.add_argument(
+        "--metadata",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Additional metadata to add to documents (can be specified multiple times)",
+    )
 
     args = parser.parse_args()
 
@@ -160,6 +173,17 @@ def parse_arguments() -> argparse.Namespace:
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be a positive integer")
 
+    # Parse and validate metadata key-value pairs
+    metadata_dict = {}
+    if args.metadata:
+        for item in args.metadata:
+            if "=" not in item:
+                parser.error(f"Invalid metadata format '{item}': must be KEY=VALUE")
+            key, value = item.split("=", 1)
+            if not key:
+                parser.error(f"Invalid metadata format '{item}': key cannot be empty")
+            metadata_dict[key] = value
+
     # Validate CA cert files exist if provided
     if args.jupyterhub_ca_cert and not args.jupyterhub_ca_cert.exists():
         parser.error(f"JupyterHub CA certificate file not found: {args.jupyterhub_ca_cert}")
@@ -168,7 +192,7 @@ def parse_arguments() -> argparse.Namespace:
             f"Elasticsearch CA certificate file not found: {args.elasticsearch_ca_cert}"
         )
 
-    return args
+    return args, metadata_dict
 
 
 def main() -> int:
@@ -179,7 +203,7 @@ def main() -> int:
         Exit code (0 for success, non-zero for error)
     """
     try:
-        args = parse_arguments()
+        args, metadata = parse_arguments()
 
         # Initialize JupyterHub client
         print("Connecting to JupyterHub...")
@@ -210,6 +234,7 @@ def main() -> int:
             elasticsearch_index=args.elasticsearch_index if not args.debug else "",
             limit=args.limit,
             debug=args.debug,
+            metadata=metadata,
         )
 
         # Clean up
