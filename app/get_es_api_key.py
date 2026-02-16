@@ -19,8 +19,11 @@ def format_output_key_only(result: Dict[str, Any]) -> str:
     Returns:
         The encoded API key string (id:api_key format)
     """
+    # Get the encoded value, ensuring it's a string
     encoded = result.get("encoded", "")
-    return str(encoded) if encoded else ""
+    if not isinstance(encoded, str):
+        return ""
+    return encoded
 
 
 def format_output_json(result: Dict[str, Any]) -> str:

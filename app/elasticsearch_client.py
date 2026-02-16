@@ -295,7 +295,7 @@ class ElasticsearchClient:
         url = f"{endpoint.rstrip('/')}/_security/api_key"
 
         # Set up TLS verification
-        verify: Any = True
+        verify: bool | str = True
         if ca_cert:
             verify = ca_cert
 
