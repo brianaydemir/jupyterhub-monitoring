@@ -49,15 +49,6 @@ class ElasticsearchClient:
         # Initialize the Elasticsearch client
         self._client = Elasticsearch(**connection_params)
 
-        # Validate the connection
-        try:
-            if not self._client.ping():
-                raise ConnectionError(f"Unable to connect to Elasticsearch at {endpoint}")
-        except Exception as e:
-            raise ConnectionError(
-                f"Failed to connect to Elasticsearch at {endpoint}: {str(e)}"
-            ) from e
-
     def upload_document(
         self,
         index: str,
