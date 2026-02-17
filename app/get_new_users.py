@@ -47,10 +47,7 @@ def filter_new_users(
         try:
             created_dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
             if created_dt >= cutoff_time:
-                new_users.append({
-                    "name": user.get("name", ""),
-                    "created": created_str
-                })
+                new_users.append({"name": user.get("name", ""), "created": created_str})
         except (ValueError, AttributeError):
             # Skip users with invalid timestamps
             continue
@@ -69,7 +66,7 @@ def format_output_text(users: List[dict], duration_str: str) -> str:
         Plain text formatted string with heading and creation dates
     """
     lines = [f"New users created in the last {duration_str}:", ""]
-    
+
     if not users:
         lines.append("No new users found.")
     else:
@@ -77,7 +74,7 @@ def format_output_text(users: List[dict], duration_str: str) -> str:
             name = user.get("name", "")
             created = user.get("created", "")
             lines.append(f"{name} (created: {created})")
-    
+
     return "\n".join(lines)
 
 
@@ -92,7 +89,7 @@ def format_output_html(users: List[dict], duration_str: str) -> str:
         HTML formatted string (body content only) with heading and creation dates
     """
     html_lines = [f"<p>New users created in the last {html.escape(duration_str)}:</p>"]
-    
+
     if not users:
         html_lines.append("<p>No new users found.</p>")
     else:

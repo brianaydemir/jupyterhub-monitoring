@@ -56,10 +56,8 @@ class JupyterHubClient:
             # Check if the request was successful
             if response.status_code == 401:
                 raise ValueError(f"Authentication failed for endpoint {endpoint}")
-            elif response.status_code == 403:
-                raise ValueError(
-                    f"Access forbidden - API key may not have sufficient permissions"
-                )
+            if response.status_code == 403:
+                raise ValueError("Access forbidden - API key may not have sufficient permissions")
 
             # Verify we got a valid response (handles any other error status codes)
             response.raise_for_status()
@@ -122,7 +120,7 @@ class JupyterHubClient:
             # Check for authentication/authorization errors
             if response.status_code == 401:
                 raise ValueError("Authentication failed - invalid API key")
-            elif response.status_code == 403:
+            if response.status_code == 403:
                 raise ValueError("Access forbidden - insufficient permissions")
 
             # Raise exception for other error status codes
