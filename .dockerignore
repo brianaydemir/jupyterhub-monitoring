@@ -1,2 +1,0 @@
-# The container image does not need the repository's history and metadata.
-/.git

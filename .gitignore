@@ -1,15 +1,10 @@
-# Temporary files created by vim.
-*.swp
-
-# Configuration file for pyenv.
-/.python-version
-
-# Build artifacts created by poetry.
+# Build artifacts.
 /dist/
 
-# Python cache files
-*.py[cod]
-*$py.class
-__pycache__/
-.mypy_cache/
-.pytest_cache/
+# Python tooling.
+/.mypy_cache/
+/.poetry/
+/.python-version
+
+# Temporary files.
+.*.swp

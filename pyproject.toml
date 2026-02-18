@@ -76,6 +76,7 @@ isort       = "~7.0"
 mypy        = "~1.19"
 pre-commit  = "~4.5"
 pylint      = "~4.0"
+toml-cli    = "~0.8"
 typos       = "~1.43"
 
 

@@ -1,5 +1,7 @@
-FROM python:3.14-slim
+FROM python:3.14-slim AS main
+ARG VERSION
 
-WORKDIR /usr/src/app
-COPY . .
-RUN python3 -m pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=bind,source=dist,target=/dist <<ENDRUN
+  set -eux
+  python3 -m pip install /dist/jupyterhub_monitoring-${VERSION}-*.whl
+ENDRUN
