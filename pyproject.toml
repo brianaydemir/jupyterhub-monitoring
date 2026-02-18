@@ -41,7 +41,7 @@ sqlite_cache = true
 
 [tool.poetry]
 name = "jupyterhub_monitoring"
-version = "0.0.1"
+version = "1.0.0"
 description = "Monitor and report on a JupyterHub's users' activity"
 license = "Apache-2.0"
 authors = [
