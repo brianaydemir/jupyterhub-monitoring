@@ -30,10 +30,6 @@ class ElasticsearchClient:
             endpoint: The Elasticsearch API endpoint URL (e.g., "https://localhost:9200")
             api_key: The API key for authentication
             ca_cert: Optional path to the CA certificate file for TLS verification
-
-        Raises:
-            ConnectionError: If unable to connect to the Elasticsearch endpoint
-            ValueError: If authentication fails or endpoint is invalid
         """
         # Build connection parameters
         connection_params: Dict[str, Any] = {
