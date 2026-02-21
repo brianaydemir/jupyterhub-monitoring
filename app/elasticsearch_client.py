@@ -24,7 +24,7 @@ class ElasticsearchClient:
         ca_cert: str | None = None,
     ) -> None:
         """
-        Initialize the Elasticsearch client and validate the connection.
+        Initialize the Elasticsearch client.
 
         Args:
             endpoint: The Elasticsearch API endpoint URL (e.g., "https://localhost:9200")
