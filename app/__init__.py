@@ -1,5 +1,5 @@
 """
-JupyterHub monitoring application.
+Monitoring and reporting scripts for JupyterHub.
 """
 
 from app.elasticsearch_client import ElasticsearchClient

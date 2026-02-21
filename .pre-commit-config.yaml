@@ -1,9 +1,11 @@
-# Pre-commit (https://pre-commit.com/).
+# Pre-commit (https://pre-commit.com)
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      - id: check-added-large-files
+        args: [--maxkb=128]
       - id: check-builtin-literals
       - id: check-case-conflict
       - id: check-executables-have-shebangs
@@ -25,23 +27,30 @@ repos:
       - id: mixed-line-ending
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-  - repo: https://github.com/crate-ci/typos
-    rev: v1.41.0
-    hooks:
-      - id: typos
-        # The default args write back changes.
-        args: [--sort, --force-exclude]
-  - repo: https://github.com/PyCQA/isort
-    rev: 7.0.0
-    hooks:
-      - id: isort
-  - repo: https://github.com/psf/black
-    rev: 25.12.0
-    hooks:
-      - id: black
+  #
+  # Check semantics
+  #
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
     hooks:
       - id: shellcheck
-        # Require only that the most serious problems be addressed.
+        # Require that only the most serious problems be addressed
         args: [--severity=warning]
+  #
+  # Standardize formatting
+  #
+  - repo: https://github.com/PyCQA/isort
+    rev: 8.0.0
+    hooks:
+      - id: isort
+  - repo: https://github.com/psf/black
+    rev: 26.1.0
+    hooks:
+      - id: black
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.43.5
+    hooks:
+      - id: typos
+        # Prevent false positives from mangling files.
+        # The hook's default behavior is to fix alleged typos.
+        args: [--sort, --force-exclude]

@@ -1,10 +1,10 @@
-# Build artifacts.
+# Build artifacts
 /dist/
 
-# Python tooling.
+# Python caches and configuration
 /.mypy_cache/
 /.poetry/
 /.python-version
 
-# Temporary files.
-.*.swp
+# Temporary files
+*.swp

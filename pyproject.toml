@@ -1,4 +1,4 @@
-# Project requirements (PEP 518, https://python-poetry.org/).
+# Project requirements (PEP 518, https://python-poetry.org)
 
 
 [build-system]
@@ -7,12 +7,12 @@ requires = ["poetry-core>=1.0.0"]
 
 
 [tool.black]
-line-length = 96
+line-length = 88
 target-version = ["py310", "py311", "py312", "py313", "py314"]
 
 
 [tool.isort]
-line_length = 96
+line_length = 88
 profile = "black"
 
 
@@ -42,7 +42,7 @@ sqlite_cache = true
 [tool.poetry]
 name = "jupyterhub_monitoring"
 version = "1.0.0"
-description = "Monitor and report on a JupyterHub's users' activity"
+description = "Monitoring and reporting scripts for JupyterHub"
 license = "Apache-2.0"
 authors = [
     "Brian Aydemir <baydemir@morgridge.org>",
@@ -72,7 +72,7 @@ requests = "~2.32"
 [tool.poetry.group.dev.dependencies]
 bandit      = "~1.9"
 black       = "~26.1"
-isort       = "~7.0"
+isort       = "~8.0"
 mypy        = "~1.19"
 pre-commit  = "~4.5"
 pylint      = "~4.0"
@@ -85,5 +85,5 @@ poetry-plugin-export = ">=1.0.0"
 
 
 [tool.pylint.messages-control]
-max-line-length = 96
-disable = "invalid-name,missing-class-docstring,missing-function-docstring"
+max-line-length = 88
+disable = "duplicate-code,invalid-name,line-too-long,missing-class-docstring,missing-function-docstring,too-many-arguments,too-many-locals,too-many-positional-arguments"
