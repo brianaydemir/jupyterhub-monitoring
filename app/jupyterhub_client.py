@@ -2,7 +2,7 @@
 JupyterHub REST API client wrapper.
 """
 
-from typing import Any
+from typing import Any, cast
 
 import requests
 
@@ -129,7 +129,7 @@ class JupyterHubClient:
             response.raise_for_status()
 
             # Parse and return the JSON response
-            return response.json()  # type: ignore[no-any-return]
+            return cast(list[dict[str, Any]], response.json())
 
         except ValueError:  # pylint: disable=try-except-raise
             # Re-raise ValueError for authentication/authorization errors
