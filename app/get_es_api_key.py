@@ -5,12 +5,12 @@ import getpass
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from app.elasticsearch_client import ElasticsearchClient
 
 
-def format_output_key_only(result: Dict[str, Any]) -> str:
+def format_output_key_only(result: dict[str, Any]) -> str:
     """Format the API key result as key-only output.
 
     Args:
@@ -26,7 +26,7 @@ def format_output_key_only(result: Dict[str, Any]) -> str:
     return encoded
 
 
-def format_output_json(result: Dict[str, Any]) -> str:
+def format_output_json(result: dict[str, Any]) -> str:
     """Format the API key result as JSON.
 
     Args:
@@ -50,7 +50,7 @@ def format_output_json(result: Dict[str, Any]) -> str:
     return json.dumps(output_data, indent=2)
 
 
-def format_output_full(result: Dict[str, Any]) -> str:
+def format_output_full(result: dict[str, Any]) -> str:
     """Format the API key result as full detailed output.
 
     Args:

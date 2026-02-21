@@ -16,7 +16,8 @@ def parse_arguments() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         description=(
-            "Query Elasticsearch and retrieve documents using " "a Kibana-style query string"
+            "Query Elasticsearch and retrieve documents using "
+            "a Kibana-style query string"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""

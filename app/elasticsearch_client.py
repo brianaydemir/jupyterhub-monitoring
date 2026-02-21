@@ -2,7 +2,7 @@
 Elasticsearch client wrapper for querying and uploading documents.
 """
 
-from typing import Any, Dict, Iterator, List, Optional, cast
+from typing import Any, Iterator, cast
 
 import requests
 from elasticsearch import Elasticsearch
@@ -21,7 +21,7 @@ class ElasticsearchClient:
         self,
         endpoint: str,
         api_key: str,
-        ca_cert: Optional[str] = None,
+        ca_cert: str | None = None,
     ) -> None:
         """
         Initialize the Elasticsearch client and validate the connection.
@@ -32,7 +32,7 @@ class ElasticsearchClient:
             ca_cert: Optional path to the CA certificate file for TLS verification
         """
         # Build connection parameters
-        connection_params: Dict[str, Any] = {
+        connection_params: dict[str, Any] = {
             "hosts": [endpoint],
             "api_key": api_key,
         }
@@ -48,9 +48,9 @@ class ElasticsearchClient:
     def upload_document(
         self,
         index: str,
-        document: Dict[str, Any],
-        doc_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        document: dict[str, Any],
+        doc_id: str | None = None,
+    ) -> dict[str, Any]:
         """
         Upload a single document to an Elasticsearch index.
 
@@ -66,14 +66,15 @@ class ElasticsearchClient:
             Exception: If the upload fails
         """
         return cast(
-            Dict[str, Any], self._client.index(index=index, id=doc_id, document=document)
+            dict[str, Any],
+            self._client.index(index=index, id=doc_id, document=document),
         )
 
     def upload_documents(
         self,
         index: str,
-        documents: Iterator[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        documents: Iterator[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """
         Upload multiple documents to an Elasticsearch index from an iterator.
 
@@ -99,10 +100,10 @@ class ElasticsearchClient:
     def query(
         self,
         index: str,
-        query: Optional[Dict[str, Any]] = None,
-        query_string: Optional[str] = None,
+        query: dict[str, Any] | None = None,
+        query_string: str | None = None,
         size: int = 100,
-    ) -> Iterator[Dict[str, Any]]:
+    ) -> Iterator[dict[str, Any]]:
         """
         Query an Elasticsearch index and return an iterator over the results.
 
@@ -138,7 +139,7 @@ class ElasticsearchClient:
             )
         """
         # Build the query body
-        query_body: Dict[str, Any] = {}
+        query_body: dict[str, Any] = {}
 
         if query is not None:
             # Use the provided Query DSL query
@@ -189,7 +190,7 @@ class ElasticsearchClient:
             if scroll_id:
                 try:
                     self._client.clear_scroll(scroll_id=scroll_id)
-                except Exception:  # pylint: disable=broad-exception-caught
+                except Exception:  # nosec  # pylint: disable=broad-exception-caught
                     # Ignore errors when clearing scroll - cleanup failures
                     # should not mask results
                     pass
@@ -217,10 +218,10 @@ class ElasticsearchClient:
         endpoint: str,
         username: str,
         password: str,
-        ca_cert: Optional[str] = None,
-        key_name: Optional[str] = None,
-        expiration: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        ca_cert: str | None = None,
+        key_name: str | None = None,
+        expiration: str | None = None,
+    ) -> dict[str, Any]:
         """
         Create an Elasticsearch API key using basic authentication.
 
@@ -262,7 +263,7 @@ class ElasticsearchClient:
         # Build the API key request body
         # Note: By not specifying role_descriptors, the API key will
         # automatically inherit all the user's permissions
-        api_key_body: Dict[str, Any] = {
+        api_key_body: dict[str, Any] = {
             "metadata": {
                 "created_by": username,
             },
@@ -304,10 +305,14 @@ class ElasticsearchClient:
         try:
             result = response.json()
         except ValueError as e:
-            raise ValueError(f"Invalid JSON response from Elasticsearch: {str(e)}") from e
+            raise ValueError(
+                f"Invalid JSON response from Elasticsearch: {str(e)}"
+            ) from e
 
         # Validate that we got the expected fields
         if "id" not in result or "api_key" not in result:
-            raise ValueError("Unexpected response from Elasticsearch: missing required fields")
+            raise ValueError(
+                "Unexpected response from Elasticsearch: missing required fields"
+            )
 
-        return cast(Dict[str, Any], result)
+        return cast(dict[str, Any], result)

@@ -2,7 +2,7 @@
 JupyterHub REST API client wrapper.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -19,7 +19,7 @@ class JupyterHubClient:
         self,
         endpoint: str,
         api_key: str,
-        ca_cert: Optional[str] = None,
+        ca_cert: str | None = None,
     ) -> None:
         """
         Initialize the JupyterHub client and validate the connection.
@@ -57,7 +57,9 @@ class JupyterHubClient:
             if response.status_code == 401:
                 raise ValueError(f"Authentication failed for endpoint {endpoint}")
             if response.status_code == 403:
-                raise ValueError("Access forbidden - API key may not have sufficient permissions")
+                raise ValueError(
+                    "Access forbidden - API key may not have sufficient permissions"
+                )
 
             # Verify we got a valid response (handles any other error status codes)
             response.raise_for_status()
@@ -80,7 +82,7 @@ class JupyterHubClient:
                 f"Failed to connect to JupyterHub at {endpoint}: {str(e)}"
             ) from e
 
-    def list_users(self, state: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_users(self, state: str | None = None) -> list[dict[str, Any]]:
         """
         Get the list of users from JupyterHub.
 
@@ -104,7 +106,7 @@ class JupyterHubClient:
         url = f"{self._endpoint}/users"
 
         # Build query parameters
-        params: Dict[str, Any] = {}
+        params: dict[str, Any] = {}
         if state is not None:
             params["state"] = state
 
@@ -127,15 +129,15 @@ class JupyterHubClient:
             response.raise_for_status()
 
             # Parse and return the JSON response
-            return response.json()
+            return response.json()  # type: ignore[no-any-return]
 
-        except ValueError:
+        except ValueError:  # pylint: disable=try-except-raise
             # Re-raise ValueError for authentication/authorization errors
             raise
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"Failed to list users: {str(e)}") from e
 
-    def list_active_servers(self) -> List[Dict[str, Any]]:
+    def list_active_servers(self) -> list[dict[str, Any]]:
         """
         Get a list of currently active servers from JupyterHub.
 
@@ -167,7 +169,9 @@ class JupyterHubClient:
             # Process each server for this user
             for server_name, server_info in servers.items():
                 # Include servers that are ready or pending
-                if server_info and (server_info.get("ready") or server_info.get("pending")):
+                if server_info and (
+                    server_info.get("ready") or server_info.get("pending")
+                ):
                     server_data = self._flatten_dict(
                         {
                             "user": {
@@ -184,8 +188,8 @@ class JupyterHubClient:
         return active_servers
 
     def _flatten_dict(
-        self, d: Dict[str, Any], parent_key: str = "", sep: str = "."
-    ) -> Dict[str, Any]:
+        self, d: dict[str, Any], parent_key: str = "", sep: str = "."
+    ) -> dict[str, Any]:
         """
         Flatten a nested dictionary by concatenating keys with a separator.
 
@@ -197,7 +201,7 @@ class JupyterHubClient:
         Returns:
             Flattened dictionary with concatenated keys
         """
-        items: List[tuple] = []
+        items: list[tuple] = []
         for k, v in d.items():
             new_key = f"{parent_key}{sep}{k}" if parent_key else k
             if isinstance(v, dict):

@@ -4,7 +4,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Optional
 
 from app.elasticsearch_client import ElasticsearchClient
 from app.jupyterhub_client import JupyterHubClient
@@ -12,11 +11,11 @@ from app.jupyterhub_client import JupyterHubClient
 
 def push_active_servers(
     jupyterhub_client: JupyterHubClient,
-    elasticsearch_client: Optional[ElasticsearchClient],
+    elasticsearch_client: ElasticsearchClient | None,
     elasticsearch_index: str,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     debug: bool = False,
-    metadata: Optional[dict[str, str]] = None,
+    metadata: dict[str, str] | None = None,
 ) -> tuple[int, int]:
     """
     Fetch active servers from JupyterHub and push them to Elasticsearch.
@@ -186,7 +185,9 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
 
     # Validate CA cert files exist if provided
     if args.jupyterhub_ca_cert and not args.jupyterhub_ca_cert.exists():
-        parser.error(f"JupyterHub CA certificate file not found: {args.jupyterhub_ca_cert}")
+        parser.error(
+            f"JupyterHub CA certificate file not found: {args.jupyterhub_ca_cert}"
+        )
     if args.elasticsearch_ca_cert and not args.elasticsearch_ca_cert.exists():
         parser.error(
             f"Elasticsearch CA certificate file not found: {args.elasticsearch_ca_cert}"
@@ -221,7 +222,11 @@ def main() -> int:
             elasticsearch_client = ElasticsearchClient(
                 endpoint=args.elasticsearch_endpoint,
                 api_key=args.elasticsearch_api_key,
-                ca_cert=str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None,
+                ca_cert=(
+                    str(args.elasticsearch_ca_cert)
+                    if args.elasticsearch_ca_cert
+                    else None
+                ),
             )
             print("Connected to Elasticsearch")
         else:

@@ -5,7 +5,6 @@ import html
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Union
 
 import pytimeparse2
 
@@ -13,8 +12,8 @@ from app.jupyterhub_client import JupyterHubClient
 
 
 def filter_new_users(
-    users: List[dict], duration_seconds: Union[int, float, timedelta]
-) -> List[dict]:
+    users: list[dict], duration_seconds: int | float | timedelta
+) -> list[dict]:
     """Filter users created within the specified duration.
 
     Args:
@@ -55,7 +54,7 @@ def filter_new_users(
     return new_users
 
 
-def format_output_text(users: List[dict], duration_str: str) -> str:
+def format_output_text(users: list[dict], duration_str: str) -> str:
     """Format users as plain text output.
 
     Args:
@@ -78,7 +77,7 @@ def format_output_text(users: List[dict], duration_str: str) -> str:
     return "\n".join(lines)
 
 
-def format_output_html(users: List[dict], duration_str: str) -> str:
+def format_output_html(users: list[dict], duration_str: str) -> str:
     """Format users as HTML output suitable for email body.
 
     Args:

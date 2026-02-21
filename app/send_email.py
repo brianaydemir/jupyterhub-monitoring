@@ -7,16 +7,15 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
 from pathlib import Path
-from typing import Optional
 
 
 def create_message(
-    sender_name: Optional[str],
+    sender_name: str | None,
     sender_email: str,
-    recipient_name: Optional[str],
+    recipient_name: str | None,
     recipient_email: str,
-    text_file: Optional[Path],
-    html_file: Optional[Path],
+    text_file: Path | None,
+    html_file: Path | None,
 ) -> MIMEMultipart:
     """Create an email message with the given parameters.
 
