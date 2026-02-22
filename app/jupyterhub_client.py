@@ -137,28 +137,27 @@ class JupyterHubClient:
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"Failed to list users: {str(e)}") from e
 
-    def list_ready_servers(self) -> list[dict[str, Any]]:
+    def list_servers(self) -> list[dict[str, Any]]:
         """
-        Get a list of ready servers from JupyterHub.
+        Get a list of servers from JupyterHub.
 
-        This method retrieves all users and extracts their ready servers,
+        This method retrieves all users and extracts their servers,
         flattening nested dictionaries by concatenating keys with ".".
-        A server is "ready" when it is fully running and available for traffic.
 
         Returns:
-            A list of dictionaries containing ready server information.
+            A list of dictionaries containing server information.
             Each dictionary has flattened keys (e.g., "user.name", "server.state").
 
         Raises:
             Exception: If the API request fails
 
         Example:
-            ready_servers = client.list_ready_servers()
-            for server in ready_servers:
+            servers = client.list_servers()
+            for server in servers:
                 print(f"User: {server['user.name']}, State: {server.get('server.state')}")
         """
         users = self.list_users()
-        ready_servers = []
+        result = []
 
         for user in users:
             # Check if this user has any servers
@@ -168,8 +167,7 @@ class JupyterHubClient:
 
             # Process each server for this user
             for server_name, server_info in servers.items():
-                # Include ready servers only
-                if server_info and server_info.get("ready"):
+                if server_info:
                     server_data = self._flatten_dict(
                         {
                             "user": {
@@ -181,9 +179,9 @@ class JupyterHubClient:
                             },
                         }
                     )
-                    ready_servers.append(server_data)
+                    result.append(server_data)
 
-        return ready_servers
+        return result
 
     def _flatten_dict(
         self, d: dict[str, Any], parent_key: str = "", sep: str = "."
