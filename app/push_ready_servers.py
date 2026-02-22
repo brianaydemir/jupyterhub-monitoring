@@ -1,4 +1,4 @@
-"""Command-line tool for pushing JupyterHub active servers to Elasticsearch."""
+"""Command-line tool for pushing JupyterHub ready servers to Elasticsearch."""
 
 import argparse
 import json
@@ -9,7 +9,7 @@ from app.elasticsearch_client import ElasticsearchClient
 from app.jupyterhub_client import JupyterHubClient
 
 
-def push_active_servers(
+def push_ready_servers(
     jupyterhub_client: JupyterHubClient,
     elasticsearch_client: ElasticsearchClient | None,
     elasticsearch_index: str,
@@ -18,7 +18,7 @@ def push_active_servers(
     metadata: dict[str, str] | None = None,
 ) -> tuple[int, int]:
     """
-    Fetch active servers from JupyterHub and push them to Elasticsearch.
+    Fetch ready servers from JupyterHub and push them to Elasticsearch.
 
     Args:
         jupyterhub_client: The JupyterHub API client
@@ -31,19 +31,19 @@ def push_active_servers(
     Returns:
         A tuple of (successful_count, error_count)
     """
-    # Fetch active servers from JupyterHub
+    # Fetch ready servers from JupyterHub
     try:
-        active_servers = jupyterhub_client.list_active_servers()
+        ready_servers = jupyterhub_client.list_ready_servers()
     except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"Error fetching active servers from JupyterHub: {e}", file=sys.stderr)
+        print(f"Error fetching ready servers from JupyterHub: {e}", file=sys.stderr)
         return (0, 1)
 
     # Apply limit if specified
     if limit is not None:
-        active_servers = active_servers[:limit]
+        ready_servers = ready_servers[:limit]
 
-    total_servers = len(active_servers)
-    print(f"Found {total_servers} active server(s) to process")
+    total_servers = len(ready_servers)
+    print(f"Found {total_servers} ready server(s) to process")
 
     if total_servers == 0:
         return (0, 0)
@@ -52,7 +52,7 @@ def push_active_servers(
     successful = 0
     errors = 0
 
-    for i, server in enumerate(active_servers, 1):
+    for i, server in enumerate(ready_servers, 1):
         try:
             # Add metadata fields to the document
             if metadata:
@@ -98,7 +98,7 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
         A tuple of (parsed arguments, metadata dictionary)
     """
     parser = argparse.ArgumentParser(
-        description="Push JupyterHub active servers to Elasticsearch",
+        description="Push JupyterHub ready servers to Elasticsearch",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
@@ -198,7 +198,7 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
 
 def main() -> int:
     """
-    Main entry point for the push_active_servers script.
+    Main entry point for the push_ready_servers script.
 
     Returns:
         Exit code (0 for success, non-zero for error)
@@ -232,8 +232,8 @@ def main() -> int:
         else:
             print("Debug mode: Documents will be printed, not pushed to Elasticsearch")
 
-        # Push active servers
-        successful, errors = push_active_servers(
+        # Push ready servers
+        successful, errors = push_ready_servers(
             jupyterhub_client=jupyterhub_client,
             elasticsearch_client=elasticsearch_client,
             elasticsearch_index=args.elasticsearch_index if not args.debug else "",

@@ -137,28 +137,28 @@ class JupyterHubClient:
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"Failed to list users: {str(e)}") from e
 
-    def list_active_servers(self) -> list[dict[str, Any]]:
+    def list_ready_servers(self) -> list[dict[str, Any]]:
         """
-        Get a list of currently active servers from JupyterHub.
+        Get a list of ready servers from JupyterHub.
 
-        This method retrieves all users and extracts their active servers,
+        This method retrieves all users and extracts their ready servers,
         flattening nested dictionaries by concatenating keys with ".".
-        Includes both ready and pending servers.
+        A server is "ready" when it is fully running and available for traffic.
 
         Returns:
-            A list of dictionaries containing active server information.
+            A list of dictionaries containing ready server information.
             Each dictionary has flattened keys (e.g., "user.name", "server.state").
 
         Raises:
             Exception: If the API request fails
 
         Example:
-            active_servers = client.list_active_servers()
-            for server in active_servers:
+            ready_servers = client.list_ready_servers()
+            for server in ready_servers:
                 print(f"User: {server['user.name']}, State: {server.get('server.state')}")
         """
         users = self.list_users()
-        active_servers = []
+        ready_servers = []
 
         for user in users:
             # Check if this user has any servers
@@ -168,10 +168,8 @@ class JupyterHubClient:
 
             # Process each server for this user
             for server_name, server_info in servers.items():
-                # Include servers that are ready or pending
-                if server_info and (
-                    server_info.get("ready") or server_info.get("pending")
-                ):
+                # Include ready servers only
+                if server_info and server_info.get("ready"):
                     server_data = self._flatten_dict(
                         {
                             "user": {
@@ -183,9 +181,9 @@ class JupyterHubClient:
                             },
                         }
                     )
-                    active_servers.append(server_data)
+                    ready_servers.append(server_data)
 
-        return active_servers
+        return ready_servers
 
     def _flatten_dict(
         self, d: dict[str, Any], parent_key: str = "", sep: str = "."
