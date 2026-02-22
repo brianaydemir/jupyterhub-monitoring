@@ -1,5 +1,5 @@
 """
-JupyterHub REST API client wrapper.
+JupyterHub API client wrapper.
 """
 
 from typing import Any, cast
@@ -22,11 +22,11 @@ class JupyterHubClient:
         ca_cert: str | None = None,
     ) -> None:
         """
-        Initialize the JupyterHub client and validate the connection.
+        Initialize the JupyterHub client.
 
         Args:
             endpoint: The JupyterHub API endpoint URL (e.g., "https://localhost:8000/hub/api")
-            api_key: The API key for authentication (used as bearer token)
+            api_key: The API key for authentication (used as a bearer token)
             ca_cert: Optional path to the CA certificate file for TLS verification
 
         Raises:
@@ -58,7 +58,7 @@ class JupyterHubClient:
                 raise ValueError(f"Authentication failed for endpoint {endpoint}")
             if response.status_code == 403:
                 raise ValueError(
-                    "Access forbidden - API key may not have sufficient permissions"
+                    "Access forbidden - API key might not have sufficient permissions"
                 )
 
             # Verify we got a valid response (handles any other error status codes)
@@ -161,7 +161,7 @@ class JupyterHubClient:
         active_servers = []
 
         for user in users:
-            # Check if user has any servers
+            # Check if this user has any servers
             servers = user.get("servers", {})
             if not servers:
                 continue

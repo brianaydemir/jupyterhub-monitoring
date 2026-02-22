@@ -1,5 +1,5 @@
 """
-Elasticsearch client wrapper for querying and uploading documents.
+Elasticsearch API client wrapper for querying and uploading documents.
 """
 
 from typing import Any, Iterator, cast
@@ -115,7 +115,7 @@ class ElasticsearchClient:
         Args:
             index: The name of the index to query
             query: Optional Query DSL query (as a dictionary)
-            query_string: Optional Kibana-style query string (e.g., "status:200 AND user:john")
+            query_string: Optional Kibana-style query string (e.g., "status:200 AND user:alice")
             size: Number of documents to retrieve per scroll request (default: 100)
 
         Returns:
@@ -200,7 +200,7 @@ class ElasticsearchClient:
         Close the Elasticsearch client connection.
 
         It's recommended to call this method when done using the client,
-        or use the client as a context manager.
+        or else use the client as a context manager.
         """
         self._client.close()
 
@@ -235,7 +235,7 @@ class ElasticsearchClient:
             ca_cert: Optional path to the CA certificate file for TLS verification
             key_name: Optional name for the API key (defaults to "api-key-{username}")
             expiration: Optional expiration time (e.g., "1d", "7d", "30d").
-                       If not provided, the key never expires.
+                        If not provided, the key never expires.
 
         Returns:
             A dictionary containing the API key information with these keys:
