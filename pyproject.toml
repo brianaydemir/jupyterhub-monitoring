@@ -1,6 +1,30 @@
 # Project requirements (PEP 518, https://python-poetry.org)
 
 
+[project]
+name = "jupyterhub-monitoring"
+version = "1.0.0"
+description = "Monitoring and reporting scripts for JupyterHub"
+license = "Apache-2.0"
+authors = [{ name = "Brian Aydemir", email = "baydemir@morgridge.org" }]
+dynamic = ["dependencies"]
+
+
+[project.urls]
+repository = "https://github.com/brianaydemir/jupyterhub-monitoring"
+
+
+[project.scripts]
+get-es-api-key = "app.get_es_api_key:main"
+get-es-docs = "app.get_es_docs:main"
+get-new-users = "app.get_new_users:main"
+push-active-servers = "app.push_active_servers:main"
+send-email = "app.send_email:main"
+
+
+#---------------------------------------------------------------------------
+
+
 [build-system]
 build-backend = "poetry.core.masonry.api"
 requires = ["poetry-core>=1.0.0"]
@@ -8,7 +32,7 @@ requires = ["poetry-core>=1.0.0"]
 
 [tool.black]
 line-length = 88
-target-version = ["py310", "py311", "py312", "py313", "py314"]
+target-version = ["py314"]
 
 
 [tool.isort]
@@ -17,56 +41,35 @@ profile = "black"
 
 
 [tool.mypy]
-namespace_packages = true
+# Import discovery
 explicit_package_bases = true
 follow_untyped_imports = true
 
+# Untyped definitions and calls
 check_untyped_defs = true
-strict_optional = true
-no_implicit_optional = true
 
-warn_no_return = true
+# Configuring warnings
 warn_redundant_casts = true
-warn_return_any = true
 warn_unreachable = true
 warn_unused_ignores = true
 
-color_output = false
+# Configuring error messages
 pretty = true
-show_error_codes = true
 
-incremental = true
+# Incremental mode
 sqlite_cache = true
 
 
 [tool.poetry]
-name = "jupyterhub_monitoring"
-version = "1.0.0"
-description = "Monitoring and reporting scripts for JupyterHub"
-license = "Apache-2.0"
-authors = [
-    "Brian Aydemir <baydemir@morgridge.org>",
-]
-repository = "https://github.com/brianaydemir/jupyterhub-monitoring"
-packages = [
-    { "include" = "app" },
-]
 package-mode = true
-
-
-[tool.poetry.scripts]
-get-es-api-key = "app.get_es_api_key:main"
-get-es-docs = "app.get_es_docs:main"
-get-new-users = "app.get_new_users:main"
-push-active-servers = "app.push_active_servers:main"
-send-email = "app.send_email:main"
+packages = [{ include = "app" }]
 
 
 [tool.poetry.dependencies]
-python = "^3.14"
-elasticsearch = "~9.3"
-pytimeparse2 = "~1.7"
-requests = "~2.32"
+python         = "^3.14"
+elasticsearch  = "~9.3"
+pytimeparse2   = "~1.7"
+requests       = "~2.32"
 
 
 [tool.poetry.group.dev.dependencies]

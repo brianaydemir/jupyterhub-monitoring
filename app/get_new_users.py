@@ -47,7 +47,7 @@ def filter_new_users(
             created_dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
             if created_dt >= cutoff_time:
                 new_users.append({"name": user.get("name", ""), "created": created_str})
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             # Skip users with invalid timestamps
             continue
 

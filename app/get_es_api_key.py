@@ -168,14 +168,14 @@ def main() -> int:
         else:
             try:
                 username = input("Username: ")
-            except (EOFError, KeyboardInterrupt):
+            except EOFError, KeyboardInterrupt:
                 print("\nOperation cancelled.", file=sys.stderr)
                 return 1
 
         # Prompt for password (always interactive for security)
         try:
             password = getpass.getpass("Password: ")
-        except (EOFError, KeyboardInterrupt):
+        except EOFError, KeyboardInterrupt:
             print("\nOperation cancelled.", file=sys.stderr)
             return 1
 

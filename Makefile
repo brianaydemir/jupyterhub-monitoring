@@ -34,7 +34,7 @@ requirements.txt: poetry.lock
 build: clean
 	poetry build
 
-	version=$$(toml get tool.poetry.version --toml-path pyproject.toml); \
+	version=$$(toml get project.version --toml-path pyproject.toml); \
 	docker build . \
 	    --build-arg VERSION=$${version} \
 	    --pull \
