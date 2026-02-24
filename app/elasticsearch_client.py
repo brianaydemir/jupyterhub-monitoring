@@ -1,5 +1,5 @@
 """
-Elasticsearch API client wrapper for querying and uploading documents.
+Elasticsearch API client wrapper.
 """
 
 from typing import Any, Iterator, cast
@@ -89,7 +89,8 @@ class ElasticsearchClient:
             A list of responses from Elasticsearch for each uploaded document
 
         Raises:
-            Exception: If any upload fails
+            elasticsearch.ApiError: If Elasticsearch rejects a document upload
+            elasticsearch.TransportError: If a connection-level error occurs
         """
         results = []
         for document in documents:
@@ -122,8 +123,8 @@ class ElasticsearchClient:
             An iterator yielding documents matching the query
 
         Raises:
-            ValueError: If neither query nor query_string is provided
-            Exception: If the query fails
+            elasticsearch.ApiError: If Elasticsearch rejects the query or scroll request
+            elasticsearch.TransportError: If a connection-level error occurs
 
         Example:
             # Using Query DSL
@@ -132,7 +133,7 @@ class ElasticsearchClient:
                 query={"match": {"status": "error"}}
             )
 
-            # Using query string
+            # Using Kibana-style query string
             client.query(
                 index="logs",
                 query_string="status:error AND level:critical"
@@ -181,7 +182,6 @@ class ElasticsearchClient:
                 )
                 scroll_id = response.get("_scroll_id")
                 hits = response["hits"]["hits"]
-
                 for hit in hits:
                     yield hit["_source"]
 

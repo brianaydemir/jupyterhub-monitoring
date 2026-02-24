@@ -189,14 +189,14 @@ def main() -> int:
                 api_key=args.api_key,
                 ca_cert=str(args.ca_cert) if args.ca_cert else None,
             )
-        except (ConnectionError, ValueError) as e:
+        except ConnectionError as e:
             print(f"Error connecting to JupyterHub: {e}", file=sys.stderr)
             return 1
 
         # Get all users from JupyterHub
         try:
             users = client.list_users()
-        except (ConnectionError, ValueError) as e:
+        except ConnectionError as e:
             print(f"Error listing users: {e}", file=sys.stderr)
             return 1
 

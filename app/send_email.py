@@ -24,8 +24,8 @@ def create_message(
         sender_email: The sender's email address
         recipient_name: The recipient's display name (optional)
         recipient_email: The recipient's email address
-        text_file: Path to plain text file for email body (optional)
-        html_file: Path to HTML file for email body (optional)
+        text_file: Path to a plain text file for the email body (optional)
+        html_file: Path to an HTML file for the email body (optional)
 
     Returns:
         A MIMEMultipart message ready to send
@@ -139,12 +139,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--text-file",
         type=Path,
-        help="Path to plain text file containing email body",
+        help="Path to a plain text file containing the email body",
     )
     parser.add_argument(
         "--html-file",
         type=Path,
-        help="Path to HTML file containing email body",
+        help="Path to an HTML file containing the email body",
     )
 
     args = parser.parse_args()
@@ -163,7 +163,7 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def main() -> int:
-    """Main entry point for the email sending script.
+    """Main entry point for the send-email script.
 
     Returns:
         Exit code (0 for success, non-zero for error)

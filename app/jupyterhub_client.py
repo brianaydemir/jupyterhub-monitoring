@@ -30,8 +30,7 @@ class JupyterHubClient:
             ca_cert: Optional path to the CA certificate file for TLS verification
 
         Raises:
-            ConnectionError: If unable to connect to the JupyterHub endpoint
-            ValueError: If authentication fails or endpoint is invalid
+            ConnectionError: If unable to connect to or validate the JupyterHub endpoint
         """
         self._endpoint = endpoint.rstrip("/")
         self._api_key = api_key
@@ -43,7 +42,7 @@ class JupyterHubClient:
             "Content-Type": "application/json",
         }
 
-        # Validate the connection
+        # Validate the connection  # fmt: off
         try:
             # Test connection with a simple GET request to the root API endpoint
             response = requests.get(
@@ -55,32 +54,22 @@ class JupyterHubClient:
 
             # Check if the request was successful
             if response.status_code == 401:
-                raise ValueError(f"Authentication failed for endpoint {endpoint}")
+                raise ConnectionError(f"Authentication failed for endpoint {endpoint}")
             if response.status_code == 403:
-                raise ValueError(
-                    "Access forbidden - API key might not have sufficient permissions"
-                )
+                raise ConnectionError("Access forbidden - API key might not have sufficient permissions")
 
             # Verify we got a valid response (handles any other error status codes)
             response.raise_for_status()
 
         except requests.exceptions.SSLError as e:
-            raise ConnectionError(
-                f"SSL verification failed for {endpoint}. "
-                "Consider providing a CA certificate."
-            ) from e
+            raise ConnectionError(f"SSL verification failed for {endpoint}. Consider providing a CA certificate.") from e
         except requests.exceptions.ConnectionError as e:
-            raise ConnectionError(
-                f"Unable to connect to JupyterHub at {endpoint}: {str(e)}"
-            ) from e
+            raise ConnectionError(f"Unable to connect to JupyterHub at {endpoint}: {str(e)}") from e
         except requests.exceptions.Timeout as e:
-            raise ConnectionError(
-                f"Connection timeout when connecting to {endpoint}"
-            ) from e
+            raise ConnectionError(f"Connection timeout when connecting to {endpoint}") from e
         except requests.exceptions.RequestException as e:
-            raise ConnectionError(
-                f"Failed to connect to JupyterHub at {endpoint}: {str(e)}"
-            ) from e
+            raise ConnectionError(f"Failed to connect to JupyterHub at {endpoint}: {str(e)}") from e
+        # fmt: on
 
     def list_users(self, state: str | None = None) -> list[dict[str, Any]]:
         """
@@ -94,7 +83,7 @@ class JupyterHubClient:
             A list of user dictionaries containing user information
 
         Raises:
-            Exception: If the API request fails
+            ConnectionError: If the API request fails
 
         Example:
             # Get all users
@@ -119,27 +108,17 @@ class JupyterHubClient:
                 timeout=30,
             )
 
-            # Check for authentication/authorization errors
-            if response.status_code == 401:
-                raise ValueError("Authentication failed - invalid API key")
-            if response.status_code == 403:
-                raise ValueError("Access forbidden - insufficient permissions")
-
-            # Raise exception for other error status codes
             response.raise_for_status()
 
             # Parse and return the JSON response
             return cast(list[dict[str, Any]], response.json())
 
-        except ValueError:  # pylint: disable=try-except-raise
-            # Re-raise ValueError for authentication/authorization errors
-            raise
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"Failed to list users: {str(e)}") from e
 
     def list_servers(self) -> list[dict[str, Any]]:
         """
-        Get a list of servers from JupyterHub.
+        Get the list of servers from JupyterHub.
 
         This method retrieves all users and extracts their servers,
         flattening nested dictionaries by concatenating keys with ".".
@@ -149,7 +128,7 @@ class JupyterHubClient:
             Each dictionary has flattened keys (e.g., "user.name", "server.state").
 
         Raises:
-            Exception: If the API request fails
+            ConnectionError: If the API request fails
 
         Example:
             servers = client.list_servers()

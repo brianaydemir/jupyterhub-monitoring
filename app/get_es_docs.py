@@ -67,7 +67,7 @@ Examples:
 
 
 def main() -> int:
-    """Main entry point for the get Elasticsearch documents script.
+    """Main entry point for the get-es-docs script.
 
     Returns:
         Exit code (0 for success, non-zero for error)
@@ -76,15 +76,11 @@ def main() -> int:
         args = parse_arguments()
 
         # Initialize the Elasticsearch client
-        try:
-            client = ElasticsearchClient(
-                endpoint=args.endpoint,
-                api_key=args.api_key,
-                ca_cert=str(args.ca_cert) if args.ca_cert else None,
-            )
-        except (ConnectionError, ValueError) as e:
-            print(f"Error connecting to Elasticsearch: {e}", file=sys.stderr)
-            return 1
+        client = ElasticsearchClient(
+            endpoint=args.endpoint,
+            api_key=args.api_key,
+            ca_cert=str(args.ca_cert) if args.ca_cert else None,
+        )
 
         # Query Elasticsearch and print results
         try:

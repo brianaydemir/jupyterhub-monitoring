@@ -254,7 +254,7 @@ def main() -> int:
             return 1
         return 0
 
-    except (ConnectionError, ValueError) as e:
+    except ConnectionError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     except Exception as e:  # pylint: disable=broad-exception-caught
