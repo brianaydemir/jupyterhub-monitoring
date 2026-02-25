@@ -20,6 +20,21 @@ def _ms_to_datetime(ms: int | None) -> str:
     ).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
+def _key_status_tags(key: dict[str, Any]) -> list[str]:
+    """Return status tags for a key that is not fully active."""
+    tags = []
+    if key.get("invalidated"):
+        tags.append("invalidated")
+    expiration = key.get("expiration")
+    if expiration is not None:
+        now_ms = int(
+            datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000
+        )
+        if expiration <= now_ms:
+            tags.append("expired")
+    return tags
+
+
 def format_output_key(keys: list[dict[str, Any]], *, active_only: bool = True) -> str:
     """Format API keys as a simple id/name listing.
 
@@ -28,11 +43,17 @@ def format_output_key(keys: list[dict[str, Any]], *, active_only: bool = True) -
         active_only: Whether the list was filtered to active keys only
 
     Returns:
-        One line per key in the form "id  name"
+        One line per key in the form "id  name" with optional status tags
     """
     if not keys:
         return "(no active API keys)" if active_only else "(no API keys)"
-    lines = [f"{key.get('id', '')}  {key.get('name', '')}" for key in keys]
+    lines = []
+    for key in keys:
+        line = f"{key.get('id', '')}  {key.get('name', '')}"
+        tags = _key_status_tags(key)
+        if tags:
+            line += f"  [{', '.join(tags)}]"
+        lines.append(line)
     return "\n".join(lines)
 
 
