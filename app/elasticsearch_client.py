@@ -316,3 +316,76 @@ class ElasticsearchClient:
             )
 
         return cast(dict[str, Any], result)
+
+    @classmethod
+    def delete_api_key_with_basic_auth(
+        cls,
+        endpoint: str,
+        username: str,
+        password: str,
+        ca_cert: str | None = None,
+        *,
+        key_id: str | None = None,
+        key_name: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Invalidate an Elasticsearch API key using basic authentication.
+
+        Exactly one of `key_id` or `key_name` must be provided.
+
+        Args:
+            endpoint: The Elasticsearch API endpoint URL (e.g., "https://localhost:9200")
+            username: The username for basic authentication
+            password: The password for basic authentication
+            ca_cert: Optional path to the CA certificate file for TLS verification
+            key_id: The ID of the API key to invalidate
+            key_name: The name of the API key(s) to invalidate
+
+        Returns:
+            A dictionary containing:
+            - invalidated_api_keys: list of key IDs just invalidated
+            - previously_invalidated_api_keys: keys that were already invalid
+            - error_count: number of errors encountered
+
+        Raises:
+            ValueError: If neither or both of key_id/key_name are provided,
+                        if authentication fails, or if the response is invalid
+        """
+        if not key_id and not key_name:
+            raise ValueError("Either key_id or key_name must be provided")
+        if key_id and key_name:
+            raise ValueError("Only one of key_id or key_name may be provided")
+
+        body: dict[str, Any] = {}
+        if key_id:
+            body["id"] = key_id
+        else:
+            body["name"] = key_name
+
+        url = f"{endpoint.rstrip('/')}/_security/api_key"
+
+        verify: bool | str = True
+        if ca_cert:
+            verify = ca_cert
+
+        try:
+            response = requests.delete(
+                url,
+                json=body,
+                auth=HTTPBasicAuth(username, password),
+                verify=verify,
+                headers={"Content-Type": "application/json"},
+                timeout=30,
+            )
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            raise ValueError(f"Failed to invalidate API key: {str(e)}") from e
+
+        try:
+            result = response.json()
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid JSON response from Elasticsearch: {str(e)}"
+            ) from e
+
+        return cast(dict[str, Any], result)
