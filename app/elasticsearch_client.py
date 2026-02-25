@@ -2,6 +2,7 @@
 Elasticsearch API client wrapper.
 """
 
+import datetime
 from typing import Any, Iterator, cast
 
 import requests
@@ -429,7 +430,7 @@ class ElasticsearchClient:
         try:
             response = requests.get(
                 url,
-                params={"active_only": "true", "owner": "true"},
+                params={"owner": "true"},
                 auth=HTTPBasicAuth(username, password),
                 verify=verify,
                 timeout=30,
@@ -445,4 +446,15 @@ class ElasticsearchClient:
                 f"Invalid JSON response from Elasticsearch: {str(e)}"
             ) from e
 
-        return cast(list[dict[str, Any]], result.get("api_keys", []))
+        # Filter to active (non-expired, non-invalidated) keys client-side,
+        # since the active_only query parameter is not available in all versions.
+        now_ms = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000)
+        return cast(
+            list[dict[str, Any]],
+            [
+                key
+                for key in result.get("api_keys", [])
+                if not key.get("invalidated")
+                and (key.get("expiration") is None or key["expiration"] > now_ms)
+            ],
+        )
