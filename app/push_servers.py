@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -110,9 +111,11 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
     )
     parser.add_argument(
         "--jupyterhub-api-key",
-        required=True,
         type=Path,
-        help="Path to file containing the JupyterHub API key for authentication",
+        help=(
+            "Path to file containing the JupyterHub API key for authentication "
+            "(or set JUPYTERHUB_API_KEY)"
+        ),
     )
     parser.add_argument(
         "--jupyterhub-ca-cert",
@@ -128,7 +131,10 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
     parser.add_argument(
         "--elasticsearch-api-key",
         type=Path,
-        help="Path to file containing the Elasticsearch API key for authentication",
+        help=(
+            "Path to file containing the Elasticsearch API key for authentication "
+            "(or set ELASTICSEARCH_API_KEY)"
+        ),
     )
     parser.add_argument(
         "--elasticsearch-index",
@@ -161,12 +167,23 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
 
     args = parser.parse_args()
 
+    # Validate that the JupyterHub API key is available
+    if not args.jupyterhub_api_key and not os.environ.get("JUPYTERHUB_API_KEY"):
+        parser.error(
+            "--jupyterhub-api-key or the JUPYTERHUB_API_KEY environment variable is required"
+        )
+
     # Validate that Elasticsearch settings are provided unless in debug mode
     if not args.debug:
         if not args.elasticsearch_endpoint:
             parser.error("--elasticsearch-endpoint is required unless --debug is used")
-        if not args.elasticsearch_api_key:
-            parser.error("--elasticsearch-api-key is required unless --debug is used")
+        if not args.elasticsearch_api_key and not os.environ.get(
+            "ELASTICSEARCH_API_KEY"
+        ):
+            parser.error(
+                "--elasticsearch-api-key or ELASTICSEARCH_API_KEY is required "
+                "unless --debug is used"
+            )
         if not args.elasticsearch_index:
             parser.error("--elasticsearch-index is required unless --debug is used")
 
@@ -211,9 +228,14 @@ def main() -> int:
 
         # Initialize JupyterHub client
         print("Connecting to JupyterHub...")
+        jupyterhub_api_key = (
+            args.jupyterhub_api_key.read_text().strip()
+            if args.jupyterhub_api_key
+            else os.environ["JUPYTERHUB_API_KEY"]
+        )
         jupyterhub_client = JupyterHubClient(
             endpoint=args.jupyterhub_endpoint,
-            api_key=args.jupyterhub_api_key.read_text().strip(),
+            api_key=jupyterhub_api_key,
             ca_cert=str(args.jupyterhub_ca_cert) if args.jupyterhub_ca_cert else None,
         )
         print("Connected to JupyterHub")
@@ -222,9 +244,14 @@ def main() -> int:
         elasticsearch_client = None
         if not args.debug:
             print("Connecting to Elasticsearch...")
+            elasticsearch_api_key = (
+                args.elasticsearch_api_key.read_text().strip()
+                if args.elasticsearch_api_key
+                else os.environ["ELASTICSEARCH_API_KEY"]
+            )
             elasticsearch_client = ElasticsearchClient(
                 endpoint=args.elasticsearch_endpoint,
-                api_key=args.elasticsearch_api_key.read_text().strip(),
+                api_key=elasticsearch_api_key,
                 ca_cert=(
                     str(args.elasticsearch_ca_cert)
                     if args.elasticsearch_ca_cert

@@ -2,6 +2,7 @@
 
 import argparse
 import html
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -116,6 +117,9 @@ Examples:
   %(prog)s --endpoint https://hub.example.com/hub/api --api-key /path/to/api-key --duration "7 days"
   %(prog)s --endpoint https://hub.example.com/hub/api --api-key /path/to/api-key --duration "12h" --text-file output.txt
   %(prog)s --endpoint https://hub.example.com/hub/api --api-key /path/to/api-key --duration "3d 6h" --html-file output.html
+
+Environment variables:
+  JUPYTERHUB_API_KEY  JupyterHub API key (used when --api-key is not provided)
         """,
     )
 
@@ -127,9 +131,11 @@ Examples:
     )
     parser.add_argument(
         "--api-key",
-        required=True,
         type=Path,
-        help="Path to file containing the JupyterHub API key for authentication",
+        help=(
+            "Path to file containing the JupyterHub API key for authentication "
+            "(or set JUPYTERHUB_API_KEY)"
+        ),
     )
     parser.add_argument(
         "--ca-cert",
@@ -165,9 +171,14 @@ Examples:
     if args.ca_cert and not args.ca_cert.exists():
         parser.error(f"CA certificate file not found: {args.ca_cert}")
 
-    # Validate API key file exists
-    if not args.api_key.exists():
-        parser.error(f"API key file not found: {args.api_key}")
+    # Validate API key: file arg takes precedence over env var
+    if args.api_key is not None:
+        if not args.api_key.exists():
+            parser.error(f"API key file not found: {args.api_key}")
+    elif not os.environ.get("JUPYTERHUB_API_KEY"):
+        parser.error(
+            "--api-key or the JUPYTERHUB_API_KEY environment variable is required"
+        )
 
     return args
 
@@ -191,7 +202,11 @@ def main() -> int:
         try:
             client = JupyterHubClient(
                 endpoint=args.endpoint,
-                api_key=args.api_key.read_text().strip(),
+                api_key=(
+                    args.api_key.read_text().strip()
+                    if args.api_key
+                    else os.environ["JUPYTERHUB_API_KEY"]
+                ),
                 ca_cert=str(args.ca_cert) if args.ca_cert else None,
             )
         except ConnectionError as e:
