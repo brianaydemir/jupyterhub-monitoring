@@ -389,3 +389,60 @@ class ElasticsearchClient:
             ) from e
 
         return cast(dict[str, Any], result)
+
+    @classmethod
+    def list_api_keys_with_basic_auth(
+        cls,
+        endpoint: str,
+        username: str,
+        password: str,
+        ca_cert: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        List the active API keys owned by the authenticated user.
+
+        Uses GET /_security/api_key?active_only=true&owner=true to return
+        only non-expired, non-invalidated keys belonging to the user.
+
+        Args:
+            endpoint: The Elasticsearch API endpoint URL (e.g., "https://localhost:9200")
+            username: The username for basic authentication
+            password: The password for basic authentication
+            ca_cert: Optional path to the CA certificate file for TLS verification
+
+        Returns:
+            A list of dictionaries, each describing one API key with fields
+            such as id, name, creation, expiration, invalidated, username,
+            and realm.
+
+        Raises:
+            requests.exceptions.HTTPError: If the API request fails
+            requests.exceptions.ConnectionError: If unable to connect to Elasticsearch
+            ValueError: If authentication fails or the response is invalid
+        """
+        url = f"{endpoint.rstrip('/')}/_security/api_key"
+
+        verify: bool | str = True
+        if ca_cert:
+            verify = ca_cert
+
+        try:
+            response = requests.get(
+                url,
+                params={"active_only": "true", "owner": "true"},
+                auth=HTTPBasicAuth(username, password),
+                verify=verify,
+                timeout=30,
+            )
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            raise ValueError(f"Failed to list API keys: {str(e)}") from e
+
+        try:
+            result = response.json()
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid JSON response from Elasticsearch: {str(e)}"
+            ) from e
+
+        return cast(list[dict[str, Any]], result.get("api_keys", []))

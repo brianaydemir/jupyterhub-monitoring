@@ -19,6 +19,7 @@ create-es-api-key = "app.create_es_api_key:main"
 delete-es-api-key = "app.delete_es_api_key:main"
 get-es-docs = "app.get_es_docs:main"
 get-new-users = "app.get_new_users:main"
+list-es-api-keys = "app.list_es_api_keys:main"
 push-servers = "app.push_servers:main"
 send-email = "app.send_email:main"
 
