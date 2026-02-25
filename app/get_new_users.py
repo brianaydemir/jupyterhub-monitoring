@@ -89,10 +89,13 @@ def format_output_text(users: list[dict], duration_str: str, strftime_fmt: str) 
     if not users:
         lines.append("No new users found.")
     else:
-        rows = [
-            (user.get("name", ""), _format_created(user.get("created", ""), strftime_fmt))
-            for user in users
-        ]
+        rows = sorted(
+            [
+                (user.get("name", ""), _format_created(user.get("created", ""), strftime_fmt))
+                for user in users
+            ],
+            key=lambda r: (r[1], r[0]),
+        )
         name_width = max(len("Name"), max(len(r[0]) for r in rows))
         created_width = max(len("Created"), max(len(r[1]) for r in rows))
         lines.append(f"{'Name':<{name_width}}  {'Created':<{created_width}}")
@@ -124,7 +127,13 @@ def format_output_html(users: list[dict], duration_str: str, strftime_fmt: str) 
         html_lines.append("    <tr><th style=\"text-align:left\">Name</th><th style=\"text-align:left\">Created</th></tr>")
         html_lines.append("  </thead>")
         html_lines.append("  <tbody>")
-        for user in users:
+        for user in sorted(
+            users,
+            key=lambda u: (
+                _format_created(u.get("created", ""), strftime_fmt),
+                u.get("name", ""),
+            ),
+        ):
             name = html.escape(user.get("name", ""))
             created = html.escape(_format_created(user.get("created", ""), strftime_fmt))
             html_lines.append(f"    <tr><td>{name}</td><td>{created}</td></tr>")
