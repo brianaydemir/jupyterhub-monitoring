@@ -88,7 +88,15 @@ def format_output_full(keys: list[dict[str, Any]], *, active_only: bool = True) 
         lines.append(f"  ID:          {key.get('id', 'N/A')}")
         lines.append(f"  Name:        {key.get('name', 'N/A')}")
         lines.append(f"  Created:     {_ms_to_datetime(key.get('creation'))}")
-        lines.append(f"  Expires:     {_ms_to_datetime(key.get('expiration'))}")
+        expiration = key.get("expiration")
+        expiration_str = _ms_to_datetime(expiration)
+        if expiration is not None:
+            now_ms = int(
+                datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000
+            )
+            if expiration <= now_ms:
+                expiration_str += "  (expired)"
+        lines.append(f"  Expires:     {expiration_str}")
         if not active_only:
             invalidated = key.get("invalidated", False)
             lines.append(f"  Invalidated: {invalidated}")
