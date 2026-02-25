@@ -20,17 +20,18 @@ def _ms_to_datetime(ms: int | None) -> str:
     ).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
-def format_output_key(keys: list[dict[str, Any]]) -> str:
+def format_output_key(keys: list[dict[str, Any]], *, active_only: bool = True) -> str:
     """Format API keys as a simple id/name listing.
 
     Args:
         keys: List of API key dictionaries from Elasticsearch
+        active_only: Whether the list was filtered to active keys only
 
     Returns:
         One line per key in the form "id  name"
     """
     if not keys:
-        return "(no active API keys)"
+        return "(no active API keys)" if active_only else "(no API keys)"
     lines = [f"{key.get('id', '')}  {key.get('name', '')}" for key in keys]
     return "\n".join(lines)
 
@@ -47,24 +48,29 @@ def format_output_json(keys: list[dict[str, Any]]) -> str:
     return json.dumps(keys, indent=2)
 
 
-def format_output_full(keys: list[dict[str, Any]]) -> str:
+def format_output_full(keys: list[dict[str, Any]], *, active_only: bool = True) -> str:
     """Format API keys as a human-readable table.
 
     Args:
         keys: List of API key dictionaries from Elasticsearch
+        active_only: Whether the list was filtered to active keys only
 
     Returns:
         Human-readable formatted string with id, name, creation, and expiration
     """
+    label = "Active API Keys" if active_only else "API Keys"
     if not keys:
-        return "No active API keys found."
+        return f"No {label.lower()} found."
 
-    lines = [f"Active API Keys ({len(keys)}):", ""]
+    lines = [f"{label} ({len(keys)}):", ""]
     for key in keys:
-        lines.append(f"  ID:       {key.get('id', 'N/A')}")
-        lines.append(f"  Name:     {key.get('name', 'N/A')}")
-        lines.append(f"  Created:  {_ms_to_datetime(key.get('creation'))}")
-        lines.append(f"  Expires:  {_ms_to_datetime(key.get('expiration'))}")
+        lines.append(f"  ID:          {key.get('id', 'N/A')}")
+        lines.append(f"  Name:        {key.get('name', 'N/A')}")
+        lines.append(f"  Created:     {_ms_to_datetime(key.get('creation'))}")
+        lines.append(f"  Expires:     {_ms_to_datetime(key.get('expiration'))}")
+        if not active_only:
+            invalidated = key.get("invalidated", False)
+            lines.append(f"  Invalidated: {invalidated}")
         lines.append("")
     return "\n".join(lines).rstrip()
 
@@ -191,12 +197,13 @@ def main() -> int:
             print(f"Error listing API keys: {e}", file=sys.stderr)
             return 1
 
+        active_only = not args.all_keys
         if args.format == "key":
-            output = format_output_key(keys)
+            output = format_output_key(keys, active_only=active_only)
         elif args.format == "json":
             output = format_output_json(keys)
         else:  # full
-            output = format_output_full(keys)
+            output = format_output_full(keys, active_only=active_only)
 
         print(output)
         return 0
