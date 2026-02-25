@@ -103,14 +103,12 @@ def parse_arguments() -> argparse.Namespace:
         Parsed command-line arguments
     """
     parser = argparse.ArgumentParser(
-        description=(
-            "List active (non-expired) Elasticsearch API keys "
-            "owned by the authenticated user"
-        ),
+        description=("List Elasticsearch API keys owned by the authenticated user"),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   %(prog)s --endpoint https://elastic.example.com:9200
+  %(prog)s --endpoint https://elastic.example.com:9200 --all
   %(prog)s --endpoint https://elastic.example.com:9200 --format json
   %(prog)s --endpoint https://elastic.example.com:9200 --format full
   %(prog)s --endpoint https://elastic.example.com:9200 --ca-cert /path/to/ca.crt
@@ -133,6 +131,14 @@ Examples:
     parser.add_argument(
         "--username",
         help="Username for authentication (will prompt if not provided)",
+    )
+
+    # Filter options
+    parser.add_argument(
+        "--all",
+        dest="all_keys",
+        action="store_true",
+        help="Include expired and invalidated keys (default: active keys only)",
     )
 
     # Output format
@@ -179,6 +185,7 @@ def main() -> int:
                 username=username,
                 password=password,
                 ca_cert=str(args.ca_cert) if args.ca_cert else None,
+                active_only=not args.all_keys,
             )
         except ValueError as e:
             print(f"Error listing API keys: {e}", file=sys.stderr)

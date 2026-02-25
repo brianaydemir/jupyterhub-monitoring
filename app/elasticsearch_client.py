@@ -333,6 +333,8 @@ class ElasticsearchClient:
         Invalidate an Elasticsearch API key using basic authentication.
 
         Exactly one of `key_id` or `key_name` must be provided.
+        The request is scoped to the authenticated user's own keys (owner=true),
+        so the `manage_own_api_key` cluster privilege is sufficient.
 
         Args:
             endpoint: The Elasticsearch API endpoint URL (e.g., "https://localhost:9200")
@@ -357,7 +359,7 @@ class ElasticsearchClient:
         if key_id and key_name:
             raise ValueError("Only one of key_id or key_name may be provided")
 
-        body: dict[str, Any] = {}
+        body: dict[str, Any] = {"owner": True}
         if key_id:
             body["id"] = key_id
         else:
@@ -398,18 +400,19 @@ class ElasticsearchClient:
         username: str,
         password: str,
         ca_cert: str | None = None,
+        *,
+        active_only: bool = True,
     ) -> list[dict[str, Any]]:
         """
-        List the active API keys owned by the authenticated user.
-
-        Uses GET /_security/api_key?active_only=true&owner=true to return
-        only non-expired, non-invalidated keys belonging to the user.
+        List API keys owned by the authenticated user.
 
         Args:
             endpoint: The Elasticsearch API endpoint URL (e.g., "https://localhost:9200")
             username: The username for basic authentication
             password: The password for basic authentication
             ca_cert: Optional path to the CA certificate file for TLS verification
+            active_only: When True (default), return only non-expired and
+                non-invalidated keys. When False, return all keys.
 
         Returns:
             A list of dictionaries, each describing one API key with fields
@@ -446,15 +449,17 @@ class ElasticsearchClient:
                 f"Invalid JSON response from Elasticsearch: {str(e)}"
             ) from e
 
+        all_keys = cast(list[dict[str, Any]], result.get("api_keys", []))
+
+        if not active_only:
+            return all_keys
+
         # Filter to active (non-expired, non-invalidated) keys client-side,
         # since the active_only query parameter is not available in all versions.
         now_ms = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000)
-        return cast(
-            list[dict[str, Any]],
-            [
-                key
-                for key in result.get("api_keys", [])
-                if not key.get("invalidated")
-                and (key.get("expiration") is None or key["expiration"] > now_ms)
-            ],
-        )
+        return [
+            key
+            for key in all_keys
+            if not key.get("invalidated")
+            and (key.get("expiration") is None or key["expiration"] > now_ms)
+        ]

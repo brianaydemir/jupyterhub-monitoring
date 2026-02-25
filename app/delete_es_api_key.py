@@ -81,13 +81,13 @@ def _get_credentials(username_arg: str | None) -> tuple[str, str] | None:
     else:
         try:
             username = input("Username: ")
-        except (EOFError, KeyboardInterrupt):
+        except EOFError, KeyboardInterrupt:
             print("\nOperation cancelled.", file=sys.stderr)
             return None
 
     try:
         password = getpass.getpass("Password: ")
-    except (EOFError, KeyboardInterrupt):
+    except EOFError, KeyboardInterrupt:
         print("\nOperation cancelled.", file=sys.stderr)
         return None
 
