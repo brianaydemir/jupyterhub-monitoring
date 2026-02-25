@@ -154,7 +154,7 @@ Expiration format:
 
 
 def main() -> int:
-    """Main entry point for the get-es-api-key script.
+    """Main entry point for the create-es-api-key script.
 
     Returns:
         Exit code (0 for success, non-zero for error)
