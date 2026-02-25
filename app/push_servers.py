@@ -111,7 +111,8 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
     parser.add_argument(
         "--jupyterhub-api-key",
         required=True,
-        help="JupyterHub API key for authentication",
+        type=Path,
+        help="Path to file containing the JupyterHub API key for authentication",
     )
     parser.add_argument(
         "--jupyterhub-ca-cert",
@@ -126,7 +127,8 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
     )
     parser.add_argument(
         "--elasticsearch-api-key",
-        help="Elasticsearch API key for authentication",
+        type=Path,
+        help="Path to file containing the Elasticsearch API key for authentication",
     )
     parser.add_argument(
         "--elasticsearch-index",
@@ -183,15 +185,16 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
                 parser.error(f"Invalid metadata format '{item}': key cannot be empty")
             metadata_dict[key] = value
 
-    # Validate CA cert files exist if provided
-    if args.jupyterhub_ca_cert and not args.jupyterhub_ca_cert.exists():
-        parser.error(
-            f"JupyterHub CA certificate file not found: {args.jupyterhub_ca_cert}"
-        )
-    if args.elasticsearch_ca_cert and not args.elasticsearch_ca_cert.exists():
-        parser.error(
-            f"Elasticsearch CA certificate file not found: {args.elasticsearch_ca_cert}"
-        )
+    # Validate that path-type arguments point to existing files
+    path_args = [
+        (args.jupyterhub_api_key, "JupyterHub API key file"),
+        (args.jupyterhub_ca_cert, "JupyterHub CA certificate file"),
+        (args.elasticsearch_api_key, "Elasticsearch API key file"),
+        (args.elasticsearch_ca_cert, "Elasticsearch CA certificate file"),
+    ]
+    for path, label in path_args:
+        if path is not None and not path.exists():
+            parser.error(f"{label} not found: {path}")
 
     return args, metadata_dict
 
@@ -210,7 +213,7 @@ def main() -> int:
         print("Connecting to JupyterHub...")
         jupyterhub_client = JupyterHubClient(
             endpoint=args.jupyterhub_endpoint,
-            api_key=args.jupyterhub_api_key,
+            api_key=args.jupyterhub_api_key.read_text().strip(),
             ca_cert=str(args.jupyterhub_ca_cert) if args.jupyterhub_ca_cert else None,
         )
         print("Connected to JupyterHub")
@@ -221,7 +224,7 @@ def main() -> int:
             print("Connecting to Elasticsearch...")
             elasticsearch_client = ElasticsearchClient(
                 endpoint=args.elasticsearch_endpoint,
-                api_key=args.elasticsearch_api_key,
+                api_key=args.elasticsearch_api_key.read_text().strip(),
                 ca_cert=(
                     str(args.elasticsearch_ca_cert)
                     if args.elasticsearch_ca_cert

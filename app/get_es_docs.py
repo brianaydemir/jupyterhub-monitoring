@@ -22,9 +22,9 @@ def parse_arguments() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --endpoint https://es.example.com:9200 --api-key TOKEN --index logs --query "status:200"
-  %(prog)s --endpoint https://es.example.com:9200 --api-key TOKEN --index logs --query "level:error AND timestamp:[now-1d TO now]"
-  %(prog)s --endpoint https://es.example.com:9200 --api-key TOKEN --index logs --query "*" --ca-cert /path/to/ca.crt
+  %(prog)s --endpoint https://es.example.com:9200 --api-key /path/to/api-key --index logs --query "status:200"
+  %(prog)s --endpoint https://es.example.com:9200 --api-key /path/to/api-key --index logs --query "level:error AND timestamp:[now-1d TO now]"
+  %(prog)s --endpoint https://es.example.com:9200 --api-key /path/to/api-key --index logs --query "*" --ca-cert /path/to/ca.crt
         """,
     )
 
@@ -37,7 +37,8 @@ Examples:
     parser.add_argument(
         "--api-key",
         required=True,
-        help="Elasticsearch API key for authentication",
+        type=Path,
+        help="Path to file containing the Elasticsearch API key for authentication",
     )
     parser.add_argument(
         "--ca-cert",
@@ -63,6 +64,10 @@ Examples:
     if args.ca_cert and not args.ca_cert.exists():
         parser.error(f"CA certificate file not found: {args.ca_cert}")
 
+    # Validate API key file exists
+    if not args.api_key.exists():
+        parser.error(f"API key file not found: {args.api_key}")
+
     return args
 
 
@@ -78,7 +83,7 @@ def main() -> int:
         # Initialize the Elasticsearch client
         client = ElasticsearchClient(
             endpoint=args.endpoint,
-            api_key=args.api_key,
+            api_key=args.api_key.read_text().strip(),
             ca_cert=str(args.ca_cert) if args.ca_cert else None,
         )
 
