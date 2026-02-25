@@ -382,6 +382,21 @@ files = [
 ]
 
 [[package]]
+name = "humanize"
+version = "4.11.0"
+description = "Python humanize utilities"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "humanize-4.11.0-py3-none-any.whl", hash = "sha256:b53caaec8532bcb2fff70c8826f904c35943f8cecaca29d272d9df38092736c0"},
+    {file = "humanize-4.11.0.tar.gz", hash = "sha256:e66f36020a2d5a974c504bd2555cf770621dbdbb6d82f94a6857c0b1ea2608be"},
+]
+
+[package.extras]
+tests = ["freezegun", "pytest", "pytest-cov"]
+
+[[package]]
 name = "identify"
 version = "2.6.16"
 description = "File identification library for Python"
@@ -1276,4 +1291,4 @@ test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.14"
-content-hash = "5d9cc11e7ae5971a107ca416823412a25d286e828e7ad2c90dc55575c49aa649"
+content-hash = "a4cba6073f44bec02ca0141ddb3e8e7d1bd71c158bb51835e79382544f9ad1cc"

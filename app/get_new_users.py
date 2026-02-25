@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import humanize
 import pytimeparse2
 
 from app.jupyterhub_client import JupyterHubClient
@@ -55,50 +56,80 @@ def filter_new_users(
     return new_users
 
 
-def format_output_text(users: list[dict], duration_str: str) -> str:
+def _format_created(created_str: str, strftime_fmt: str) -> str:
+    """Reformat a JupyterHub ISO 8601 creation timestamp.
+
+    Args:
+        created_str: ISO 8601 timestamp string from JupyterHub
+        strftime_fmt: strftime format string to apply
+
+    Returns:
+        Formatted timestamp string, or the original string if parsing fails
+    """
+    try:
+        dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+        return dt.strftime(strftime_fmt)
+    except (ValueError, AttributeError):
+        return created_str
+
+
+def format_output_text(users: list[dict], duration_str: str, strftime_fmt: str) -> str:
     """Format users as plain text output.
 
     Args:
         users: List of user dictionaries with 'name' and 'created' keys
         duration_str: Human-readable duration string (e.g., "7 days", "12h")
+        strftime_fmt: strftime format string for creation timestamps
 
     Returns:
-        Plain text formatted string with heading and creation dates
+        Plain text formatted string with a two-column table of name and creation date
     """
     lines = [f"New users created in the last {duration_str}:", ""]
 
     if not users:
         lines.append("No new users found.")
     else:
-        for user in users:
-            name = user.get("name", "")
-            created = user.get("created", "")
-            lines.append(f"{name} (created: {created})")
+        rows = [
+            (user.get("name", ""), _format_created(user.get("created", ""), strftime_fmt))
+            for user in users
+        ]
+        name_width = max(len("Name"), max(len(r[0]) for r in rows))
+        created_width = max(len("Created"), max(len(r[1]) for r in rows))
+        lines.append(f"{'Name':<{name_width}}  {'Created':<{created_width}}")
+        lines.append(f"{'-' * name_width}  {'-' * created_width}")
+        for name, created in rows:
+            lines.append(f"{name:<{name_width}}  {created:<{created_width}}")
 
     return "\n".join(lines)
 
 
-def format_output_html(users: list[dict], duration_str: str) -> str:
+def format_output_html(users: list[dict], duration_str: str, strftime_fmt: str) -> str:
     """Format users as HTML output suitable for email body.
 
     Args:
         users: List of user dictionaries with 'name' and 'created' keys
         duration_str: Human-readable duration string (e.g., "7 days", "12h")
+        strftime_fmt: strftime format string for creation timestamps
 
     Returns:
-        HTML formatted string (body content only) with heading and creation dates
+        HTML formatted string (body content only) with a table of name and creation date
     """
     html_lines = [f"<p>New users created in the last {html.escape(duration_str)}:</p>"]
 
     if not users:
         html_lines.append("<p>No new users found.</p>")
     else:
-        html_lines.append("<ul>")
+        html_lines.append("<table>")
+        html_lines.append("  <thead>")
+        html_lines.append("    <tr><th style=\"text-align:left\">Name</th><th style=\"text-align:left\">Created</th></tr>")
+        html_lines.append("  </thead>")
+        html_lines.append("  <tbody>")
         for user in users:
             name = html.escape(user.get("name", ""))
-            created = html.escape(user.get("created", ""))
-            html_lines.append(f"  <li>{name} (created: {created})</li>")
-        html_lines.append("</ul>")
+            created = html.escape(_format_created(user.get("created", ""), strftime_fmt))
+            html_lines.append(f"    <tr><td>{name}</td><td>{created}</td></tr>")
+        html_lines.append("  </tbody>")
+        html_lines.append("</table>")
 
     return "\n".join(html_lines)
 
@@ -165,6 +196,17 @@ Environment variables:
         help="Write output as HTML to the specified file (suitable for email body)",
     )
 
+    # Timestamp format
+    parser.add_argument(
+        "--date-format",
+        choices=["date", "datetime"],
+        default="date",
+        help=(
+            "Format for creation timestamps: 'date' (default, YYYY-MM-DD) or "
+            "'datetime' (YYYY-MM-DD HH:MM)"
+        ),
+    )
+
     args = parser.parse_args()
 
     # Validate CA certificate exists if provided
@@ -223,19 +265,28 @@ def main() -> int:
         # Filter for new users within the specified duration
         new_users = filter_new_users(users, duration_seconds)
 
+        # Determine the strftime format from the --date-format choice
+        strftime_fmt = "%Y-%m-%d" if args.date_format == "date" else "%Y-%m-%d %H:%M"
+
+        human_duration = humanize.naturaldelta(
+            duration_seconds
+            if isinstance(duration_seconds, timedelta)
+            else timedelta(seconds=float(duration_seconds))
+        )
+
         # Output to stdout by default
         if not args.text_file and not args.html_file:
-            print(format_output_text(new_users, args.duration))
+            print(format_output_text(new_users, human_duration, strftime_fmt))
 
         # Output to text file if specified
         if args.text_file:
-            text_content = format_output_text(new_users, args.duration)
+            text_content = format_output_text(new_users, human_duration, strftime_fmt)
             args.text_file.write_text(text_content + "\n", encoding="utf-8")
             print(f"Plain text output written to: {args.text_file}", file=sys.stderr)
 
         # Output to HTML file if specified
         if args.html_file:
-            html_content = format_output_html(new_users, args.duration)
+            html_content = format_output_html(new_users, human_duration, strftime_fmt)
             args.html_file.write_text(html_content + "\n", encoding="utf-8")
             print(f"HTML output written to: {args.html_file}", file=sys.stderr)
 
