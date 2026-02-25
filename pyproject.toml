@@ -70,7 +70,7 @@ packages = [{ include = "app" }]
 [tool.poetry.dependencies]
 python         = "^3.14"
 elasticsearch  = "~9.3"
-humanize       = "~4.11"
+humanize       = "~4.15"
 pytimeparse2   = "~1.7"
 requests       = "~2.32"
 
