@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from collections.abc import Iterable
 import humanize
 import pytimeparse2
 
@@ -14,7 +15,7 @@ from app.jupyterhub_client import JupyterHubClient
 
 
 def filter_new_users(
-    users: list[dict], duration_seconds: int | float | timedelta
+    users: Iterable[dict], duration_seconds: int | float | timedelta
 ) -> list[dict]:
     """Filter users created within the specified duration.
 

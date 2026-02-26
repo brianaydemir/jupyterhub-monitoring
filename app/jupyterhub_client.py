@@ -2,6 +2,7 @@
 JupyterHub API client wrapper.
 """
 
+from collections.abc import Iterator
 from typing import Any, cast
 
 import requests
@@ -71,50 +72,59 @@ class JupyterHubClient:
             raise ConnectionError(f"Failed to connect to JupyterHub at {endpoint}: {str(e)}") from e
         # fmt: on
 
-    def list_users(self, state: str | None = None) -> list[dict[str, Any]]:
+    def list_users(
+        self, state: str | None = None, limit: int = 100
+    ) -> Iterator[dict[str, Any]]:
         """
-        Get the list of users from JupyterHub.
+        Get the list of users from JupyterHub using offset-based pagination.
 
         Args:
             state: Optional state filter for users (e.g., "active", "inactive").
                    If not provided, returns all users.
+            limit: Number of users to fetch per page (default: 100).
 
-        Returns:
-            A list of user dictionaries containing user information
+        Yields:
+            User dictionaries containing user information, one per user.
 
         Raises:
             ConnectionError: If the API request fails
 
         Example:
             # Get all users
-            all_users = client.list_users()
+            for user in client.list_users():
+                print(user["name"])
 
             # Get only active users
-            active_users = client.list_users(state="active")
+            for user in client.list_users(state="active"):
+                print(user["name"])
         """
         url = f"{self._endpoint}/users"
+        offset = 0
 
-        # Build query parameters
-        params: dict[str, Any] = {}
-        if state is not None:
-            params["state"] = state
+        while True:
+            params: dict[str, Any] = {"offset": offset, "limit": limit}
+            if state is not None:
+                params["state"] = state
 
-        try:
-            response = requests.get(
-                url,
-                headers=self._headers,
-                params=params,
-                verify=self._ca_cert if self._ca_cert is not None else True,
-                timeout=30,
-            )
+            try:
+                response = requests.get(
+                    url,
+                    headers=self._headers,
+                    params=params,
+                    verify=self._ca_cert if self._ca_cert is not None else True,
+                    timeout=30,
+                )
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                raise ConnectionError(f"Failed to list users: {str(e)}") from e
 
-            response.raise_for_status()
+            page = cast(list[dict[str, Any]], response.json())
+            yield from page
 
-            # Parse and return the JSON response
-            return cast(list[dict[str, Any]], response.json())
+            if len(page) < limit:
+                break
 
-        except requests.exceptions.RequestException as e:
-            raise ConnectionError(f"Failed to list users: {str(e)}") from e
+            offset += limit
 
     def list_servers(self) -> list[dict[str, Any]]:
         """
