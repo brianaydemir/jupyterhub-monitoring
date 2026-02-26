@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.elasticsearch_client import ElasticsearchClient
@@ -60,6 +61,11 @@ def push_servers(
                 for key, value in metadata.items():
                     server[f"meta.{key}"] = value
 
+            # Add reserved snapshot-time fields
+            now = datetime.now(timezone.utc)
+            server["meta.snapshot-time"] = int(now.timestamp())
+            server["meta.snapshot-time-iso"] = now.replace(microsecond=0).isoformat()
+
             if debug:
                 # In debug mode, just print the document
                 print(f"\n--- Document {i}/{total_servers} ---")
@@ -89,6 +95,38 @@ def push_servers(
             errors += 1
 
     return (successful, errors)
+
+
+def _parse_metadata(
+    raw_items: list[str] | None, parser: argparse.ArgumentParser
+) -> dict[str, str]:
+    """Parse and validate --metadata KEY=VALUE items, dropping reserved keys.
+
+    Args:
+        raw_items: List of raw 'KEY=VALUE' strings from argparse, or None
+        parser: ArgumentParser instance for error reporting
+
+    Returns:
+        Dictionary of validated metadata key-value pairs
+    """
+    metadata_dict: dict[str, str] = {}
+    for item in raw_items or []:
+        if "=" not in item:
+            parser.error(f"Invalid metadata format '{item}': must be KEY=VALUE")
+        key, value = item.split("=", 1)
+        if not key:
+            parser.error(f"Invalid metadata format '{item}': key cannot be empty")
+        metadata_dict[key] = value
+
+    reserved_keys = {"snapshot-time", "snapshot-time-iso"}
+    for key in reserved_keys & metadata_dict.keys():
+        print(
+            f"Warning: --metadata {key}=... is reserved and will be ignored.",
+            file=sys.stderr,
+        )
+        del metadata_dict[key]
+
+    return metadata_dict
 
 
 def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
@@ -192,15 +230,7 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
         parser.error("--limit must be a positive integer")
 
     # Parse and validate metadata key-value pairs
-    metadata_dict = {}
-    if args.metadata:
-        for item in args.metadata:
-            if "=" not in item:
-                parser.error(f"Invalid metadata format '{item}': must be KEY=VALUE")
-            key, value = item.split("=", 1)
-            if not key:
-                parser.error(f"Invalid metadata format '{item}': key cannot be empty")
-            metadata_dict[key] = value
+    metadata_dict = _parse_metadata(args.metadata, parser)
 
     # Validate that path-type arguments point to existing files
     path_args = [
