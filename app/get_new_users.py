@@ -4,10 +4,10 @@ import argparse
 import html
 import os
 import sys
+from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from collections.abc import Iterable
 import humanize
 import pytimeparse2
 
