@@ -69,7 +69,7 @@ def _format_created(created_str: str, strftime_fmt: str) -> str:
     try:
         dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
         return dt.strftime(strftime_fmt)
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return created_str
 
 
@@ -91,7 +91,10 @@ def format_output_text(users: list[dict], duration_str: str, strftime_fmt: str) 
     else:
         rows = sorted(
             [
-                (user.get("name", ""), _format_created(user.get("created", ""), strftime_fmt))
+                (
+                    user.get("name", ""),
+                    _format_created(user.get("created", ""), strftime_fmt),
+                )
                 for user in users
             ],
             key=lambda r: (r[1], r[0]),
@@ -124,7 +127,9 @@ def format_output_html(users: list[dict], duration_str: str, strftime_fmt: str) 
     else:
         html_lines.append("<table>")
         html_lines.append("  <thead>")
-        html_lines.append("    <tr><th style=\"text-align:left\">Name</th><th style=\"text-align:left\">Created</th></tr>")
+        html_lines.append(
+            '    <tr><th style="text-align:left">Name</th><th style="text-align:left">Created</th></tr>'
+        )
         html_lines.append("  </thead>")
         html_lines.append("  <tbody>")
         for user in sorted(
@@ -135,7 +140,9 @@ def format_output_html(users: list[dict], duration_str: str, strftime_fmt: str) 
             ),
         ):
             name = html.escape(user.get("name", ""))
-            created = html.escape(_format_created(user.get("created", ""), strftime_fmt))
+            created = html.escape(
+                _format_created(user.get("created", ""), strftime_fmt)
+            )
             html_lines.append(f"    <tr><td>{name}</td><td>{created}</td></tr>")
         html_lines.append("  </tbody>")
         html_lines.append("</table>")

@@ -27,9 +27,7 @@ def _key_status_tags(key: dict[str, Any]) -> list[str]:
         tags.append("invalidated")
     expiration = key.get("expiration")
     if expiration is not None:
-        now_ms = int(
-            datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000
-        )
+        now_ms = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000)
         if expiration <= now_ms:
             tags.append("expired")
     return tags
