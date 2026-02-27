@@ -130,25 +130,34 @@ def format_output_html(users: list[dict], duration_str: str, strftime_fmt: str) 
     else:
         noun = "user" if n == 1 else "users"
         html_lines = [f"<p>{n} new {noun} created in the last {esc_duration}:</p>"]
-        html_lines.append("<table>")
+        html_lines.append('<table style="border-collapse:collapse">')
         html_lines.append("  <thead>")
         html_lines.append(
-            '    <tr><th style="text-align:left">Name</th><th style="text-align:left">Created</th></tr>'
+            '    <tr>'
+            '<th style="text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000">Name</th>'
+            '<th style="text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000">Created</th>'
+            "</tr>"
         )
         html_lines.append("  </thead>")
         html_lines.append("  <tbody>")
-        for user in sorted(
+        for i, user in enumerate(sorted(
             users,
             key=lambda u: (
                 _format_created(u.get("created", ""), strftime_fmt),
                 u.get("name", ""),
             ),
-        ):
+        )):
+            bg = "#deeaf1" if i % 2 else "#ffffff"
             name = html.escape(user.get("name", ""))
             created = html.escape(
                 _format_created(user.get("created", ""), strftime_fmt)
             )
-            html_lines.append(f"    <tr><td>{name}</td><td>{created}</td></tr>")
+            html_lines.append(
+                f'    <tr>'
+                f'<td style="border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000">{name}</td>'
+                f'<td style="border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000">{created}</td>'
+                f'</tr>'
+            )
         html_lines.append("  </tbody>")
         html_lines.append("</table>")
 

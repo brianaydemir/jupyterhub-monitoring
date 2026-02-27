@@ -146,20 +146,26 @@ def format_output_html(totals: dict[str, float], duration_str: str) -> str:
     else:
         noun = "user" if n == 1 else "users"
         html_lines = [f"<p>{n} {noun} with active server time in the last {esc_duration}:</p>"]
-        html_lines.append("<table>")
+        html_lines.append('<table style="border-collapse:collapse">')
         html_lines.append("  <thead>")
         html_lines.append(
             "    <tr>"
-            '<th style="text-align:left">Name</th>'
-            '<th style="text-align:left">Active time</th>'
+            '<th style="text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000">Name</th>'
+            '<th style="text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000">Active time</th>'
             "</tr>"
         )
         html_lines.append("  </thead>")
         html_lines.append("  <tbody>")
-        for user, seconds in _sorted_rows(totals):
+        for i, (user, seconds) in enumerate(_sorted_rows(totals)):
+            bg = "#deeaf1" if i % 2 else "#ffffff"
             name = html.escape(user)
             active_time = html.escape(_format_duration(seconds))
-            html_lines.append(f"    <tr><td>{name}</td><td>{active_time}</td></tr>")
+            html_lines.append(
+                f'    <tr>'
+                f'<td style="border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000">{name}</td>'
+                f'<td style="border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000">{active_time}</td>'
+                f'</tr>'
+            )
         html_lines.append("  </tbody>")
         html_lines.append("</table>")
 
