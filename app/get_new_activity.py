@@ -109,11 +109,12 @@ def format_output_text(totals: dict[str, float], duration_str: str) -> str:
     Returns:
         Plain text formatted string with a two-column table
     """
-    lines = [f"Active server time in the last {duration_str}:", ""]
-
-    if not totals:
-        lines.append("No active server time found.")
+    n = len(totals)
+    if n == 0:
+        lines = [f"No active server time in the last {duration_str}."]
     else:
+        noun = "user" if n == 1 else "users"
+        lines = [f"{n} {noun} with active server time in the last {duration_str}:", ""]
         rows = [
             (user, _format_duration(seconds)) for user, seconds in _sorted_rows(totals)
         ]
@@ -137,11 +138,14 @@ def format_output_html(totals: dict[str, float], duration_str: str) -> str:
     Returns:
         HTML formatted string (body content only)
     """
-    html_lines = [f"<p>Active server time in the last {html.escape(duration_str)}:</p>"]
+    n = len(totals)
+    esc_duration = html.escape(duration_str)
 
     if not totals:
-        html_lines.append("<p>No active server time found.</p>")
+        html_lines = [f"<p>No active server time in the last {esc_duration}.</p>"]
     else:
+        noun = "user" if n == 1 else "users"
+        html_lines = [f"<p>{n} {noun} with active server time in the last {esc_duration}:</p>"]
         html_lines.append("<table>")
         html_lines.append("  <thead>")
         html_lines.append(
