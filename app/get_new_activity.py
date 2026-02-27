@@ -43,11 +43,9 @@ def build_query(
         filters.append({"term": {"meta.hub": hub}})
 
     return {
-        "query": {
-            "bool": {
-                "filter": filters,
-                "must_not": [{"term": {"meta.testing": "true"}}],
-            }
+        "bool": {
+            "filter": filters,
+            "must_not": [{"term": {"meta.testing": "true"}}],
         }
     }
 
