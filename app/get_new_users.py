@@ -85,11 +85,12 @@ def format_output_text(users: list[dict], duration_str: str, strftime_fmt: str) 
     Returns:
         Plain text formatted string with a two-column table of name and creation date
     """
-    lines = [f"New users created in the last {duration_str}:", ""]
-
-    if not users:
-        lines.append("No new users found.")
+    n = len(users)
+    if n == 0:
+        lines = [f"No new users created in the last {duration_str}."]
     else:
+        noun = "user" if n == 1 else "users"
+        lines = [f"{n} new {noun} created in the last {duration_str}:", ""]
         rows = sorted(
             [
                 (
@@ -121,11 +122,14 @@ def format_output_html(users: list[dict], duration_str: str, strftime_fmt: str) 
     Returns:
         HTML formatted string (body content only) with a table of name and creation date
     """
-    html_lines = [f"<p>New users created in the last {html.escape(duration_str)}:</p>"]
+    n = len(users)
+    esc_duration = html.escape(duration_str)
 
     if not users:
-        html_lines.append("<p>No new users found.</p>")
+        html_lines = [f"<p>No new users created in the last {esc_duration}.</p>"]
     else:
+        noun = "user" if n == 1 else "users"
+        html_lines = [f"<p>{n} new {noun} created in the last {esc_duration}:</p>"]
         html_lines.append("<table>")
         html_lines.append("  <thead>")
         html_lines.append(
