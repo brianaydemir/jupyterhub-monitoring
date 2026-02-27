@@ -3,7 +3,7 @@
 
 [project]
 name = "jupyterhub-monitoring"
-version = "2.1.0"
+version = "2.2.0"
 description = "Monitoring and reporting scripts for JupyterHub"
 license = "Apache-2.0"
 authors = [{ name = "Brian Aydemir", email = "baydemir@morgridge.org" }]
@@ -84,7 +84,7 @@ mypy        = "~1.19"
 pre-commit  = "~4.5"
 pylint      = "~4.0"
 toml-cli    = "~0.8"
-typos       = "~1.43"
+typos       = "~1.44"
 
 
 [tool.poetry.requires-plugins]

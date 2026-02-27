@@ -145,7 +145,9 @@ def format_output_html(totals: dict[str, float], duration_str: str) -> str:
         html_lines = [f"<p>No active server time in the last {esc_duration}.</p>"]
     else:
         noun = "user" if n == 1 else "users"
-        html_lines = [f"<p>{n} {noun} with active server time in the last {esc_duration}:</p>"]
+        html_lines = [
+            f"<p>{n} {noun} with active server time in the last {esc_duration}:</p>"
+        ]
         html_lines.append('<table style="border-collapse:collapse">')
         html_lines.append("  <thead>")
         html_lines.append(
@@ -161,10 +163,10 @@ def format_output_html(totals: dict[str, float], duration_str: str) -> str:
             name = html.escape(user)
             active_time = html.escape(_format_duration(seconds))
             html_lines.append(
-                f'    <tr>'
+                f"    <tr>"
                 f'<td style="border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000">{name}</td>'
                 f'<td style="border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000">{active_time}</td>'
-                f'</tr>'
+                f"</tr>"
             )
         html_lines.append("  </tbody>")
         html_lines.append("</table>")
