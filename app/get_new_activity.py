@@ -40,7 +40,7 @@ def build_query(
     ]
 
     if hub is not None:
-        filters.append({"term": {"meta.hub": hub}})
+        filters.append({"term": {"meta.hub.keyword": hub}})
 
     return {
         "bool": {
