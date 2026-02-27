@@ -17,6 +17,7 @@ def create_message(
     subject: str,
     text_file: Path | None,
     html_file: Path | None,
+    subject_heading: bool = True,
 ) -> MIMEMultipart:
     """Create an email message with the given parameters.
 
@@ -28,6 +29,8 @@ def create_message(
         subject: The email subject line
         text_file: Path to a plain text file for the email body (optional)
         html_file: Path to an HTML file for the email body (optional)
+        subject_heading: Whether to prepend the subject as a heading in the
+            body (default: True)
 
     Returns:
         A MIMEMultipart message ready to send
@@ -50,11 +53,15 @@ def create_message(
     # Read and attach plain text content
     if text_file:
         text_content = text_file.read_text(encoding="utf-8")
+        if subject_heading:
+            text_content = f"{subject}\n{'-' * len(subject)}\n\n{text_content}"
         msg.attach(MIMEText(text_content, "plain"))
 
     # Read and attach HTML content
     if html_file:
         html_content = html_file.read_text(encoding="utf-8")
+        if subject_heading:
+            html_content = f"<h1>{subject}</h1>\n{html_content}"
         msg.attach(MIMEText(html_content, "html"))
 
     return msg
@@ -146,6 +153,13 @@ def parse_arguments() -> argparse.Namespace:
         help="Disable SSL/TLS (enabled by default)",
     )
 
+    # Subject heading (optional with default)
+    parser.add_argument(
+        "--no-subject-heading",
+        action="store_true",
+        help="Do not prepend the subject as a heading in the message body",
+    )
+
     # Email content (at least one required)
     parser.add_argument(
         "--text-file",
@@ -191,6 +205,7 @@ def main() -> int:
             subject=args.subject,
             text_file=args.text_file,
             html_file=args.html_file,
+            subject_heading=not args.no_subject_heading,
         )
 
         # Send the email
