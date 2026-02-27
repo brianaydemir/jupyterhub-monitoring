@@ -14,6 +14,7 @@ def create_message(
     sender_email: str,
     recipient_name: str | None,
     recipient_email: str,
+    subject: str,
     text_file: Path | None,
     html_file: Path | None,
 ) -> MIMEMultipart:
@@ -24,6 +25,7 @@ def create_message(
         sender_email: The sender's email address
         recipient_name: The recipient's display name (optional)
         recipient_email: The recipient's email address
+        subject: The email subject line
         text_file: Path to a plain text file for the email body (optional)
         html_file: Path to an HTML file for the email body (optional)
 
@@ -42,6 +44,8 @@ def create_message(
         msg["To"] = formataddr((recipient_name, recipient_email))
     else:
         msg["To"] = recipient_email
+
+    msg["Subject"] = subject
 
     # Read and attach plain text content
     if text_file:
@@ -115,6 +119,13 @@ def parse_arguments() -> argparse.Namespace:
         help="The recipient's display name",
     )
 
+    # Subject (optional with default)
+    parser.add_argument(
+        "--subject",
+        default="JupyterHub Monitoring Report",
+        help='Email subject line (default: "JupyterHub Monitoring Report")',
+    )
+
     # SMTP server settings (required)
     parser.add_argument(
         "--smtp-host",
@@ -177,6 +188,7 @@ def main() -> int:
             sender_email=args.sender_email,
             recipient_name=args.recipient_name,
             recipient_email=args.recipient_email,
+            subject=args.subject,
             text_file=args.text_file,
             html_file=args.html_file,
         )
