@@ -1,0 +1,53 @@
+# Copilot Instructions
+
+## Commands
+
+```bash
+make init       # Install dependencies (poetry install)
+make reformat   # Format code with isort + black
+make lint       # Run bandit, mypy, and pylint
+make build      # Build Python wheel + Docker image
+make all        # reformat + lint + build
+```
+
+There are no automated tests. Linters run with `-` prefix (non-fatal) in the Makefile.
+
+## Architecture
+
+This project provides CLI scripts that pull data from a JupyterHub instance and push it to Elasticsearch, plus utilities for managing Elasticsearch API keys and sending emails.
+
+**Two client wrappers** in `app/`:
+- `JupyterHubClient` — wraps JupyterHub REST API; `list_servers()` returns flattened dicts with dot-notation keys (e.g., `user.name`, `server.state`)
+- `ElasticsearchClient` — wraps the official Python client; constructor uses API key auth, class methods (`create_api_key_with_basic_auth`, `delete_api_key_with_basic_auth`, `list_api_keys_with_basic_auth`) use basic auth via HTTP requests directly
+
+**CLI scripts** (each maps to a `[project.scripts]` entry):
+- `push-servers` — main pipeline: JupyterHub → Elasticsearch
+- `get-new-users` — filter/report new JupyterHub users
+- `get-es-docs` — query and dump Elasticsearch documents
+- `create-es-api-key` / `delete-es-api-key` / `list-es-api-keys` — API key management
+- `send-email` — send SMTP email from file-based body
+
+**Deployment**: `make build` builds a Docker image from the installed wheel (requires `dist/` artifacts first).
+
+## Conventions
+
+**Script structure**: Every CLI script follows: argparse argument parsing in `parse_arguments()`, `main()` returning `int` exit code, errors printed to `sys.stderr`.
+
+**API key input**: Secrets are accepted as either a file path argument (`--*-api-key`) or an environment variable (`JUPYTERHUB_API_KEY`, `ELASTICSEARCH_API_KEY`). File contents are `.strip()`ped.
+
+**CA certificates**: All external connections accept an optional `--*-ca-cert` path argument for TLS verification.
+
+**Document field naming**: Elasticsearch documents use dot-notation keys. Metadata added by scripts uses the `meta.` prefix (e.g., `meta.snapshot-time`). The keys `snapshot-time` and `snapshot-time-iso` are reserved.
+
+**`[project.scripts]` entries must be in alphabetical order.**
+
+**Python version**: Requires Python ≥ 3.14 (uses union type syntax `X | Y`, `match` etc.).
+
+**Formatting**: black with line-length 88, isort with `profile = "black"`.
+
+## Commit Preferences
+
+- **Subject line**: Short imperative phrase, no trailing period (e.g., `Add --subject argument to send-email`)
+- **Body**: Wrap at ~72 characters; use `-` bullet lists for multi-item changes
+- **Authorship**: Unless told otherwise, Copilot should be the commit author and the user should be left as the committer. Use `--author` to set the author to `Copilot <copilot@github.com>` and include the trailer `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
+- **Dependencies**: Pin to the latest minor release at update time using `~X.Y` (e.g., `humanize = "~4.15"`)
