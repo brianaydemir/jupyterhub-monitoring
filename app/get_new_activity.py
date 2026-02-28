@@ -155,13 +155,13 @@ def format_output_text(
             (*parsed_names[user], _format_duration(seconds))
             for user, seconds in _sorted_rows(totals, show_method)
         ]
-        domain_width = max(len("Domain"), max(len(r[1]) for r in rows))
+        domain_width = max(len("Institution"), max(len(r[1]) for r in rows))
         id_width = max(len("ID"), max(len(r[2]) for r in rows))
         time_width = max(len("Time (HH:MM)"), max(len(r[4]) for r in rows))
         if show_method:
             method_width = max(len("Login method"), max(len(r[3]) for r in rows))
             lines.append(
-                f"{'Time (HH:MM)':>{time_width}}  {'Domain':<{domain_width}}  "
+                f"{'Time (HH:MM)':>{time_width}}  {'Institution':<{domain_width}}  "
                 f"{'ID':<{id_width}}  {'Login method':<{method_width}}"
             )
             lines.append(
@@ -175,7 +175,7 @@ def format_output_text(
                 )
         else:
             lines.append(
-                f"{'Time (HH:MM)':>{time_width}}  {'Domain':<{domain_width}}  "
+                f"{'Time (HH:MM)':>{time_width}}  {'Institution':<{domain_width}}  "
                 f"{'ID':<{id_width}}"
             )
             lines.append(
@@ -237,7 +237,7 @@ def format_output_html(
             html_lines.append(
                 f'    <tr>'
                 f'<th style="{TH_R}">Time (HH:MM)</th>'
-                f'<th style="{TH}">Domain</th>'
+                f'<th style="{TH}">Institution</th>'
                 f'<th style="{TH}">ID</th>'
                 f'<th style="{TH}">Login method</th>'
                 f"</tr>"
@@ -246,7 +246,7 @@ def format_output_html(
             html_lines.append(
                 f'    <tr>'
                 f'<th style="{TH_R}">Time (HH:MM)</th>'
-                f'<th style="{TH}">Domain</th>'
+                f'<th style="{TH}">Institution</th>'
                 f'<th style="{TH}">ID</th>'
                 f"</tr>"
             )

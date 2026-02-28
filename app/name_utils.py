@@ -41,7 +41,7 @@ def parse_name(name: str) -> tuple[int, str, str, str]:
     if m := _LEGACY_EPPN_RE.match(name):
         return (1, m.group(2), m.group(1), "legacy eppn")
     if m := _EPPN_RE.match(name):
-        return (0, m.group(2), m.group(1), "institution")
+        return (0, m.group(2), m.group(1), "local NetID")
     if m := _ORCID_RE.match(name):
         return (3, "orcid.org", m.group(1), "ORCID")
     return (4, "", name, "")

@@ -118,12 +118,12 @@ def format_output_text(
                 key=lambda r: (r[0], _trailing_domain_key(r[2]), r[2], r[3]),
             )
         created_width = max(len("Created"), max(len(r[0]) for r in rows))
-        domain_width = max(len("Domain"), max(len(r[2]) for r in rows))
+        domain_width = max(len("Institution"), max(len(r[2]) for r in rows))
         id_width = max(len("ID"), max(len(r[3]) for r in rows))
         if show_method:
             method_width = max(len("Login method"), max(len(r[4]) for r in rows))
             lines.append(
-                f"{'Created':<{created_width}}  {'Domain':<{domain_width}}  "
+                f"{'Created':<{created_width}}  {'Institution':<{domain_width}}  "
                 f"{'ID':<{id_width}}  {'Login method':<{method_width}}"
             )
             lines.append(
@@ -137,7 +137,7 @@ def format_output_text(
                 )
         else:
             lines.append(
-                f"{'Created':<{created_width}}  {'Domain':<{domain_width}}  "
+                f"{'Created':<{created_width}}  {'Institution':<{domain_width}}  "
                 f"{'ID':<{id_width}}"
             )
             lines.append(
@@ -202,7 +202,7 @@ def format_output_html(
             html_lines.append(
                 f'    <tr>'
                 f'<th style="{TH}">Created</th>'
-                f'<th style="{TH}">Domain</th>'
+                f'<th style="{TH}">Institution</th>'
                 f'<th style="{TH}">ID</th>'
                 f'<th style="{TH}">Login method</th>'
                 f"</tr>"
@@ -211,7 +211,7 @@ def format_output_html(
             html_lines.append(
                 f'    <tr>'
                 f'<th style="{TH}">Created</th>'
-                f'<th style="{TH}">Domain</th>'
+                f'<th style="{TH}">Institution</th>'
                 f'<th style="{TH}">ID</th>'
                 f"</tr>"
             )
