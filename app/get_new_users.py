@@ -195,7 +195,7 @@ def format_output_html(
         show_method = detailed_usernames or (
             len(domain_id_pairs) != len(set(domain_id_pairs))
         )
-        TH = 'text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000'
+        TH = 'text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#a6c9e8; color:#000000'
         html_lines.append('<table style="border-collapse:collapse">')
         html_lines.append("  <thead>")
         if show_method:
@@ -230,7 +230,7 @@ def format_output_html(
                 parse_name(u.get("name", ""))[2],
             )
         for i, user in enumerate(sorted(users, key=sort_key)):
-            bg = "#deeaf1" if i % 2 else "#ffffff"
+            bg = "#e6eff4" if i % 2 else "#ffffff"
             TD = f"border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
             created = html.escape(
                 _format_created(user.get("created", ""), strftime_fmt, tz)
