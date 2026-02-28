@@ -5,79 +5,71 @@ import html
 import os
 import sys
 from collections.abc import Iterable
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, tzinfo
 from pathlib import Path
 
-import humanize
 import pytimeparse2
 
 from app.jupyterhub_client import JupyterHubClient
 from app.name_utils import _trailing_domain_key, parse_name
+from app.time_utils import compute_time_range, parse_timezone
 
 
 def filter_new_users(
-    users: Iterable[dict], duration_seconds: int | float | timedelta
+    users: Iterable[dict], cutoff_time: datetime, end_time: datetime
 ) -> list[dict]:
-    """Filter users created within the specified duration.
+    """Filter users created within [*cutoff_time*, *end_time*].
 
     Args:
         users: List of user dictionaries from JupyterHub API
-        duration_seconds: Duration to look back from now (int/float as seconds,
-                          or timedelta object)
+        cutoff_time: Timezone-aware datetime; only users created at or after
+            this moment are returned
+        end_time: Timezone-aware datetime; only users created at or before
+            this moment are returned
 
     Returns:
-        List of user dictionaries (with 'name' and 'created' keys) that were
-        created within the specified duration
+        List of user dictionaries (with 'name' and 'created' keys)
     """
-    now = datetime.now(timezone.utc)
-
-    # Convert duration to seconds if it's a timedelta
-    if isinstance(duration_seconds, timedelta):
-        seconds = duration_seconds.total_seconds()
-    else:
-        seconds = float(duration_seconds)
-
-    cutoff_time = now - timedelta(seconds=seconds)
-
     new_users = []
     for user in users:
-        # Get the user's creation timestamp
         created_str = user.get("created")
         if not created_str:
             continue
 
-        # Parse the ISO 8601 timestamp from JupyterHub
         try:
             created_dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-            if created_dt >= cutoff_time:
+            if cutoff_time <= created_dt <= end_time:
                 new_users.append({"name": user.get("name", ""), "created": created_str})
-        except ValueError, AttributeError:
-            # Skip users with invalid timestamps
+        except (ValueError, AttributeError):
             continue
 
     return new_users
 
 
-def _format_created(created_str: str, strftime_fmt: str) -> str:
-    """Reformat a JupyterHub ISO 8601 creation timestamp.
+def _format_created(created_str: str, strftime_fmt: str, tz: tzinfo) -> str:
+    """Reformat a JupyterHub ISO 8601 creation timestamp in a given timezone.
 
     Args:
         created_str: ISO 8601 timestamp string from JupyterHub
         strftime_fmt: strftime format string to apply
+        tz: Timezone to convert the timestamp into before formatting
 
     Returns:
         Formatted timestamp string, or the original string if parsing fails
     """
     try:
-        dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(created_str.replace("Z", "+00:00")).astimezone(tz)
         return dt.strftime(strftime_fmt)
-    except ValueError, AttributeError:
+    except (ValueError, AttributeError):
         return created_str
 
 
 def format_output_text(
     users: list[dict],
-    duration_str: str,
+    start_time: datetime,
+    end_time: datetime,
+    tz_name: str,
+    tz: tzinfo,
     strftime_fmt: str,
     detailed_usernames: bool = False,
 ) -> str:
@@ -85,22 +77,30 @@ def format_output_text(
 
     Args:
         users: List of user dictionaries with 'name' and 'created' keys
-        duration_str: Human-readable duration string (e.g., "7 days", "12h")
+        start_time: Start of the reporting window (timezone-aware)
+        end_time: End of the reporting window (timezone-aware)
+        tz_name: Timezone name for the footnote
+        tz: Timezone for converting creation timestamps
         strftime_fmt: strftime format string for creation timestamps
         detailed_usernames: Always show the "Login method" column
 
     Returns:
         Plain text formatted string with a table of creation date and name columns
     """
+    fmt = "%Y-%m-%d %H:%M"
+    range_str = f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}"
     n = len(users)
     if n == 0:
-        lines = [f"No new users created in the last {duration_str}."]
+        lines = [
+            f"No new users created between "
+            f"{start_time.strftime(fmt)} and {end_time.strftime(fmt)}."
+        ]
     else:
         noun = "user" if n == 1 else "users"
-        lines = [f"{n} new {noun} created in the last {duration_str}:", ""]
+        lines = [f"{n} new {noun} created {range_str}:", ""]
         parsed = [
             (
-                _format_created(user.get("created", ""), strftime_fmt),
+                _format_created(user.get("created", ""), strftime_fmt, tz),
                 *parse_name(user.get("name", "")),
             )
             for user in users
@@ -149,12 +149,17 @@ def format_output_text(
                     f"{uid:<{id_width}}"
                 )
 
+    lines.append("")
+    lines.append(f"Timezone: {tz_name}")
     return "\n".join(lines)
 
 
 def format_output_html(
     users: list[dict],
-    duration_str: str,
+    start_time: datetime,
+    end_time: datetime,
+    tz_name: str,
+    tz: tzinfo,
     strftime_fmt: str,
     detailed_usernames: bool = False,
 ) -> str:
@@ -162,21 +167,29 @@ def format_output_html(
 
     Args:
         users: List of user dictionaries with 'name' and 'created' keys
-        duration_str: Human-readable duration string (e.g., "7 days", "12h")
+        start_time: Start of the reporting window (timezone-aware)
+        end_time: End of the reporting window (timezone-aware)
+        tz_name: Timezone name for the footnote
+        tz: Timezone for converting creation timestamps
         strftime_fmt: strftime format string for creation timestamps
         detailed_usernames: Always show the "Login method" column
 
     Returns:
         HTML formatted string (body content only) with a table of creation date and name columns
     """
+    fmt = "%Y-%m-%d %H:%M"
+    range_str = f"from {html.escape(start_time.strftime(fmt))} to {html.escape(end_time.strftime(fmt))}"
     n = len(users)
-    esc_duration = html.escape(duration_str)
 
     if not users:
-        html_lines = [f"<p>No new users created in the last {esc_duration}.</p>"]
+        html_lines = [
+            f"<p>No new users created between "
+            f"{html.escape(start_time.strftime(fmt))} and "
+            f"{html.escape(end_time.strftime(fmt))}.</p>"
+        ]
     else:
         noun = "user" if n == 1 else "users"
-        html_lines = [f"<p>{n} new {noun} created in the last {esc_duration}:</p>"]
+        html_lines = [f"<p>{n} new {noun} created {range_str}:</p>"]
         parsed = [parse_name(user.get("name", "")) for user in users]
         domain_id_pairs = [(p[1], p[2]) for p in parsed]
         show_method = detailed_usernames or (
@@ -206,12 +219,12 @@ def format_output_html(
         html_lines.append("  <tbody>")
         if show_method:
             sort_key = lambda u: (  # noqa: E731
-                _format_created(u.get("created", ""), strftime_fmt),
+                _format_created(u.get("created", ""), strftime_fmt, tz),
                 *parse_name(u.get("name", ""))[:3],
             )
         else:
             sort_key = lambda u: (  # noqa: E731
-                _format_created(u.get("created", ""), strftime_fmt),
+                _format_created(u.get("created", ""), strftime_fmt, tz),
                 _trailing_domain_key(parse_name(u.get("name", ""))[1]),
                 parse_name(u.get("name", ""))[1],
                 parse_name(u.get("name", ""))[2],
@@ -220,7 +233,7 @@ def format_output_html(
             bg = "#deeaf1" if i % 2 else "#ffffff"
             TD = f"border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
             created = html.escape(
-                _format_created(user.get("created", ""), strftime_fmt)
+                _format_created(user.get("created", ""), strftime_fmt, tz)
             )
             _priority, domain, uid, method = parse_name(user.get("name", ""))
             if show_method:
@@ -243,6 +256,7 @@ def format_output_html(
         html_lines.append("  </tbody>")
         html_lines.append("</table>")
 
+    html_lines.append(f"<p><em>Timezone: {html.escape(tz_name)}</em></p>")
     return "\n".join(html_lines)
 
 
@@ -295,6 +309,23 @@ Environment variables:
             '"12h", "7 days", "3d 6h 12m")'
         ),
     )
+    parser.add_argument(
+        "--time",
+        metavar="HH:MM",
+        help=(
+            "Interpret --duration as ending at the most recent occurrence of this "
+            "wall-clock time (in the given timezone) within the past 24 hours"
+        ),
+    )
+    parser.add_argument(
+        "--timezone",
+        default="America/Chicago",
+        metavar="TZ",
+        help=(
+            "Timezone for --time and all output timestamps "
+            '(e.g., "America/Chicago", "MST", "+04:00"); default: America/Chicago'
+        ),
+    )
 
     # Output options
     parser.add_argument(
@@ -341,6 +372,18 @@ Environment variables:
             "--api-key or the JUPYTERHUB_API_KEY environment variable is required"
         )
 
+    # Validate --time format
+    if args.time is not None:
+        import re
+        if not re.fullmatch(r"\d{1,2}:\d{2}", args.time):
+            parser.error("--time must be in HH:MM format")
+
+    # Validate --timezone
+    try:
+        parse_timezone(args.timezone)
+    except ValueError as e:
+        parser.error(str(e))
+
     return args
 
 
@@ -358,6 +401,16 @@ def main() -> int:
         if duration_seconds is None:
             print(f"Error: Invalid duration format: {args.duration}", file=sys.stderr)
             return 1
+
+        duration_td = (
+            duration_seconds
+            if isinstance(duration_seconds, timedelta)
+            else timedelta(seconds=float(duration_seconds))
+        )
+
+        # Resolve timezone and compute time range
+        tz = parse_timezone(args.timezone)
+        start_time, end_time = compute_time_range(duration_td, args.time, tz)
 
         # Initialize the JupyterHub client
         try:
@@ -381,31 +434,25 @@ def main() -> int:
             print(f"Error listing users: {e}", file=sys.stderr)
             return 1
 
-        # Filter for new users within the specified duration
-        new_users = filter_new_users(users, duration_seconds)
+        # Filter for new users within the computed time range
+        new_users = filter_new_users(users, start_time, end_time)
 
         # Determine the strftime format from the --date-format choice
         strftime_fmt = "%Y-%m-%d" if args.date_format == "date" else "%Y-%m-%d %H:%M"
 
-        human_duration = humanize.naturaldelta(
-            duration_seconds
-            if isinstance(duration_seconds, timedelta)
-            else timedelta(seconds=float(duration_seconds))
-        )
-
         # Output to stdout by default
         if not args.text_file and not args.html_file:
-            print(format_output_text(new_users, human_duration, strftime_fmt, args.detailed_usernames))
+            print(format_output_text(new_users, start_time, end_time, args.timezone, tz, strftime_fmt, args.detailed_usernames))
 
         # Output to text file if specified
         if args.text_file:
-            text_content = format_output_text(new_users, human_duration, strftime_fmt, args.detailed_usernames)
+            text_content = format_output_text(new_users, start_time, end_time, args.timezone, tz, strftime_fmt, args.detailed_usernames)
             args.text_file.write_text(text_content + "\n", encoding="utf-8")
             print(f"Plain text output written to: {args.text_file}", file=sys.stderr)
 
         # Output to HTML file if specified
         if args.html_file:
-            html_content = format_output_html(new_users, human_duration, strftime_fmt, args.detailed_usernames)
+            html_content = format_output_html(new_users, start_time, end_time, args.timezone, tz, strftime_fmt, args.detailed_usernames)
             args.html_file.write_text(html_content + "\n", encoding="utf-8")
             print(f"HTML output written to: {args.html_file}", file=sys.stderr)
 

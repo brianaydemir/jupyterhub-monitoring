@@ -4,7 +4,7 @@ import argparse
 import html
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import humanize
@@ -12,23 +12,26 @@ import pytimeparse2
 
 from app.elasticsearch_client import ElasticsearchClient
 from app.name_utils import _trailing_domain_key, parse_name
+from app.time_utils import compute_time_range, parse_timezone
 
 
 def build_query(
     cutoff: int,
+    end: int,
     hub: str | None = None,
 ) -> dict:
     """Build the Elasticsearch Query DSL for active server documents.
 
     Args:
         cutoff: Unix timestamp; only documents at or after this time are included
+        end: Unix timestamp; only documents at or before this time are included
         hub: Optional meta.hub value to filter on
 
     Returns:
         Elasticsearch Query DSL dictionary
     """
     filters: list[dict] = [
-        {"range": {"meta.snapshot-time": {"gte": cutoff}}},
+        {"range": {"meta.snapshot-time": {"gte": cutoff, "lte": end}}},
         {
             "bool": {
                 "should": [
@@ -117,25 +120,31 @@ def _sorted_rows(
 
 def format_output_text(
     totals: dict[str, float],
-    duration_str: str,
+    start_time: datetime,
+    end_time: datetime,
+    tz_name: str,
     detailed_usernames: bool = False,
 ) -> str:
     """Format per-user activity as plain text.
 
     Args:
         totals: Dictionary mapping user name to total active seconds
-        duration_str: Human-readable duration string for the report header
+        start_time: Start of the reporting window (timezone-aware)
+        end_time: End of the reporting window (timezone-aware)
+        tz_name: Timezone name for the footnote
         detailed_usernames: Always show the "Login method" column
 
     Returns:
         Plain text formatted string with a table
     """
+    fmt = "%Y-%m-%d %H:%M"
+    range_str = f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}"
     n = len(totals)
     if n == 0:
-        lines = [f"No active server time in the last {duration_str}."]
+        lines = [f"No active server time between {start_time.strftime(fmt)} and {end_time.strftime(fmt)}."]
     else:
         noun = "user" if n == 1 else "users"
-        lines = [f"{n} {noun} with active server time in the last {duration_str}:", ""]
+        lines = [f"{n} {noun} with active server time {range_str}:", ""]
         parsed_names = {user: parse_name(user) for user in totals}
         domain_id_pairs = [(p[1], p[2]) for p in parsed_names.values()]
         show_method = detailed_usernames or (
@@ -177,33 +186,44 @@ def format_output_text(
                     f"{active_time:<{time_width}}"
                 )
 
+    lines.append("")
+    lines.append(f"Timezone: {tz_name}")
     return "\n".join(lines)
 
 
 def format_output_html(
     totals: dict[str, float],
-    duration_str: str,
+    start_time: datetime,
+    end_time: datetime,
+    tz_name: str,
     detailed_usernames: bool = False,
 ) -> str:
     """Format per-user activity as HTML suitable for an email body.
 
     Args:
         totals: Dictionary mapping user name to total active seconds
-        duration_str: Human-readable duration string for the report header
+        start_time: Start of the reporting window (timezone-aware)
+        end_time: End of the reporting window (timezone-aware)
+        tz_name: Timezone name for the footnote
         detailed_usernames: Always show the "Login method" column
 
     Returns:
         HTML formatted string (body content only)
     """
+    fmt = "%Y-%m-%d %H:%M"
+    range_str = f"from {html.escape(start_time.strftime(fmt))} to {html.escape(end_time.strftime(fmt))}"
     n = len(totals)
-    esc_duration = html.escape(duration_str)
 
     if not totals:
-        html_lines = [f"<p>No active server time in the last {esc_duration}.</p>"]
+        html_lines = [
+            f"<p>No active server time between "
+            f"{html.escape(start_time.strftime(fmt))} and "
+            f"{html.escape(end_time.strftime(fmt))}.</p>"
+        ]
     else:
         noun = "user" if n == 1 else "users"
         html_lines = [
-            f"<p>{n} {noun} with active server time in the last {esc_duration}:</p>"
+            f"<p>{n} {noun} with active server time {range_str}:</p>"
         ]
         parsed_names = {user: parse_name(user) for user in totals}
         domain_id_pairs = [(p[1], p[2]) for p in parsed_names.values()]
@@ -257,6 +277,7 @@ def format_output_html(
         html_lines.append("  </tbody>")
         html_lines.append("</table>")
 
+    html_lines.append(f"<p><em>Timezone: {html.escape(tz_name)}</em></p>")
     return "\n".join(html_lines)
 
 
@@ -315,6 +336,23 @@ Environment variables:
         ),
     )
     parser.add_argument(
+        "--time",
+        metavar="HH:MM",
+        help=(
+            "Interpret --duration as ending at the most recent occurrence of this "
+            "wall-clock time (in the given timezone) within the past 24 hours"
+        ),
+    )
+    parser.add_argument(
+        "--timezone",
+        default="America/Chicago",
+        metavar="TZ",
+        help=(
+            "Timezone for --time and all output timestamps "
+            '(e.g., "America/Chicago", "MST", "+04:00"); default: America/Chicago'
+        ),
+    )
+    parser.add_argument(
         "--hub",
         help="Filter results to documents with this meta.hub value",
     )
@@ -353,6 +391,18 @@ Environment variables:
             "--api-key or the ELASTICSEARCH_API_KEY environment variable is required"
         )
 
+    # Validate --time format
+    if args.time is not None:
+        import re
+        if not re.fullmatch(r"\d{1,2}:\d{2}", args.time):
+            parser.error("--time must be in HH:MM format")
+
+    # Validate --timezone
+    try:
+        parse_timezone(args.timezone)
+    except ValueError as e:
+        parser.error(str(e))
+
     return args
 
 
@@ -371,13 +421,16 @@ def main() -> int:
             print(f"Error: Invalid duration format: {args.duration}", file=sys.stderr)
             return 1
 
-        # Compute the cutoff Unix timestamp
         duration_td = (
             duration_seconds
             if isinstance(duration_seconds, timedelta)
             else timedelta(seconds=duration_seconds)
         )
-        cutoff = int((datetime.now(timezone.utc) - duration_td).timestamp())
+
+        # Resolve timezone and compute time range
+        tz = parse_timezone(args.timezone)
+        start_time, end_time = compute_time_range(duration_td, args.time, tz)
+        cutoff = int(start_time.timestamp())
 
         # Initialize the Elasticsearch client
         api_key = (
@@ -393,7 +446,7 @@ def main() -> int:
 
         # Query Elasticsearch
         try:
-            query = build_query(cutoff=cutoff, hub=args.hub)
+            query = build_query(cutoff=cutoff, end=int(end_time.timestamp()), hub=args.hub)
             documents = list(client.query(index=args.index, query=query))
         except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"Error querying Elasticsearch: {e}", file=sys.stderr)
@@ -404,26 +457,19 @@ def main() -> int:
         # Aggregate active time per user
         totals = compute_activity(documents)
 
-        # Build human-readable duration for report headers
-        human_duration = humanize.naturaldelta(
-            duration_seconds
-            if isinstance(duration_seconds, timedelta)
-            else timedelta(seconds=duration_seconds)
-        )
-
         # Output to stdout by default
         if not args.text_file and not args.html_file:
-            print(format_output_text(totals, human_duration, args.detailed_usernames))
+            print(format_output_text(totals, start_time, end_time, args.timezone, args.detailed_usernames))
 
         # Output to text file if specified
         if args.text_file:
-            text_content = format_output_text(totals, human_duration, args.detailed_usernames)
+            text_content = format_output_text(totals, start_time, end_time, args.timezone, args.detailed_usernames)
             args.text_file.write_text(text_content + "\n", encoding="utf-8")
             print(f"Plain text output written to: {args.text_file}", file=sys.stderr)
 
         # Output to HTML file if specified
         if args.html_file:
-            html_content = format_output_html(totals, human_duration, args.detailed_usernames)
+            html_content = format_output_html(totals, start_time, end_time, args.timezone, args.detailed_usernames)
             args.html_file.write_text(html_content + "\n", encoding="utf-8")
             print(f"HTML output written to: {args.html_file}", file=sys.stderr)
 
