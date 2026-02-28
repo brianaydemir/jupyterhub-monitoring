@@ -12,6 +12,7 @@ import humanize
 import pytimeparse2
 
 from app.jupyterhub_client import JupyterHubClient
+from app.name_utils import _trailing_domain_key, parse_name
 
 
 def filter_new_users(
@@ -74,16 +75,22 @@ def _format_created(created_str: str, strftime_fmt: str) -> str:
         return created_str
 
 
-def format_output_text(users: list[dict], duration_str: str, strftime_fmt: str) -> str:
+def format_output_text(
+    users: list[dict],
+    duration_str: str,
+    strftime_fmt: str,
+    detailed_usernames: bool = False,
+) -> str:
     """Format users as plain text output.
 
     Args:
         users: List of user dictionaries with 'name' and 'created' keys
         duration_str: Human-readable duration string (e.g., "7 days", "12h")
         strftime_fmt: strftime format string for creation timestamps
+        detailed_usernames: Always show the "Login method" column
 
     Returns:
-        Plain text formatted string with a two-column table of name and creation date
+        Plain text formatted string with a table of creation date and name columns
     """
     n = len(users)
     if n == 0:
@@ -91,36 +98,76 @@ def format_output_text(users: list[dict], duration_str: str, strftime_fmt: str) 
     else:
         noun = "user" if n == 1 else "users"
         lines = [f"{n} new {noun} created in the last {duration_str}:", ""]
-        rows = sorted(
-            [
-                (
-                    user.get("name", ""),
-                    _format_created(user.get("created", ""), strftime_fmt),
-                )
-                for user in users
-            ],
-            key=lambda r: (r[1], r[0]),
+        parsed = [
+            (
+                _format_created(user.get("created", ""), strftime_fmt),
+                *parse_name(user.get("name", "")),
+            )
+            for user in users
+        ]
+        # Determine whether the "Login method" column is needed
+        domain_id_pairs = [(r[2], r[3]) for r in parsed]
+        show_method = detailed_usernames or (
+            len(domain_id_pairs) != len(set(domain_id_pairs))
         )
-        name_width = max(len("Name"), max(len(r[0]) for r in rows))
-        created_width = max(len("Created"), max(len(r[1]) for r in rows))
-        lines.append(f"{'Name':<{name_width}}  {'Created':<{created_width}}")
-        lines.append(f"{'-' * name_width}  {'-' * created_width}")
-        for name, created in rows:
-            lines.append(f"{name:<{name_width}}  {created:<{created_width}}")
+        if show_method:
+            rows = sorted(parsed, key=lambda r: (r[0], r[1], r[2], r[3]))
+        else:
+            rows = sorted(
+                parsed,
+                key=lambda r: (r[0], _trailing_domain_key(r[2]), r[2], r[3]),
+            )
+        created_width = max(len("Created"), max(len(r[0]) for r in rows))
+        domain_width = max(len("Domain"), max(len(r[2]) for r in rows))
+        id_width = max(len("ID"), max(len(r[3]) for r in rows))
+        if show_method:
+            method_width = max(len("Login method"), max(len(r[4]) for r in rows))
+            lines.append(
+                f"{'Created':<{created_width}}  {'Domain':<{domain_width}}  "
+                f"{'ID':<{id_width}}  {'Login method':<{method_width}}"
+            )
+            lines.append(
+                f"{'-' * created_width}  {'-' * domain_width}  "
+                f"{'-' * id_width}  {'-' * method_width}"
+            )
+            for created, _priority, domain, uid, method in rows:
+                lines.append(
+                    f"{created:<{created_width}}  {domain:<{domain_width}}  "
+                    f"{uid:<{id_width}}  {method:<{method_width}}"
+                )
+        else:
+            lines.append(
+                f"{'Created':<{created_width}}  {'Domain':<{domain_width}}  "
+                f"{'ID':<{id_width}}"
+            )
+            lines.append(
+                f"{'-' * created_width}  {'-' * domain_width}  {'-' * id_width}"
+            )
+            for created, _priority, domain, uid, _method in rows:
+                lines.append(
+                    f"{created:<{created_width}}  {domain:<{domain_width}}  "
+                    f"{uid:<{id_width}}"
+                )
 
     return "\n".join(lines)
 
 
-def format_output_html(users: list[dict], duration_str: str, strftime_fmt: str) -> str:
+def format_output_html(
+    users: list[dict],
+    duration_str: str,
+    strftime_fmt: str,
+    detailed_usernames: bool = False,
+) -> str:
     """Format users as HTML output suitable for email body.
 
     Args:
         users: List of user dictionaries with 'name' and 'created' keys
         duration_str: Human-readable duration string (e.g., "7 days", "12h")
         strftime_fmt: strftime format string for creation timestamps
+        detailed_usernames: Always show the "Login method" column
 
     Returns:
-        HTML formatted string (body content only) with a table of name and creation date
+        HTML formatted string (body content only) with a table of creation date and name columns
     """
     n = len(users)
     esc_duration = html.escape(duration_str)
@@ -130,36 +177,69 @@ def format_output_html(users: list[dict], duration_str: str, strftime_fmt: str) 
     else:
         noun = "user" if n == 1 else "users"
         html_lines = [f"<p>{n} new {noun} created in the last {esc_duration}:</p>"]
+        parsed = [parse_name(user.get("name", "")) for user in users]
+        domain_id_pairs = [(p[1], p[2]) for p in parsed]
+        show_method = detailed_usernames or (
+            len(domain_id_pairs) != len(set(domain_id_pairs))
+        )
+        TH = 'text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000'
         html_lines.append('<table style="border-collapse:collapse">')
         html_lines.append("  <thead>")
-        html_lines.append(
-            "    <tr>"
-            '<th style="text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000">Name</th>'
-            '<th style="text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000">Created</th>'
-            "</tr>"
-        )
+        if show_method:
+            html_lines.append(
+                f'    <tr>'
+                f'<th style="{TH}">Created</th>'
+                f'<th style="{TH}">Domain</th>'
+                f'<th style="{TH}">ID</th>'
+                f'<th style="{TH}">Login method</th>'
+                f"</tr>"
+            )
+        else:
+            html_lines.append(
+                f'    <tr>'
+                f'<th style="{TH}">Created</th>'
+                f'<th style="{TH}">Domain</th>'
+                f'<th style="{TH}">ID</th>'
+                f"</tr>"
+            )
         html_lines.append("  </thead>")
         html_lines.append("  <tbody>")
-        for i, user in enumerate(
-            sorted(
-                users,
-                key=lambda u: (
-                    _format_created(u.get("created", ""), strftime_fmt),
-                    u.get("name", ""),
-                ),
+        if show_method:
+            sort_key = lambda u: (  # noqa: E731
+                _format_created(u.get("created", ""), strftime_fmt),
+                *parse_name(u.get("name", ""))[:3],
             )
-        ):
+        else:
+            sort_key = lambda u: (  # noqa: E731
+                _format_created(u.get("created", ""), strftime_fmt),
+                _trailing_domain_key(parse_name(u.get("name", ""))[1]),
+                parse_name(u.get("name", ""))[1],
+                parse_name(u.get("name", ""))[2],
+            )
+        for i, user in enumerate(sorted(users, key=sort_key)):
             bg = "#deeaf1" if i % 2 else "#ffffff"
-            name = html.escape(user.get("name", ""))
+            TD = f"border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
             created = html.escape(
                 _format_created(user.get("created", ""), strftime_fmt)
             )
-            html_lines.append(
-                f"    <tr>"
-                f'<td style="border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000">{name}</td>'
-                f'<td style="border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000">{created}</td>'
-                f"</tr>"
-            )
+            _priority, domain, uid, method = parse_name(user.get("name", ""))
+            if show_method:
+                html_lines.append(
+                    f"    <tr>"
+                    f'<td style="{TD}">{created}</td>'
+                    f'<td style="{TD}">{html.escape(domain)}</td>'
+                    f'<td style="{TD}">{html.escape(uid)}</td>'
+                    f'<td style="{TD}">{html.escape(method)}</td>'
+                    f"</tr>"
+                )
+            else:
+                html_lines.append(
+                    f"    <tr>"
+                    f'<td style="{TD}">{created}</td>'
+                    f'<td style="{TD}">{html.escape(domain)}</td>'
+                    f'<td style="{TD}">{html.escape(uid)}</td>'
+                    f"</tr>"
+                )
         html_lines.append("  </tbody>")
         html_lines.append("</table>")
 
@@ -239,6 +319,13 @@ Environment variables:
         ),
     )
 
+    # Username display
+    parser.add_argument(
+        "--detailed-usernames",
+        action="store_true",
+        help='Always show the "Login method" column in the output',
+    )
+
     args = parser.parse_args()
 
     # Validate CA certificate exists if provided
@@ -308,17 +395,17 @@ def main() -> int:
 
         # Output to stdout by default
         if not args.text_file and not args.html_file:
-            print(format_output_text(new_users, human_duration, strftime_fmt))
+            print(format_output_text(new_users, human_duration, strftime_fmt, args.detailed_usernames))
 
         # Output to text file if specified
         if args.text_file:
-            text_content = format_output_text(new_users, human_duration, strftime_fmt)
+            text_content = format_output_text(new_users, human_duration, strftime_fmt, args.detailed_usernames)
             args.text_file.write_text(text_content + "\n", encoding="utf-8")
             print(f"Plain text output written to: {args.text_file}", file=sys.stderr)
 
         # Output to HTML file if specified
         if args.html_file:
-            html_content = format_output_html(new_users, human_duration, strftime_fmt)
+            html_content = format_output_html(new_users, human_duration, strftime_fmt, args.detailed_usernames)
             args.html_file.write_text(html_content + "\n", encoding="utf-8")
             print(f"HTML output written to: {args.html_file}", file=sys.stderr)
 

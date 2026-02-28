@@ -11,6 +11,7 @@ import humanize
 import pytimeparse2
 
 from app.elasticsearch_client import ElasticsearchClient
+from app.name_utils import _trailing_domain_key, parse_name
 
 
 def build_query(
@@ -94,20 +95,40 @@ def _format_duration(seconds: float) -> str:
     return humanize.precisedelta(timedelta(seconds=seconds))
 
 
-def _sorted_rows(totals: dict[str, float]) -> list[tuple[str, float]]:
-    """Return (user, seconds) pairs sorted by time descending, then name ascending."""
-    return sorted(totals.items(), key=lambda item: (-item[1], item[0]))
+def _sorted_rows(
+    totals: dict[str, float], show_method: bool
+) -> list[tuple[str, float]]:
+    """Return (user, seconds) pairs sorted by time descending, then by parsed name.
+
+    When *show_method* is True, sorts by (priority, domain, id) as a tiebreaker.
+    When False, sorts by (trailing_domain_key, domain, id) so trailing domains
+    (e.g. orcid.org) sort last regardless of login method.
+    """
+    if show_method:
+        name_key = lambda user: parse_name(user)[:3]  # noqa: E731
+    else:
+        name_key = lambda user: (  # noqa: E731
+            _trailing_domain_key(parse_name(user)[1]),
+            parse_name(user)[1],
+            parse_name(user)[2],
+        )
+    return sorted(totals.items(), key=lambda item: (-item[1], name_key(item[0])))
 
 
-def format_output_text(totals: dict[str, float], duration_str: str) -> str:
+def format_output_text(
+    totals: dict[str, float],
+    duration_str: str,
+    detailed_usernames: bool = False,
+) -> str:
     """Format per-user activity as plain text.
 
     Args:
         totals: Dictionary mapping user name to total active seconds
         duration_str: Human-readable duration string for the report header
+        detailed_usernames: Always show the "Login method" column
 
     Returns:
-        Plain text formatted string with a two-column table
+        Plain text formatted string with a table
     """
     n = len(totals)
     if n == 0:
@@ -115,25 +136,61 @@ def format_output_text(totals: dict[str, float], duration_str: str) -> str:
     else:
         noun = "user" if n == 1 else "users"
         lines = [f"{n} {noun} with active server time in the last {duration_str}:", ""]
+        parsed_names = {user: parse_name(user) for user in totals}
+        domain_id_pairs = [(p[1], p[2]) for p in parsed_names.values()]
+        show_method = detailed_usernames or (
+            len(domain_id_pairs) != len(set(domain_id_pairs))
+        )
         rows = [
-            (user, _format_duration(seconds)) for user, seconds in _sorted_rows(totals)
+            (*parsed_names[user], _format_duration(seconds))
+            for user, seconds in _sorted_rows(totals, show_method)
         ]
-        name_width = max(len("Name"), max(len(r[0]) for r in rows))
-        time_width = max(len("Active time"), max(len(r[1]) for r in rows))
-        lines.append(f"{'Name':<{name_width}}  {'Active time':<{time_width}}")
-        lines.append(f"{'-' * name_width}  {'-' * time_width}")
-        for name, active_time in rows:
-            lines.append(f"{name:<{name_width}}  {active_time:<{time_width}}")
+        domain_width = max(len("Domain"), max(len(r[1]) for r in rows))
+        id_width = max(len("ID"), max(len(r[2]) for r in rows))
+        time_width = max(len("Active time"), max(len(r[4]) for r in rows))
+        if show_method:
+            method_width = max(len("Login method"), max(len(r[3]) for r in rows))
+            lines.append(
+                f"{'Domain':<{domain_width}}  {'ID':<{id_width}}  "
+                f"{'Login method':<{method_width}}  {'Active time':<{time_width}}"
+            )
+            lines.append(
+                f"{'-' * domain_width}  {'-' * id_width}  "
+                f"{'-' * method_width}  {'-' * time_width}"
+            )
+            for _priority, domain, uid, method, active_time in rows:
+                lines.append(
+                    f"{domain:<{domain_width}}  {uid:<{id_width}}  "
+                    f"{method:<{method_width}}  {active_time:<{time_width}}"
+                )
+        else:
+            lines.append(
+                f"{'Domain':<{domain_width}}  {'ID':<{id_width}}  "
+                f"{'Active time':<{time_width}}"
+            )
+            lines.append(
+                f"{'-' * domain_width}  {'-' * id_width}  {'-' * time_width}"
+            )
+            for _priority, domain, uid, _method, active_time in rows:
+                lines.append(
+                    f"{domain:<{domain_width}}  {uid:<{id_width}}  "
+                    f"{active_time:<{time_width}}"
+                )
 
     return "\n".join(lines)
 
 
-def format_output_html(totals: dict[str, float], duration_str: str) -> str:
+def format_output_html(
+    totals: dict[str, float],
+    duration_str: str,
+    detailed_usernames: bool = False,
+) -> str:
     """Format per-user activity as HTML suitable for an email body.
 
     Args:
         totals: Dictionary mapping user name to total active seconds
         duration_str: Human-readable duration string for the report header
+        detailed_usernames: Always show the "Login method" column
 
     Returns:
         HTML formatted string (body content only)
@@ -148,26 +205,55 @@ def format_output_html(totals: dict[str, float], duration_str: str) -> str:
         html_lines = [
             f"<p>{n} {noun} with active server time in the last {esc_duration}:</p>"
         ]
+        parsed_names = {user: parse_name(user) for user in totals}
+        domain_id_pairs = [(p[1], p[2]) for p in parsed_names.values()]
+        show_method = detailed_usernames or (
+            len(domain_id_pairs) != len(set(domain_id_pairs))
+        )
+        TH = 'text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000'
         html_lines.append('<table style="border-collapse:collapse">')
         html_lines.append("  <thead>")
-        html_lines.append(
-            "    <tr>"
-            '<th style="text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000">Name</th>'
-            '<th style="text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000">Active time</th>'
-            "</tr>"
-        )
-        html_lines.append("  </thead>")
-        html_lines.append("  <tbody>")
-        for i, (user, seconds) in enumerate(_sorted_rows(totals)):
-            bg = "#deeaf1" if i % 2 else "#ffffff"
-            name = html.escape(user)
-            active_time = html.escape(_format_duration(seconds))
+        if show_method:
             html_lines.append(
-                f"    <tr>"
-                f'<td style="border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000">{name}</td>'
-                f'<td style="border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000">{active_time}</td>'
+                f'    <tr>'
+                f'<th style="{TH}">Domain</th>'
+                f'<th style="{TH}">ID</th>'
+                f'<th style="{TH}">Login method</th>'
+                f'<th style="{TH}">Active time</th>'
                 f"</tr>"
             )
+        else:
+            html_lines.append(
+                f'    <tr>'
+                f'<th style="{TH}">Domain</th>'
+                f'<th style="{TH}">ID</th>'
+                f'<th style="{TH}">Active time</th>'
+                f"</tr>"
+            )
+        html_lines.append("  </thead>")
+        html_lines.append("  <tbody>")
+        for i, (user, seconds) in enumerate(_sorted_rows(totals, show_method)):
+            bg = "#deeaf1" if i % 2 else "#ffffff"
+            TD = f"border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
+            _priority, domain, uid, method = parsed_names[user]
+            active_time = html.escape(_format_duration(seconds))
+            if show_method:
+                html_lines.append(
+                    f"    <tr>"
+                    f'<td style="{TD}">{html.escape(domain)}</td>'
+                    f'<td style="{TD}">{html.escape(uid)}</td>'
+                    f'<td style="{TD}">{html.escape(method)}</td>'
+                    f'<td style="{TD}">{active_time}</td>'
+                    f"</tr>"
+                )
+            else:
+                html_lines.append(
+                    f"    <tr>"
+                    f'<td style="{TD}">{html.escape(domain)}</td>'
+                    f'<td style="{TD}">{html.escape(uid)}</td>'
+                    f'<td style="{TD}">{active_time}</td>'
+                    f"</tr>"
+                )
         html_lines.append("  </tbody>")
         html_lines.append("</table>")
 
@@ -245,6 +331,13 @@ Environment variables:
         help="Write output as HTML to the specified file (suitable for email body)",
     )
 
+    # Username display
+    parser.add_argument(
+        "--detailed-usernames",
+        action="store_true",
+        help='Always show the "Login method" column in the output',
+    )
+
     args = parser.parse_args()
 
     # Validate CA certificate exists if provided
@@ -320,17 +413,17 @@ def main() -> int:
 
         # Output to stdout by default
         if not args.text_file and not args.html_file:
-            print(format_output_text(totals, human_duration))
+            print(format_output_text(totals, human_duration, args.detailed_usernames))
 
         # Output to text file if specified
         if args.text_file:
-            text_content = format_output_text(totals, human_duration)
+            text_content = format_output_text(totals, human_duration, args.detailed_usernames)
             args.text_file.write_text(text_content + "\n", encoding="utf-8")
             print(f"Plain text output written to: {args.text_file}", file=sys.stderr)
 
         # Output to HTML file if specified
         if args.html_file:
-            html_content = format_output_html(totals, human_duration)
+            html_content = format_output_html(totals, human_duration, args.detailed_usernames)
             args.html_file.write_text(html_content + "\n", encoding="utf-8")
             print(f"HTML output written to: {args.html_file}", file=sys.stderr)
 
