@@ -1,6 +1,7 @@
 # This Makefile provides a set of targets for performing a variety of
 # development-related tasks.
 
+IMAGE         ?= hub.osg-htc.org/brian.aydemir/jupyterhub-monitoring
 PY_PACKAGE_SRC := app
 
 .PHONY: all build clean init lint reformat update
@@ -38,7 +39,7 @@ build: clean
 	docker build . \
 	    --build-arg VERSION=$${version} \
 	    --pull \
-	    -t hub.osg-htc.org/brian.aydemir/jupyterhub-monitoring:$${version}
+	    -t $(IMAGE):$${version}
 
 clean:
 	rm -rf dist
