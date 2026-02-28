@@ -23,8 +23,8 @@ def parse_name(name: str) -> tuple[int, str, str, str]:
     """Parse a JupyterHub username into its components.
 
     Names are recognised in four forms:
-      - ``{id}@{domain}``          — EPPN-style (priority 0)
-      - ``eppn:{id}@{domain}``     — legacy EPPN (priority 1)
+      - ``{id}@{domain}``          — ePPN-style (priority 0)
+      - ``eppn:{id}@{domain}``     — legacy ePPN (priority 1)
       - ``email:{id}@{domain}``    — explicit email (priority 2)
       - ``orcid:{id}``             — ORCID (priority 3)
     Unrecognised names are returned with an empty domain (priority 4).
