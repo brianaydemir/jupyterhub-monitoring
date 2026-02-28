@@ -7,7 +7,6 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import humanize
 import pytimeparse2
 
 from app.elasticsearch_client import ElasticsearchClient
@@ -87,15 +86,17 @@ def compute_activity(documents: list[dict]) -> dict[str, float]:
 
 
 def _format_duration(seconds: float) -> str:
-    """Format a duration in seconds as a human-readable string.
+    """Format a duration in seconds as HH:MM.
 
     Args:
         seconds: Duration in seconds
 
     Returns:
-        Human-readable duration string (e.g., "2 hours, 30 minutes")
+        Duration string in ``HH:MM`` format (hours may exceed 23)
     """
-    return humanize.precisedelta(timedelta(seconds=seconds))
+    total_minutes = int(seconds) // 60
+    hours, minutes = divmod(total_minutes, 60)
+    return f"{hours}:{minutes:02d}"
 
 
 def _sorted_rows(
@@ -141,10 +142,10 @@ def format_output_text(
     range_str = f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}"
     n = len(totals)
     if n == 0:
-        lines = [f"No active server time between {start_time.strftime(fmt)} and {end_time.strftime(fmt)}."]
+        lines = [f"No users were active between {start_time.strftime(fmt)} and {end_time.strftime(fmt)}."]
     else:
         noun = "user" if n == 1 else "users"
-        lines = [f"{n} {noun} with active server time {range_str}:", ""]
+        lines = [f"{n} {noun} were active {range_str}:", ""]
         parsed_names = {user: parse_name(user) for user in totals}
         domain_id_pairs = [(p[1], p[2]) for p in parsed_names.values()]
         show_method = detailed_usernames or (
@@ -156,34 +157,34 @@ def format_output_text(
         ]
         domain_width = max(len("Domain"), max(len(r[1]) for r in rows))
         id_width = max(len("ID"), max(len(r[2]) for r in rows))
-        time_width = max(len("Active time"), max(len(r[4]) for r in rows))
+        time_width = max(len("Time (HH:MM)"), max(len(r[4]) for r in rows))
         if show_method:
             method_width = max(len("Login method"), max(len(r[3]) for r in rows))
             lines.append(
-                f"{'Domain':<{domain_width}}  {'ID':<{id_width}}  "
-                f"{'Login method':<{method_width}}  {'Active time':<{time_width}}"
+                f"{'Time (HH:MM)':>{time_width}}  {'Domain':<{domain_width}}  "
+                f"{'ID':<{id_width}}  {'Login method':<{method_width}}"
             )
             lines.append(
-                f"{'-' * domain_width}  {'-' * id_width}  "
-                f"{'-' * method_width}  {'-' * time_width}"
+                f"{'-' * time_width}  {'-' * domain_width}  "
+                f"{'-' * id_width}  {'-' * method_width}"
             )
             for _priority, domain, uid, method, active_time in rows:
                 lines.append(
-                    f"{domain:<{domain_width}}  {uid:<{id_width}}  "
-                    f"{method:<{method_width}}  {active_time:<{time_width}}"
+                    f"{active_time:>{time_width}}  {domain:<{domain_width}}  "
+                    f"{uid:<{id_width}}  {method:<{method_width}}"
                 )
         else:
             lines.append(
-                f"{'Domain':<{domain_width}}  {'ID':<{id_width}}  "
-                f"{'Active time':<{time_width}}"
+                f"{'Time (HH:MM)':>{time_width}}  {'Domain':<{domain_width}}  "
+                f"{'ID':<{id_width}}"
             )
             lines.append(
-                f"{'-' * domain_width}  {'-' * id_width}  {'-' * time_width}"
+                f"{'-' * time_width}  {'-' * domain_width}  {'-' * id_width}"
             )
             for _priority, domain, uid, _method, active_time in rows:
                 lines.append(
-                    f"{domain:<{domain_width}}  {uid:<{id_width}}  "
-                    f"{active_time:<{time_width}}"
+                    f"{active_time:>{time_width}}  {domain:<{domain_width}}  "
+                    f"{uid:<{id_width}}"
                 )
 
     lines.append("")
@@ -216,38 +217,37 @@ def format_output_html(
 
     if not totals:
         html_lines = [
-            f"<p>No active server time between "
+            f"<p>No users were active between "
             f"{html.escape(start_time.strftime(fmt))} and "
             f"{html.escape(end_time.strftime(fmt))}.</p>"
         ]
     else:
         noun = "user" if n == 1 else "users"
-        html_lines = [
-            f"<p>{n} {noun} with active server time {range_str}:</p>"
-        ]
+        html_lines = [f"<p>{n} {noun} were active {range_str}:</p>"]
         parsed_names = {user: parse_name(user) for user in totals}
         domain_id_pairs = [(p[1], p[2]) for p in parsed_names.values()]
         show_method = detailed_usernames or (
             len(domain_id_pairs) != len(set(domain_id_pairs))
         )
         TH = 'text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000'
+        TH_R = 'text-align:right; border:1px solid #9ab3c8; padding:2px 8px; background:#bdd7ee; color:#000000'
         html_lines.append('<table style="border-collapse:collapse">')
         html_lines.append("  <thead>")
         if show_method:
             html_lines.append(
                 f'    <tr>'
+                f'<th style="{TH_R}">Time (HH:MM)</th>'
                 f'<th style="{TH}">Domain</th>'
                 f'<th style="{TH}">ID</th>'
                 f'<th style="{TH}">Login method</th>'
-                f'<th style="{TH}">Active time</th>'
                 f"</tr>"
             )
         else:
             html_lines.append(
                 f'    <tr>'
+                f'<th style="{TH_R}">Time (HH:MM)</th>'
                 f'<th style="{TH}">Domain</th>'
                 f'<th style="{TH}">ID</th>'
-                f'<th style="{TH}">Active time</th>'
                 f"</tr>"
             )
         html_lines.append("  </thead>")
@@ -255,23 +255,24 @@ def format_output_html(
         for i, (user, seconds) in enumerate(_sorted_rows(totals, show_method)):
             bg = "#deeaf1" if i % 2 else "#ffffff"
             TD = f"border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
+            TD_R = f"text-align:right; border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
             _priority, domain, uid, method = parsed_names[user]
             active_time = html.escape(_format_duration(seconds))
             if show_method:
                 html_lines.append(
                     f"    <tr>"
+                    f'<td style="{TD_R}">{active_time}</td>'
                     f'<td style="{TD}">{html.escape(domain)}</td>'
                     f'<td style="{TD}">{html.escape(uid)}</td>'
                     f'<td style="{TD}">{html.escape(method)}</td>'
-                    f'<td style="{TD}">{active_time}</td>'
                     f"</tr>"
                 )
             else:
                 html_lines.append(
                     f"    <tr>"
+                    f'<td style="{TD_R}">{active_time}</td>'
                     f'<td style="{TD}">{html.escape(domain)}</td>'
                     f'<td style="{TD}">{html.escape(uid)}</td>'
-                    f'<td style="{TD}">{active_time}</td>'
                     f"</tr>"
                 )
         html_lines.append("  </tbody>")
