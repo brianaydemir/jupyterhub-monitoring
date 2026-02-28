@@ -4,7 +4,7 @@
 IMAGE         ?= hub.osg-htc.org/brian.aydemir/jupyterhub-monitoring
 PY_PACKAGE_SRC := app
 
-.PHONY: all build clean init lint reformat update
+.PHONY: all build clean distclean init lint reformat update
 
 all: reformat lint build
 
@@ -43,3 +43,6 @@ build: clean
 
 clean:
 	rm -rf dist
+
+distclean:
+	git clean --force -dx --exclude=.python-version

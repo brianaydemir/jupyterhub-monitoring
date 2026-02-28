@@ -8,6 +8,7 @@ make reformat   # Format code with isort + black
 make lint       # Run bandit, mypy, and pylint
 make build      # Clean dist/, build Python wheel, build Docker image
 make clean      # Remove the dist/ directory
+make distclean  # Remove all untracked/ignored files except .python-version
 make update     # Update dependencies and regenerate requirements.txt
 make all        # reformat + lint + build
 ```
