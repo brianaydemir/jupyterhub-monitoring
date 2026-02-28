@@ -3,6 +3,7 @@
 import argparse
 import html
 import os
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -108,14 +109,13 @@ def _sorted_rows(
     When False, sorts by (trailing_domain_key, domain, id) so trailing domains
     (e.g. orcid.org) sort last regardless of login method.
     """
-    if show_method:
-        name_key = lambda user: parse_name(user)[:3]  # noqa: E731
-    else:
-        name_key = lambda user: (  # noqa: E731
-            _trailing_domain_key(parse_name(user)[1]),
-            parse_name(user)[1],
-            parse_name(user)[2],
-        )
+
+    def name_key(user: str) -> tuple:
+        name = parse_name(user)
+        if show_method:
+            return name[:3]
+        return (_trailing_domain_key(name[1]), name[1], name[2])
+
     return sorted(totals.items(), key=lambda item: (-item[1], name_key(item[0])))
 
 
@@ -142,7 +142,9 @@ def format_output_text(
     range_str = f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}"
     n = len(totals)
     if n == 0:
-        lines = [f"No users were active between {start_time.strftime(fmt)} and {end_time.strftime(fmt)}."]
+        lines = [
+            f"No users were active between {start_time.strftime(fmt)} and {end_time.strftime(fmt)}."
+        ]
     else:
         noun = "user" if n == 1 else "users"
         lines = [f"{n} {noun} were active {range_str}:", ""]
@@ -178,9 +180,7 @@ def format_output_text(
                 f"{'Time (HH:MM)':>{time_width}}  {'Institution':<{domain_width}}  "
                 f"{'ID':<{id_width}}"
             )
-            lines.append(
-                f"{'-' * time_width}  {'-' * domain_width}  {'-' * id_width}"
-            )
+            lines.append(f"{'-' * time_width}  {'-' * domain_width}  {'-' * id_width}")
             for _priority, domain, uid, _method, active_time in rows:
                 lines.append(
                     f"{active_time:>{time_width}}  {domain:<{domain_width}}  "
@@ -229,13 +229,13 @@ def format_output_html(
         show_method = detailed_usernames or (
             len(domain_id_pairs) != len(set(domain_id_pairs))
         )
-        TH = 'text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#a6c9e8; color:#000000'
-        TH_R = 'text-align:right; border:1px solid #9ab3c8; padding:2px 8px; background:#a6c9e8; color:#000000'
+        TH = "text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#a6c9e8; color:#000000"
+        TH_R = "text-align:right; border:1px solid #9ab3c8; padding:2px 8px; background:#a6c9e8; color:#000000"
         html_lines.append('<table style="border-collapse:collapse">')
         html_lines.append("  <thead>")
         if show_method:
             html_lines.append(
-                f'    <tr>'
+                f"    <tr>"
                 f'<th style="{TH_R}">Time (HH:MM)</th>'
                 f'<th style="{TH}">Institution</th>'
                 f'<th style="{TH}">ID</th>'
@@ -244,7 +244,7 @@ def format_output_html(
             )
         else:
             html_lines.append(
-                f'    <tr>'
+                f"    <tr>"
                 f'<th style="{TH_R}">Time (HH:MM)</th>'
                 f'<th style="{TH}">Institution</th>'
                 f'<th style="{TH}">ID</th>'
@@ -394,7 +394,6 @@ Environment variables:
 
     # Validate --time format
     if args.time is not None:
-        import re
         if not re.fullmatch(r"\d{1,2}:\d{2}", args.time):
             parser.error("--time must be in HH:MM format")
 
@@ -447,7 +446,9 @@ def main() -> int:
 
         # Query Elasticsearch
         try:
-            query = build_query(cutoff=cutoff, end=int(end_time.timestamp()), hub=args.hub)
+            query = build_query(
+                cutoff=cutoff, end=int(end_time.timestamp()), hub=args.hub
+            )
             documents = list(client.query(index=args.index, query=query))
         except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"Error querying Elasticsearch: {e}", file=sys.stderr)
@@ -460,17 +461,25 @@ def main() -> int:
 
         # Output to stdout by default
         if not args.text_file and not args.html_file:
-            print(format_output_text(totals, start_time, end_time, args.timezone, args.detailed_usernames))
+            print(
+                format_output_text(
+                    totals, start_time, end_time, args.timezone, args.detailed_usernames
+                )
+            )
 
         # Output to text file if specified
         if args.text_file:
-            text_content = format_output_text(totals, start_time, end_time, args.timezone, args.detailed_usernames)
+            text_content = format_output_text(
+                totals, start_time, end_time, args.timezone, args.detailed_usernames
+            )
             args.text_file.write_text(text_content + "\n", encoding="utf-8")
             print(f"Plain text output written to: {args.text_file}", file=sys.stderr)
 
         # Output to HTML file if specified
         if args.html_file:
-            html_content = format_output_html(totals, start_time, end_time, args.timezone, args.detailed_usernames)
+            html_content = format_output_html(
+                totals, start_time, end_time, args.timezone, args.detailed_usernames
+            )
             args.html_file.write_text(html_content + "\n", encoding="utf-8")
             print(f"HTML output written to: {args.html_file}", file=sys.stderr)
 

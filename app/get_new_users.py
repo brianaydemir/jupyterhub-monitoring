@@ -3,6 +3,7 @@
 import argparse
 import html
 import os
+import re
 import sys
 from collections.abc import Iterable
 from datetime import datetime, timedelta, tzinfo
@@ -40,7 +41,7 @@ def filter_new_users(
             created_dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
             if cutoff_time <= created_dt <= end_time:
                 new_users.append({"name": user.get("name", ""), "created": created_str})
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             continue
 
     return new_users
@@ -60,7 +61,7 @@ def _format_created(created_str: str, strftime_fmt: str, tz: tzinfo) -> str:
     try:
         dt = datetime.fromisoformat(created_str.replace("Z", "+00:00")).astimezone(tz)
         return dt.strftime(strftime_fmt)
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return created_str
 
 
@@ -195,12 +196,12 @@ def format_output_html(
         show_method = detailed_usernames or (
             len(domain_id_pairs) != len(set(domain_id_pairs))
         )
-        TH = 'text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#a6c9e8; color:#000000'
+        TH = "text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#a6c9e8; color:#000000"
         html_lines.append('<table style="border-collapse:collapse">')
         html_lines.append("  <thead>")
         if show_method:
             html_lines.append(
-                f'    <tr>'
+                f"    <tr>"
                 f'<th style="{TH}">Created</th>'
                 f'<th style="{TH}">Institution</th>'
                 f'<th style="{TH}">ID</th>'
@@ -209,7 +210,7 @@ def format_output_html(
             )
         else:
             html_lines.append(
-                f'    <tr>'
+                f"    <tr>"
                 f'<th style="{TH}">Created</th>'
                 f'<th style="{TH}">Institution</th>'
                 f'<th style="{TH}">ID</th>'
@@ -217,18 +218,14 @@ def format_output_html(
             )
         html_lines.append("  </thead>")
         html_lines.append("  <tbody>")
-        if show_method:
-            sort_key = lambda u: (  # noqa: E731
-                _format_created(u.get("created", ""), strftime_fmt, tz),
-                *parse_name(u.get("name", ""))[:3],
-            )
-        else:
-            sort_key = lambda u: (  # noqa: E731
-                _format_created(u.get("created", ""), strftime_fmt, tz),
-                _trailing_domain_key(parse_name(u.get("name", ""))[1]),
-                parse_name(u.get("name", ""))[1],
-                parse_name(u.get("name", ""))[2],
-            )
+
+        def sort_key(u: dict) -> tuple:
+            created = _format_created(u.get("created", ""), strftime_fmt, tz)
+            name = parse_name(u.get("name", ""))
+            if show_method:
+                return (created, *name[:3])
+            return (created, _trailing_domain_key(name[1]), name[1], name[2])
+
         for i, user in enumerate(sorted(users, key=sort_key)):
             bg = "#e6eff4" if i % 2 else "#ffffff"
             TD = f"border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
@@ -374,7 +371,6 @@ Environment variables:
 
     # Validate --time format
     if args.time is not None:
-        import re
         if not re.fullmatch(r"\d{1,2}:\d{2}", args.time):
             parser.error("--time must be in HH:MM format")
 
@@ -442,17 +438,43 @@ def main() -> int:
 
         # Output to stdout by default
         if not args.text_file and not args.html_file:
-            print(format_output_text(new_users, start_time, end_time, args.timezone, tz, strftime_fmt, args.detailed_usernames))
+            print(
+                format_output_text(
+                    new_users,
+                    start_time,
+                    end_time,
+                    args.timezone,
+                    tz,
+                    strftime_fmt,
+                    args.detailed_usernames,
+                )
+            )
 
         # Output to text file if specified
         if args.text_file:
-            text_content = format_output_text(new_users, start_time, end_time, args.timezone, tz, strftime_fmt, args.detailed_usernames)
+            text_content = format_output_text(
+                new_users,
+                start_time,
+                end_time,
+                args.timezone,
+                tz,
+                strftime_fmt,
+                args.detailed_usernames,
+            )
             args.text_file.write_text(text_content + "\n", encoding="utf-8")
             print(f"Plain text output written to: {args.text_file}", file=sys.stderr)
 
         # Output to HTML file if specified
         if args.html_file:
-            html_content = format_output_html(new_users, start_time, end_time, args.timezone, tz, strftime_fmt, args.detailed_usernames)
+            html_content = format_output_html(
+                new_users,
+                start_time,
+                end_time,
+                args.timezone,
+                tz,
+                strftime_fmt,
+                args.detailed_usernames,
+            )
             args.html_file.write_text(html_content + "\n", encoding="utf-8")
             print(f"HTML output written to: {args.html_file}", file=sys.stderr)
 
