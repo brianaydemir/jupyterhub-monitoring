@@ -3,7 +3,7 @@
 
 [project]
 name = "jupyterhub-monitoring"
-version = "2.2.0"
+version = "2.2.1"
 description = "Monitoring and reporting scripts for JupyterHub"
 license = "Apache-2.0"
 authors = [{ name = "Brian Aydemir", email = "baydemir@morgridge.org" }]
