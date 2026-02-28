@@ -6,11 +6,20 @@
 make init       # Install dependencies (poetry install)
 make reformat   # Format code with isort + black
 make lint       # Run bandit, mypy, and pylint
-make build      # Build Python wheel + Docker image
+make build      # Clean dist/, build Python wheel, build Docker image
+make clean      # Remove the dist/ directory
+make update     # Update dependencies and regenerate requirements.txt
 make all        # reformat + lint + build
 ```
 
-There are no automated tests. Linters run with `-` prefix (non-fatal) in the Makefile.
+There are no automated tests. Linters run with `-` prefix (non-fatal) in the
+Makefile.
+
+Pre-commit hooks can be run manually with:
+
+```bash
+pre-commit run --all-files
+```
 
 ## Architecture
 
@@ -20,14 +29,20 @@ This project provides CLI scripts that pull data from a JupyterHub instance and 
 - `JupyterHubClient` — wraps JupyterHub REST API; `list_servers()` returns flattened dicts with dot-notation keys (e.g., `user.name`, `server.state`)
 - `ElasticsearchClient` — wraps the official Python client; constructor uses API key auth, class methods (`create_api_key_with_basic_auth`, `delete_api_key_with_basic_auth`, `list_api_keys_with_basic_auth`) use basic auth via HTTP requests directly
 
+**Utility modules** in `app/`:
+- `name_utils.py` — helpers for parsing and normalizing JupyterHub usernames
+- `time_utils.py` — helpers for time range computation and timezone parsing
+
 **CLI scripts** (each maps to a `[project.scripts]` entry):
 - `push-servers` — main pipeline: JupyterHub → Elasticsearch
+- `get-new-activity` — report active server time per user from Elasticsearch
 - `get-new-users` — filter/report new JupyterHub users
 - `get-es-docs` — query and dump Elasticsearch documents
 - `create-es-api-key` / `delete-es-api-key` / `list-es-api-keys` — API key management
 - `send-email` — send SMTP email from file-based body
 
-**Deployment**: `make build` builds a Docker image from the installed wheel (requires `dist/` artifacts first).
+**Deployment**: `make build` cleans `dist/`, builds a Python wheel with
+`poetry build`, and then builds a Docker image from the installed wheel.
 
 ## Conventions
 
@@ -44,6 +59,11 @@ This project provides CLI scripts that pull data from a JupyterHub instance and 
 **Python version**: Requires Python ≥ 3.14 (uses union type syntax `X | Y`, `match` etc.).
 
 **Formatting**: black with line-length 88, isort with `profile = "black"`.
+
+**Pre-commit**: The repo uses `pre-commit` with hooks for file hygiene
+(trailing whitespace, merge conflicts, etc.), `shellcheck`, `isort`, `black`,
+and `typos` (spell-checker). Run `pre-commit run --all-files` to check
+everything at once.
 
 ## Commit Preferences
 
