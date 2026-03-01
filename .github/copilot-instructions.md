@@ -71,5 +71,5 @@ everything at once.
 - **Subject line**: Short imperative phrase, no trailing period (e.g., `Add --subject argument to send-email`)
 - **Body**: Wrap at ~72 characters; use `-` bullet lists for multi-item changes
 - **Workflow**: Never commit automatically. Always run `make reformat && make lint` before staging. Stage changes with `git add` and ask the user to review before committing.
-- **Authorship**: Unless told otherwise, Copilot should be the commit author and the user should be left as the committer. Use `--author` to set the author to `Copilot <copilot@github.com>` and include the trailer `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
+- **Authorship**: Unless told otherwise, Copilot should be the commit author and the user should be left as the committer. Use `--author` to set the author to `Copilot <223556219+Copilot@users.noreply.github.com>` and include the trailer `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
 - **Dependencies**: Pin to the latest minor release at update time using `~X.Y` (e.g., `humanize = "~4.15"`)
