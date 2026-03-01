@@ -340,7 +340,7 @@ def format_output_csv(
         writer.writerow(
             [
                 f"{n} {noun} were active "
-                f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}:"
+                f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}"
             ]
         )
     writer.writerow([f"Timezone: {tz_name}"])
