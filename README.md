@@ -102,7 +102,7 @@ Elasticsearch.
 ### `get-new-users`
 
 Lists JupyterHub users whose accounts were created within a given time window.
-Optionally writes plain-text and/or HTML output files for use with
+Optionally writes plain-text, HTML, and/or CSV output files for use with
 `send-email`.
 
 ```
@@ -111,7 +111,8 @@ get-new-users \
     --api-key ~/secrets/jh-api-key.txt \
     --duration "7 days" \
     --text-file new-users.txt \
-    --html-file new-users.html
+    --html-file new-users.html \
+    --csv-file new-users.csv
 ```
 
 Use `--time HH:MM` to anchor the end of the window to a specific wall-clock
@@ -120,7 +121,8 @@ time (within the past 24 hours) rather than the current moment.
 ### `get-new-activity`
 
 Reports active server time per user within a given time window, pulling data
-from Elasticsearch. Optionally writes plain-text and/or HTML output files.
+from Elasticsearch. Optionally writes plain-text, HTML, and/or CSV output
+files.
 
 ```
 get-new-activity \
@@ -130,7 +132,8 @@ get-new-activity \
     --duration "24 hours" \
     --hub production \
     --text-file activity.txt \
-    --html-file activity.html
+    --html-file activity.html \
+    --csv-file activity.csv
 ```
 
 ### `get-es-docs`
@@ -204,7 +207,9 @@ send-email \
     --smtp-host smtp.example.com \
     --smtp-port 465 \
     --text-file new-users.txt \
-    --html-file new-users.html
+    --html-file new-users.html \
+    --attachment new-users.csv
 ```
 
+Use `--attachment` (repeatable) to attach one or more files to the message.
 Use `--no-ssl` if your SMTP server does not use SSL/TLS.
