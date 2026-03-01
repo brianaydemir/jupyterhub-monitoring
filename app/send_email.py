@@ -1,8 +1,11 @@
 """Command-line tool for sending emails via SMTP."""
 
 import argparse
+import mimetypes
 import smtplib
 import sys
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
@@ -18,6 +21,7 @@ def create_message(
     text_file: Path | None,
     html_file: Path | None,
     subject_heading: bool = True,
+    attachments: list[Path] | None = None,
 ) -> MIMEMultipart:
     """Create an email message with the given parameters.
 
@@ -31,11 +35,42 @@ def create_message(
         html_file: Path to an HTML file for the email body (optional)
         subject_heading: Whether to prepend the subject as a heading in the
             body (default: True)
+        attachments: Paths to files to attach (optional)
 
     Returns:
         A MIMEMultipart message ready to send
     """
-    msg = MIMEMultipart("alternative")
+    body = MIMEMultipart("alternative")
+
+    # Read and attach plain text content
+    if text_file:
+        text_content = text_file.read_text(encoding="utf-8")
+        if subject_heading:
+            text_content = f"{subject}\n{'-' * len(subject)}\n\n{text_content}"
+        body.attach(MIMEText(text_content, "plain"))
+
+    # Read and attach HTML content
+    if html_file:
+        html_content = html_file.read_text(encoding="utf-8")
+        if subject_heading:
+            html_content = f"<h1>{subject}</h1>\n{html_content}"
+        body.attach(MIMEText(html_content, "html"))
+
+    if attachments:
+        msg = MIMEMultipart("mixed")
+        msg.attach(body)
+        for path in attachments:
+            mime_type, _ = mimetypes.guess_type(str(path))
+            if mime_type is None:
+                mime_type = "application/octet-stream"
+            maintype, subtype = mime_type.split("/", 1)
+            part = MIMEBase(maintype, subtype)
+            part.set_payload(path.read_bytes())
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", "attachment", filename=path.name)
+            msg.attach(part)
+    else:
+        msg = body
 
     # Format the From and To fields with names if provided
     if sender_name:
@@ -49,20 +84,6 @@ def create_message(
         msg["To"] = recipient_email
 
     msg["Subject"] = subject
-
-    # Read and attach plain text content
-    if text_file:
-        text_content = text_file.read_text(encoding="utf-8")
-        if subject_heading:
-            text_content = f"{subject}\n{'-' * len(subject)}\n\n{text_content}"
-        msg.attach(MIMEText(text_content, "plain"))
-
-    # Read and attach HTML content
-    if html_file:
-        html_content = html_file.read_text(encoding="utf-8")
-        if subject_heading:
-            html_content = f"<h1>{subject}</h1>\n{html_content}"
-        msg.attach(MIMEText(html_content, "html"))
 
     return msg
 
@@ -171,6 +192,13 @@ def parse_arguments() -> argparse.Namespace:
         type=Path,
         help="Path to an HTML file containing the email body",
     )
+    parser.add_argument(
+        "--attachment",
+        type=Path,
+        action="append",
+        metavar="PATH",
+        help="Path to a file to attach (may be repeated)",
+    )
 
     args = parser.parse_args()
 
@@ -183,6 +211,9 @@ def parse_arguments() -> argparse.Namespace:
         parser.error(f"Text file not found: {args.text_file}")
     if args.html_file and not args.html_file.exists():
         parser.error(f"HTML file not found: {args.html_file}")
+    for path in args.attachment or []:
+        if not path.exists():
+            parser.error(f"Attachment file not found: {path}")
 
     return args
 
@@ -206,6 +237,7 @@ def main() -> int:
             text_file=args.text_file,
             html_file=args.html_file,
             subject_heading=not args.no_subject_heading,
+            attachments=args.attachment,
         )
 
         # Send the email
