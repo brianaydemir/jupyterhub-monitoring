@@ -575,31 +575,21 @@ def main() -> int:
         # Determine the strftime format from the --date-format choice
         strftime_fmt = "%Y-%m-%d" if args.date_format == "date" else "%Y-%m-%d %H:%M"
 
-        # Output to stdout by default
-        if not args.text_file and not args.html_file and not args.csv_file:
-            print(
-                format_output_text(
-                    new_users,
-                    start_time,
-                    end_time,
-                    args.timezone,
-                    tz,
-                    strftime_fmt,
-                    args.detailed_usernames,
-                )
-            )
+        # Always print the text report to stdout, bracketed by separator lines
+        # so it remains visually distinct when stderr is merged into stdout
+        text_content = format_output_text(
+            new_users,
+            start_time,
+            end_time,
+            args.timezone,
+            tz,
+            strftime_fmt,
+            args.detailed_usernames,
+        )
+        print(f"---\n{text_content}\n---")
 
         # Output to text file if specified
         if args.text_file:
-            text_content = format_output_text(
-                new_users,
-                start_time,
-                end_time,
-                args.timezone,
-                tz,
-                strftime_fmt,
-                args.detailed_usernames,
-            )
             args.text_file.write_text(text_content + "\n", encoding="utf-8")
             print(f"Plain text output written to: {args.text_file}", file=sys.stderr)
 
@@ -633,15 +623,6 @@ def main() -> int:
 
         # Send email if requested
         if args.send_email:
-            text_content = format_output_text(
-                new_users,
-                start_time,
-                end_time,
-                args.timezone,
-                tz,
-                strftime_fmt,
-                args.detailed_usernames,
-            )
             html_content = format_output_html(
                 new_users,
                 start_time,
