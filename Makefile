@@ -1,7 +1,7 @@
 # This Makefile provides a set of targets for performing a variety of
 # development-related tasks.
 
-IMAGE         ?= hub.osg-htc.org/brian.aydemir/jupyterhub-monitoring
+IMAGE ?= hub.osg-htc.org/brian.aydemir/jupyterhub-monitoring
 PY_PACKAGE_SRC := app
 
 .PHONY: all build clean distclean init lint reformat update
@@ -35,14 +35,14 @@ requirements.txt: poetry.lock
 build: clean
 	poetry build
 
-	version=$$(toml get project.version --toml-path pyproject.toml); \
+	VERSION=$$(toml get project.version --toml-path pyproject.toml); \
 	docker build . \
-	    --build-arg VERSION=$${version} \
+	    --build-arg VERSION=$${VERSION} \
 	    --pull \
-	    -t $(IMAGE):$${version}
+	    -t $(IMAGE):$${VERSION}
 
 clean:
 	rm -rf dist
 
 distclean:
-	git clean --force -dx --exclude=.python-version
+	git clean -x -d --force --exclude=.python-version
