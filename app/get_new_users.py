@@ -1,7 +1,9 @@
 """Command-line tool for listing new JupyterHub users."""
 
 import argparse
+import csv
 import html
+import io
 import os
 import re
 import sys
@@ -257,6 +259,82 @@ def format_output_html(
     return "\n".join(html_lines)
 
 
+def format_output_csv(
+    users: list[dict],
+    start_time: datetime,
+    end_time: datetime,
+    tz_name: str,
+    tz: tzinfo,
+    strftime_fmt: str,
+    detailed_usernames: bool = False,
+) -> str:
+    """Format users as CSV output.
+
+    The CSV starts with the data table (header row plus one row per user),
+    followed by an empty row, a summary line, and a timezone line.
+
+    Args:
+        users: List of user dictionaries with 'name' and 'created' keys
+        start_time: Start of the reporting window (timezone-aware)
+        end_time: End of the reporting window (timezone-aware)
+        tz_name: Timezone name for the footer
+        tz: Timezone for converting creation timestamps
+        strftime_fmt: strftime format string for creation timestamps
+        detailed_usernames: Always show the "Login method" column
+
+    Returns:
+        CSV formatted string
+    """
+    fmt = "%Y-%m-%d %H:%M"
+    n = len(users)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+
+    parsed = [
+        (
+            _format_created(user.get("created", ""), strftime_fmt, tz),
+            *parse_name(user.get("name", "")),
+        )
+        for user in users
+    ]
+    domain_id_pairs = [(r[2], r[3]) for r in parsed]
+    show_method = detailed_usernames or (
+        len(domain_id_pairs) != len(set(domain_id_pairs))
+    )
+    if show_method:
+        writer.writerow(["Created", "Institution", "ID", "Login method"])
+        rows = sorted(parsed, key=lambda r: (r[0], r[1], r[2], r[3]))
+        for created, _priority, domain, uid, method in rows:
+            writer.writerow([created, domain, uid, method])
+    else:
+        writer.writerow(["Created", "Institution", "ID"])
+        rows = sorted(
+            parsed,
+            key=lambda r: (r[0], _trailing_domain_key(r[2]), r[2], r[3]),
+        )
+        for created, _priority, domain, uid, _method in rows:
+            writer.writerow([created, domain, uid])
+
+    writer.writerow([])
+    if n == 0:
+        writer.writerow(
+            [
+                f"No new users created between "
+                f"{start_time.strftime(fmt)} and {end_time.strftime(fmt)}."
+            ]
+        )
+    else:
+        noun = "user" if n == 1 else "users"
+        writer.writerow(
+            [
+                f"{n} new {noun} created "
+                f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}:"
+            ]
+        )
+    writer.writerow([f"Timezone: {tz_name}"])
+    return buf.getvalue()
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse command-line arguments.
 
@@ -329,6 +407,11 @@ Environment variables:
         "--text-file",
         type=Path,
         help="Write output as plain text to the specified file",
+    )
+    parser.add_argument(
+        "--csv-file",
+        type=Path,
+        help="Write output as CSV to the specified file",
     )
     parser.add_argument(
         "--html-file",
@@ -437,7 +520,7 @@ def main() -> int:
         strftime_fmt = "%Y-%m-%d" if args.date_format == "date" else "%Y-%m-%d %H:%M"
 
         # Output to stdout by default
-        if not args.text_file and not args.html_file:
+        if not args.text_file and not args.html_file and not args.csv_file:
             print(
                 format_output_text(
                     new_users,
@@ -477,6 +560,20 @@ def main() -> int:
             )
             args.html_file.write_text(html_content + "\n", encoding="utf-8")
             print(f"HTML output written to: {args.html_file}", file=sys.stderr)
+
+        # Output to CSV file if specified
+        if args.csv_file:
+            csv_content = format_output_csv(
+                new_users,
+                start_time,
+                end_time,
+                args.timezone,
+                tz,
+                strftime_fmt,
+                args.detailed_usernames,
+            )
+            args.csv_file.write_text(csv_content, encoding="utf-8")
+            print(f"CSV output written to: {args.csv_file}", file=sys.stderr)
 
         return 0
 

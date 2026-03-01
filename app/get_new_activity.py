@@ -1,7 +1,9 @@
 """Command-line tool for reporting active server time per JupyterHub user."""
 
 import argparse
+import csv
 import html
+import io
 import os
 import re
 import sys
@@ -282,6 +284,69 @@ def format_output_html(
     return "\n".join(html_lines)
 
 
+def format_output_csv(
+    totals: dict[str, float],
+    start_time: datetime,
+    end_time: datetime,
+    tz_name: str,
+    detailed_usernames: bool = False,
+) -> str:
+    """Format per-user activity as CSV.
+
+    The CSV starts with the data table (header row plus one row per user),
+    followed by an empty row, a summary line, and a timezone line.
+
+    Args:
+        totals: Dictionary mapping user name to total active seconds
+        start_time: Start of the reporting window (timezone-aware)
+        end_time: End of the reporting window (timezone-aware)
+        tz_name: Timezone name for the footer
+        detailed_usernames: Always show the "Login method" column
+
+    Returns:
+        CSV formatted string
+    """
+    fmt = "%Y-%m-%d %H:%M"
+    n = len(totals)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+
+    parsed_names = {user: parse_name(user) for user in totals}
+    domain_id_pairs = [(p[1], p[2]) for p in parsed_names.values()]
+    show_method = detailed_usernames or (
+        len(domain_id_pairs) != len(set(domain_id_pairs))
+    )
+    if show_method:
+        writer.writerow(["Time (HH:MM)", "Institution", "ID", "Login method"])
+        for user, seconds in _sorted_rows(totals, show_method):
+            _priority, domain, uid, method = parsed_names[user]
+            writer.writerow([_format_duration(seconds), domain, uid, method])
+    else:
+        writer.writerow(["Time (HH:MM)", "Institution", "ID"])
+        for user, seconds in _sorted_rows(totals, show_method):
+            _priority, domain, uid, _method = parsed_names[user]
+            writer.writerow([_format_duration(seconds), domain, uid])
+
+    writer.writerow([])
+    if n == 0:
+        writer.writerow(
+            [
+                f"No users were active between "
+                f"{start_time.strftime(fmt)} and {end_time.strftime(fmt)}."
+            ]
+        )
+    else:
+        noun = "user" if n == 1 else "users"
+        writer.writerow(
+            [
+                f"{n} {noun} were active "
+                f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}:"
+            ]
+        )
+    writer.writerow([f"Timezone: {tz_name}"])
+    return buf.getvalue()
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse command-line arguments.
 
@@ -363,6 +428,11 @@ Environment variables:
         "--text-file",
         type=Path,
         help="Write output as plain text to the specified file",
+    )
+    parser.add_argument(
+        "--csv-file",
+        type=Path,
+        help="Write output as CSV to the specified file",
     )
     parser.add_argument(
         "--html-file",
@@ -460,7 +530,7 @@ def main() -> int:
         totals = compute_activity(documents)
 
         # Output to stdout by default
-        if not args.text_file and not args.html_file:
+        if not args.text_file and not args.html_file and not args.csv_file:
             print(
                 format_output_text(
                     totals, start_time, end_time, args.timezone, args.detailed_usernames
@@ -482,6 +552,14 @@ def main() -> int:
             )
             args.html_file.write_text(html_content + "\n", encoding="utf-8")
             print(f"HTML output written to: {args.html_file}", file=sys.stderr)
+
+        # Output to CSV file if specified
+        if args.csv_file:
+            csv_content = format_output_csv(
+                totals, start_time, end_time, args.timezone, args.detailed_usernames
+            )
+            args.csv_file.write_text(csv_content, encoding="utf-8")
+            print(f"CSV output written to: {args.csv_file}", file=sys.stderr)
 
         return 0
 
