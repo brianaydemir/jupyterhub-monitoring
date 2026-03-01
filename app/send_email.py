@@ -18,9 +18,10 @@ def create_message(
     recipient_name: str | None,
     recipient_email: str,
     subject: str,
-    text_file: Path | None,
-    html_file: Path | None,
+    text_content: str | None,
+    html_content: str | None,
     attachments: list[Path] | None = None,
+    attachment_data: list[tuple[str, bytes]] | None = None,
 ) -> MIMEMultipart:
     """Create an email message with the given parameters.
 
@@ -30,9 +31,11 @@ def create_message(
         recipient_name: The recipient's display name (optional)
         recipient_email: The recipient's email address
         subject: The email subject line
-        text_file: Path to a plain text file for the email body (optional)
-        html_file: Path to an HTML file for the email body (optional)
+        text_content: Plain text body content (optional)
+        html_content: HTML body content (optional)
         attachments: Paths to files to attach (optional)
+        attachment_data: In-memory attachments as (filename, bytes) pairs
+            (optional)
 
     Returns:
         A MIMEMultipart message ready to send
@@ -40,19 +43,17 @@ def create_message(
     body = MIMEMultipart("alternative")
 
     # Read and attach plain text content
-    if text_file:
-        text_content = text_file.read_text(encoding="utf-8")
+    if text_content:
         body.attach(MIMEText(text_content, "plain"))
 
     # Read and attach HTML content
-    if html_file:
-        html_content = html_file.read_text(encoding="utf-8")
+    if html_content:
         body.attach(MIMEText(html_content, "html"))
 
-    if attachments:
+    if attachments or attachment_data:
         msg = MIMEMultipart("mixed")
         msg.attach(body)
-        for path in attachments:
+        for path in attachments or []:
             mime_type, _ = mimetypes.guess_type(str(path))
             if mime_type is None:
                 mime_type = "application/octet-stream"
@@ -61,6 +62,16 @@ def create_message(
             part.set_payload(path.read_bytes())
             encoders.encode_base64(part)
             part.add_header("Content-Disposition", "attachment", filename=path.name)
+            msg.attach(part)
+        for filename, data in attachment_data or []:
+            mime_type, _ = mimetypes.guess_type(filename)
+            if mime_type is None:
+                mime_type = "application/octet-stream"
+            maintype, subtype = mime_type.split("/", 1)
+            part = MIMEBase(maintype, subtype)
+            part.set_payload(data)
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", "attachment", filename=filename)
             msg.attach(part)
     else:
         msg = body
@@ -220,8 +231,12 @@ def main() -> int:
             recipient_name=args.recipient_name,
             recipient_email=args.recipient_email,
             subject=args.subject,
-            text_file=args.text_file,
-            html_file=args.html_file,
+            text_content=(
+                args.text_file.read_text(encoding="utf-8") if args.text_file else None
+            ),
+            html_content=(
+                args.html_file.read_text(encoding="utf-8") if args.html_file else None
+            ),
             attachments=args.attachment,
         )
 

@@ -6,6 +6,7 @@ import html
 import io
 import os
 import re
+import smtplib
 import sys
 from collections.abc import Iterable
 from datetime import datetime, timedelta, tzinfo
@@ -15,6 +16,8 @@ import pytimeparse2
 
 from app.jupyterhub_client import JupyterHubClient
 from app.name_utils import _trailing_domain_key, parse_name
+from app.send_email import create_message as create_email_message
+from app.send_email import send_email as send_email_message
 from app.time_utils import compute_time_range, parse_timezone
 
 
@@ -356,12 +359,13 @@ Environment variables:
     )
 
     # JupyterHub API connection parameters
-    parser.add_argument(
+    hub_group = parser.add_argument_group("JupyterHub API")
+    hub_group.add_argument(
         "--endpoint",
         required=True,
         help="JupyterHub API endpoint URL (e.g., https://hub.example.com/hub/api)",
     )
-    parser.add_argument(
+    hub_group.add_argument(
         "--api-key",
         type=Path,
         help=(
@@ -369,14 +373,15 @@ Environment variables:
             "(or set JUPYTERHUB_API_KEY)"
         ),
     )
-    parser.add_argument(
+    hub_group.add_argument(
         "--ca-cert",
         type=Path,
         help="Path to CA certificate file for TLS verification",
     )
 
-    # Duration parameter
-    parser.add_argument(
+    # Query parameters
+    query_group = parser.add_argument_group("Query")
+    query_group.add_argument(
         "--duration",
         required=True,
         help=(
@@ -384,7 +389,7 @@ Environment variables:
             '"12h", "7 days", "3d 6h 12m")'
         ),
     )
-    parser.add_argument(
+    query_group.add_argument(
         "--time",
         metavar="HH:MM",
         help=(
@@ -392,7 +397,7 @@ Environment variables:
             "wall-clock time (in the given timezone) within the past 24 hours"
         ),
     )
-    parser.add_argument(
+    query_group.add_argument(
         "--timezone",
         default="America/Chicago",
         metavar="TZ",
@@ -403,24 +408,23 @@ Environment variables:
     )
 
     # Output options
-    parser.add_argument(
+    output_group = parser.add_argument_group("Output")
+    output_group.add_argument(
         "--text-file",
         type=Path,
         help="Write output as plain text to the specified file",
     )
-    parser.add_argument(
+    output_group.add_argument(
         "--csv-file",
         type=Path,
         help="Write output as CSV to the specified file",
     )
-    parser.add_argument(
+    output_group.add_argument(
         "--html-file",
         type=Path,
         help="Write output as HTML to the specified file (suitable for email body)",
     )
-
-    # Timestamp format
-    parser.add_argument(
+    output_group.add_argument(
         "--date-format",
         choices=["date", "datetime"],
         default="date",
@@ -429,12 +433,53 @@ Environment variables:
             "'datetime' (YYYY-MM-DD HH:MM)"
         ),
     )
-
-    # Username display
-    parser.add_argument(
+    output_group.add_argument(
         "--detailed-usernames",
         action="store_true",
         help='Always show the "Login method" column in the output',
+    )
+
+    # Email options
+    email_group = parser.add_argument_group("Email")
+    email_group.add_argument(
+        "--send-email",
+        action="store_true",
+        help="Send the report via email in addition to any file output",
+    )
+    email_group.add_argument(
+        "--sender-email",
+        help="Sender email address (required with --send-email)",
+    )
+    email_group.add_argument(
+        "--recipient-email",
+        help="Recipient email address (required with --send-email)",
+    )
+    email_group.add_argument(
+        "--sender-name",
+        help="Sender display name",
+    )
+    email_group.add_argument(
+        "--recipient-name",
+        help="Recipient display name",
+    )
+    email_group.add_argument(
+        "--subject",
+        default="JupyterHub New Users Report",
+        help='Email subject line (default: "JupyterHub New Users Report")',
+    )
+    email_group.add_argument(
+        "--smtp-host",
+        help="SMTP server hostname (required with --send-email)",
+    )
+    email_group.add_argument(
+        "--smtp-port",
+        type=int,
+        help="SMTP server port (required with --send-email)",
+    )
+    email_group.add_argument(
+        "--smtp-no-ssl",
+        action="store_true",
+        help="Disable SSL/TLS for the SMTP connection (SSL enabled by default)",
     )
 
     args = parser.parse_args()
@@ -462,6 +507,17 @@ Environment variables:
         parse_timezone(args.timezone)
     except ValueError as e:
         parser.error(str(e))
+
+    # Validate email arguments
+    if args.send_email:
+        for flag, attr in [
+            ("--sender-email", "sender_email"),
+            ("--recipient-email", "recipient_email"),
+            ("--smtp-host", "smtp_host"),
+            ("--smtp-port", "smtp_port"),
+        ]:
+            if getattr(args, attr) is None:
+                parser.error(f"{flag} is required when --send-email is set")
 
     return args
 
@@ -574,6 +630,59 @@ def main() -> int:
             )
             args.csv_file.write_text(csv_content, encoding="utf-8")
             print(f"CSV output written to: {args.csv_file}", file=sys.stderr)
+
+        # Send email if requested
+        if args.send_email:
+            text_content = format_output_text(
+                new_users,
+                start_time,
+                end_time,
+                args.timezone,
+                tz,
+                strftime_fmt,
+                args.detailed_usernames,
+            )
+            html_content = format_output_html(
+                new_users,
+                start_time,
+                end_time,
+                args.timezone,
+                tz,
+                strftime_fmt,
+                args.detailed_usernames,
+            )
+            csv_content = format_output_csv(
+                new_users,
+                start_time,
+                end_time,
+                args.timezone,
+                tz,
+                strftime_fmt,
+                args.detailed_usernames,
+            )
+            try:
+                message = create_email_message(
+                    sender_name=args.sender_name,
+                    sender_email=args.sender_email,
+                    recipient_name=args.recipient_name,
+                    recipient_email=args.recipient_email,
+                    subject=args.subject,
+                    text_content=text_content,
+                    html_content=html_content,
+                    attachment_data=[("new-users.csv", csv_content.encode("utf-8"))],
+                )
+                send_email_message(
+                    smtp_host=args.smtp_host,
+                    smtp_port=args.smtp_port,
+                    use_ssl=not args.smtp_no_ssl,
+                    sender_email=args.sender_email,
+                    recipient_email=args.recipient_email,
+                    message=message,
+                )
+                print("Email sent successfully", file=sys.stderr)
+            except (OSError, smtplib.SMTPException) as e:
+                print(f"Error sending email: {e}", file=sys.stderr)
+                return 1
 
         return 0
 
