@@ -9,15 +9,16 @@ import smtplib
 import sys
 from collections.abc import Iterable
 from datetime import datetime, timedelta, tzinfo
-from pathlib import Path
 
 import pytimeparse2
 
 from app.cli_utils import (
     add_email_argument_group,
+    add_jupyterhub_argument_group,
     add_output_argument_group,
     add_query_argument_group,
     validate_email_arguments,
+    validate_jupyterhub_arguments,
     validate_query_arguments,
 )
 from app.jupyterhub_client import JupyterHubClient
@@ -365,25 +366,7 @@ Environment variables:
     )
 
     # JupyterHub API connection parameters
-    hub_group = parser.add_argument_group("JupyterHub API")
-    hub_group.add_argument(
-        "--jupyterhub-endpoint",
-        required=True,
-        help="JupyterHub API endpoint URL (e.g., https://hub.example.com/hub/api)",
-    )
-    hub_group.add_argument(
-        "--jupyterhub-api-key",
-        type=Path,
-        help=(
-            "Path to file containing the JupyterHub API key for authentication "
-            "(or set JUPYTERHUB_API_KEY)"
-        ),
-    )
-    hub_group.add_argument(
-        "--jupyterhub-ca-cert",
-        type=Path,
-        help="Path to CA certificate file for TLS verification",
-    )
+    add_jupyterhub_argument_group(parser)
 
     # Query parameters
     add_query_argument_group(parser)
@@ -396,18 +379,8 @@ Environment variables:
 
     args = parser.parse_args()
 
-    # Validate CA certificate exists if provided
-    if args.jupyterhub_ca_cert and not args.jupyterhub_ca_cert.exists():
-        parser.error(f"CA certificate file not found: {args.jupyterhub_ca_cert}")
-
-    # Validate API key: file arg takes precedence over env var
-    if args.jupyterhub_api_key is not None:
-        if not args.jupyterhub_api_key.exists():
-            parser.error(f"API key file not found: {args.jupyterhub_api_key}")
-    elif not os.environ.get("JUPYTERHUB_API_KEY"):
-        parser.error(
-            "--jupyterhub-api-key or the JUPYTERHUB_API_KEY environment variable is required"
-        )
+    # Validate JupyterHub API key and CA certificate
+    validate_jupyterhub_arguments(args, parser)
 
     # Validate --time and --timezone
     validate_query_arguments(args, parser)

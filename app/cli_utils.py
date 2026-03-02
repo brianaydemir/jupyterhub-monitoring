@@ -1,10 +1,78 @@
 """Helper functions for building command-line interfaces."""
 
 import argparse
+import os
 import re
 from pathlib import Path
 
 from app.time_utils import parse_timezone
+
+
+def add_jupyterhub_argument_group(
+    parser: argparse.ArgumentParser,
+) -> argparse._ArgumentGroup:
+    """Add a "JupyterHub API" argument group to a parser and return it.
+
+    Adds ``--jupyterhub-endpoint``, ``--jupyterhub-api-key``, and
+    ``--jupyterhub-ca-cert``. The returned group can be used to append
+    additional script-specific arguments.
+
+    Use :func:`validate_jupyterhub_arguments` after parsing to validate the
+    API key and CA certificate.
+
+    Args:
+        parser: The argument parser to add the group to
+
+    Returns:
+        The newly created argument group
+    """
+    hub_group = parser.add_argument_group("JupyterHub API")
+    hub_group.add_argument(
+        "--jupyterhub-endpoint",
+        required=True,
+        help="JupyterHub API endpoint URL (e.g., https://hub.example.com/hub/api)",
+    )
+    hub_group.add_argument(
+        "--jupyterhub-api-key",
+        type=Path,
+        help=(
+            "Path to file containing the JupyterHub API key for authentication "
+            "(or set JUPYTERHUB_API_KEY)"
+        ),
+    )
+    hub_group.add_argument(
+        "--jupyterhub-ca-cert",
+        type=Path,
+        help="Path to CA certificate file for TLS verification",
+    )
+    return hub_group
+
+
+def validate_jupyterhub_arguments(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Validate JupyterHub API key and CA certificate arguments after parsing.
+
+    Calls ``parser.error`` if the CA certificate file does not exist (when
+    provided), the API key file does not exist (when provided), or neither
+    ``--jupyterhub-api-key`` nor the ``JUPYTERHUB_API_KEY`` environment
+    variable is set.
+
+    Args:
+        args: Parsed command-line arguments
+        parser: The argument parser (used to report errors)
+    """
+    if args.jupyterhub_ca_cert is not None and not args.jupyterhub_ca_cert.exists():
+        parser.error(f"CA certificate file not found: {args.jupyterhub_ca_cert}")
+
+    if args.jupyterhub_api_key is not None:
+        if not args.jupyterhub_api_key.exists():
+            parser.error(f"API key file not found: {args.jupyterhub_api_key}")
+    elif not os.environ.get("JUPYTERHUB_API_KEY"):
+        parser.error(
+            "--jupyterhub-api-key or the JUPYTERHUB_API_KEY environment variable is required"
+        )
 
 
 def add_query_argument_group(

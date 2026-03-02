@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.cli_utils import add_jupyterhub_argument_group, validate_jupyterhub_arguments
 from app.elasticsearch_client import ElasticsearchClient
 from app.jupyterhub_client import JupyterHubClient
 
@@ -142,24 +143,7 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
     )
 
     # JupyterHub settings (required)
-    parser.add_argument(
-        "--jupyterhub-endpoint",
-        required=True,
-        help='JupyterHub API endpoint URL (e.g., "https://localhost:8000/hub/api")',
-    )
-    parser.add_argument(
-        "--jupyterhub-api-key",
-        type=Path,
-        help=(
-            "Path to file containing the JupyterHub API key for authentication "
-            "(or set JUPYTERHUB_API_KEY)"
-        ),
-    )
-    parser.add_argument(
-        "--jupyterhub-ca-cert",
-        type=Path,
-        help="Path to CA certificate file for JupyterHub TLS verification",
-    )
+    add_jupyterhub_argument_group(parser)
 
     # Elasticsearch settings (required unless --debug)
     parser.add_argument(
@@ -205,11 +189,8 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
 
     args = parser.parse_args()
 
-    # Validate that the JupyterHub API key is available
-    if not args.jupyterhub_api_key and not os.environ.get("JUPYTERHUB_API_KEY"):
-        parser.error(
-            "--jupyterhub-api-key or the JUPYTERHUB_API_KEY environment variable is required"
-        )
+    # Validate JupyterHub API key and CA certificate
+    validate_jupyterhub_arguments(args, parser)
 
     # Validate that Elasticsearch settings are provided unless in debug mode
     if not args.debug:
@@ -234,8 +215,6 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
 
     # Validate that path-type arguments point to existing files
     path_args = [
-        (args.jupyterhub_api_key, "JupyterHub API key file"),
-        (args.jupyterhub_ca_cert, "JupyterHub CA certificate file"),
         (args.elasticsearch_api_key, "Elasticsearch API key file"),
         (args.elasticsearch_ca_cert, "Elasticsearch CA certificate file"),
     ]
