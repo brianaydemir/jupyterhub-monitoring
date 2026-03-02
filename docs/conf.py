@@ -14,7 +14,8 @@ extensions = [
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "shibuya"
+html_theme_options = {"accent_color": "cyan"}
 
 # Suppress "document isn't included in any toctree" warnings for api/ stubs.
 suppress_warnings = ["toc.not_readable"]
