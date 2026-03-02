@@ -355,24 +355,24 @@ def parse_arguments() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --endpoint https://hub.example.com/hub/api --api-key /path/to/api-key --duration "7 days"
-  %(prog)s --endpoint https://hub.example.com/hub/api --api-key /path/to/api-key --duration "12h" --text-file output.txt
-  %(prog)s --endpoint https://hub.example.com/hub/api --api-key /path/to/api-key --duration "3d 6h" --html-file output.html
+  %(prog)s --jupyterhub-endpoint https://hub.example.com/hub/api --jupyterhub-api-key /path/to/api-key --duration "7 days"
+  %(prog)s --jupyterhub-endpoint https://hub.example.com/hub/api --jupyterhub-api-key /path/to/api-key --duration "12h" --text-file output.txt
+  %(prog)s --jupyterhub-endpoint https://hub.example.com/hub/api --jupyterhub-api-key /path/to/api-key --duration "3d 6h" --html-file output.html
 
 Environment variables:
-  JUPYTERHUB_API_KEY  JupyterHub API key (used when --api-key is not provided)
+  JUPYTERHUB_API_KEY  JupyterHub API key (used when --jupyterhub-api-key is not provided)
         """,
     )
 
     # JupyterHub API connection parameters
     hub_group = parser.add_argument_group("JupyterHub API")
     hub_group.add_argument(
-        "--endpoint",
+        "--jupyterhub-endpoint",
         required=True,
         help="JupyterHub API endpoint URL (e.g., https://hub.example.com/hub/api)",
     )
     hub_group.add_argument(
-        "--api-key",
+        "--jupyterhub-api-key",
         type=Path,
         help=(
             "Path to file containing the JupyterHub API key for authentication "
@@ -380,7 +380,7 @@ Environment variables:
         ),
     )
     hub_group.add_argument(
-        "--ca-cert",
+        "--jupyterhub-ca-cert",
         type=Path,
         help="Path to CA certificate file for TLS verification",
     )
@@ -397,16 +397,16 @@ Environment variables:
     args = parser.parse_args()
 
     # Validate CA certificate exists if provided
-    if args.ca_cert and not args.ca_cert.exists():
-        parser.error(f"CA certificate file not found: {args.ca_cert}")
+    if args.jupyterhub_ca_cert and not args.jupyterhub_ca_cert.exists():
+        parser.error(f"CA certificate file not found: {args.jupyterhub_ca_cert}")
 
     # Validate API key: file arg takes precedence over env var
-    if args.api_key is not None:
-        if not args.api_key.exists():
-            parser.error(f"API key file not found: {args.api_key}")
+    if args.jupyterhub_api_key is not None:
+        if not args.jupyterhub_api_key.exists():
+            parser.error(f"API key file not found: {args.jupyterhub_api_key}")
     elif not os.environ.get("JUPYTERHUB_API_KEY"):
         parser.error(
-            "--api-key or the JUPYTERHUB_API_KEY environment variable is required"
+            "--jupyterhub-api-key or the JUPYTERHUB_API_KEY environment variable is required"
         )
 
     # Validate --time and --timezone
@@ -446,13 +446,15 @@ def main() -> int:
         # Initialize the JupyterHub client
         try:
             client = JupyterHubClient(
-                endpoint=args.endpoint,
+                endpoint=args.jupyterhub_endpoint,
                 api_key=(
-                    args.api_key.read_text().strip()
-                    if args.api_key
+                    args.jupyterhub_api_key.read_text().strip()
+                    if args.jupyterhub_api_key
                     else os.environ["JUPYTERHUB_API_KEY"]
                 ),
-                ca_cert=str(args.ca_cert) if args.ca_cert else None,
+                ca_cert=(
+                    str(args.jupyterhub_ca_cert) if args.jupyterhub_ca_cert else None
+                ),
             )
         except ConnectionError as e:
             print(f"Error connecting to JupyterHub: {e}", file=sys.stderr)

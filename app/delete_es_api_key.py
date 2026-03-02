@@ -19,20 +19,20 @@ def parse_arguments() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --endpoint https://elastic.example.com:9200 --id abc123
-  %(prog)s --endpoint https://elastic.example.com:9200 --name "my-api-key"
-  %(prog)s --endpoint https://elastic.example.com:9200 --id abc123 --ca-cert /path/to/ca.crt
+  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200 --id abc123
+  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200 --name "my-api-key"
+  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200 --id abc123 --elasticsearch-ca-cert /path/to/ca.crt
         """,
     )
 
     # Elasticsearch connection parameters
     parser.add_argument(
-        "--endpoint",
+        "--elasticsearch-endpoint",
         required=True,
         help="Elasticsearch API endpoint URL (e.g., https://elastic.example.com:9200)",
     )
     parser.add_argument(
-        "--ca-cert",
+        "--elasticsearch-ca-cert",
         type=Path,
         help="Path to CA certificate file for TLS verification",
     )
@@ -61,8 +61,8 @@ Examples:
     args = parser.parse_args()
 
     # Validate CA certificate exists if provided
-    if args.ca_cert and not args.ca_cert.exists():
-        parser.error(f"CA certificate file not found: {args.ca_cert}")
+    if args.elasticsearch_ca_cert and not args.elasticsearch_ca_cert.exists():
+        parser.error(f"CA certificate file not found: {args.elasticsearch_ca_cert}")
 
     return args
 
@@ -117,10 +117,14 @@ def main() -> int:
         # Invalidate the API key
         try:
             result = ElasticsearchClient.delete_api_key_with_basic_auth(
-                endpoint=args.endpoint,
+                endpoint=args.elasticsearch_endpoint,
                 username=username,
                 password=password,
-                ca_cert=str(args.ca_cert) if args.ca_cert else None,
+                ca_cert=(
+                    str(args.elasticsearch_ca_cert)
+                    if args.elasticsearch_ca_cert
+                    else None
+                ),
                 key_id=args.key_id,
                 key_name=args.key_name,
             )

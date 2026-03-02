@@ -367,24 +367,24 @@ def parse_arguments() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --endpoint https://es.example.com:9200 --api-key /path/to/api-key --index servers --duration "7 days"
-  %(prog)s --endpoint https://es.example.com:9200 --api-key /path/to/api-key --index servers --duration "24h" --hub myhub
-  %(prog)s --endpoint https://es.example.com:9200 --api-key /path/to/api-key --index servers --duration "7 days" --html-file report.html
+  %(prog)s --elasticsearch-endpoint https://es.example.com:9200 --elasticsearch-api-key /path/to/api-key --elasticsearch-index servers --duration "7 days"
+  %(prog)s --elasticsearch-endpoint https://es.example.com:9200 --elasticsearch-api-key /path/to/api-key --elasticsearch-index servers --duration "24h" --hub myhub
+  %(prog)s --elasticsearch-endpoint https://es.example.com:9200 --elasticsearch-api-key /path/to/api-key --elasticsearch-index servers --duration "7 days" --html-file report.html
 
 Environment variables:
-  ELASTICSEARCH_API_KEY  Elasticsearch API key (used when --api-key is not provided)
+  ELASTICSEARCH_API_KEY  Elasticsearch API key (used when --elasticsearch-api-key is not provided)
         """,
     )
 
     # Elasticsearch connection parameters
     es_group = parser.add_argument_group("Elasticsearch")
     es_group.add_argument(
-        "--endpoint",
+        "--elasticsearch-endpoint",
         required=True,
         help="Elasticsearch API endpoint URL (e.g., https://localhost:9200)",
     )
     es_group.add_argument(
-        "--api-key",
+        "--elasticsearch-api-key",
         type=Path,
         help=(
             "Path to file containing the Elasticsearch API key for authentication "
@@ -392,7 +392,7 @@ Environment variables:
         ),
     )
     es_group.add_argument(
-        "--ca-cert",
+        "--elasticsearch-ca-cert",
         type=Path,
         help="Path to CA certificate file for TLS verification",
     )
@@ -400,7 +400,7 @@ Environment variables:
     # Query parameters
     query_group = add_query_argument_group(parser)
     query_group.add_argument(
-        "--index",
+        "--elasticsearch-index",
         required=True,
         help="Name of the Elasticsearch index to query",
     )
@@ -418,16 +418,16 @@ Environment variables:
     args = parser.parse_args()
 
     # Validate CA certificate exists if provided
-    if args.ca_cert and not args.ca_cert.exists():
-        parser.error(f"CA certificate file not found: {args.ca_cert}")
+    if args.elasticsearch_ca_cert and not args.elasticsearch_ca_cert.exists():
+        parser.error(f"CA certificate file not found: {args.elasticsearch_ca_cert}")
 
     # Validate API key: file arg takes precedence over env var
-    if args.api_key is not None:
-        if not args.api_key.exists():
-            parser.error(f"API key file not found: {args.api_key}")
+    if args.elasticsearch_api_key is not None:
+        if not args.elasticsearch_api_key.exists():
+            parser.error(f"API key file not found: {args.elasticsearch_api_key}")
     elif not os.environ.get("ELASTICSEARCH_API_KEY"):
         parser.error(
-            "--api-key or the ELASTICSEARCH_API_KEY environment variable is required"
+            "--elasticsearch-api-key or the ELASTICSEARCH_API_KEY environment variable is required"
         )
 
     # Validate --time and --timezone
@@ -467,14 +467,16 @@ def main() -> int:
 
         # Initialize the Elasticsearch client
         api_key = (
-            args.api_key.read_text().strip()
-            if args.api_key
+            args.elasticsearch_api_key.read_text().strip()
+            if args.elasticsearch_api_key
             else os.environ["ELASTICSEARCH_API_KEY"]
         )
         client = ElasticsearchClient(
-            endpoint=args.endpoint,
+            endpoint=args.elasticsearch_endpoint,
             api_key=api_key,
-            ca_cert=str(args.ca_cert) if args.ca_cert else None,
+            ca_cert=(
+                str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
+            ),
         )
 
         # Query Elasticsearch
@@ -482,7 +484,7 @@ def main() -> int:
             query = build_query(
                 cutoff=cutoff, end=int(end_time.timestamp()), hub=args.hub
             )
-            documents = list(client.query(index=args.index, query=query))
+            documents = list(client.query(index=args.elasticsearch_index, query=query))
         except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"Error querying Elasticsearch: {e}", file=sys.stderr)
             return 1

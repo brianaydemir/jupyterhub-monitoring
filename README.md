@@ -57,7 +57,7 @@ list:users  read:users  read:servers
 Pass the token to a script via a file:
 
 ```
---api-key /path/to/jh-api-key.txt
+--jupyterhub-api-key /path/to/jh-api-key.txt
 ```
 
 or via the environment variable `JUPYTERHUB_API_KEY`.
@@ -67,7 +67,7 @@ or via the environment variable `JUPYTERHUB_API_KEY`.
 Scripts that talk to Elasticsearch require an API key. Pass it via a file:
 
 ```
---api-key /path/to/es-api-key.txt
+--elasticsearch-api-key /path/to/es-api-key.txt
 ```
 
 or via the environment variable `ELASTICSEARCH_API_KEY`.
@@ -107,8 +107,8 @@ Optionally writes plain-text, HTML, and/or CSV output files for use with
 
 ```
 get-new-users \
-    --endpoint https://hub.example.com/hub/api \
-    --api-key ~/secrets/jh-api-key.txt \
+    --jupyterhub-endpoint https://hub.example.com/hub/api \
+    --jupyterhub-api-key ~/secrets/jh-api-key.txt \
     --duration "7 days" \
     --text-file new-users.txt \
     --html-file new-users.html \
@@ -126,9 +126,9 @@ files.
 
 ```
 get-new-activity \
-    --endpoint https://elastic.example.com:9200 \
-    --api-key ~/secrets/es-api-key.txt \
-    --index jupyterhub-servers \
+    --elasticsearch-endpoint https://elastic.example.com:9200 \
+    --elasticsearch-api-key ~/secrets/es-api-key.txt \
+    --elasticsearch-index jupyterhub-servers \
     --duration "24 hours" \
     --hub production \
     --text-file activity.txt \
@@ -143,9 +143,9 @@ matching documents as JSON.
 
 ```
 get-es-docs \
-    --endpoint https://elastic.example.com:9200 \
-    --api-key ~/secrets/es-api-key.txt \
-    --index jupyterhub-servers \
+    --elasticsearch-endpoint https://elastic.example.com:9200 \
+    --elasticsearch-api-key ~/secrets/es-api-key.txt \
+    --elasticsearch-index jupyterhub-servers \
     --query "meta.hub:production AND user.admin:true"
 ```
 
@@ -156,7 +156,7 @@ Prints the new key in the requested format.
 
 ```
 create-es-api-key \
-    --endpoint https://elastic.example.com:9200 \
+    --elasticsearch-endpoint https://elastic.example.com:9200 \
     --username elastic \
     --name push-servers-key \
     --expiration 30d \
@@ -169,7 +169,7 @@ Lists the active Elasticsearch API keys owned by the authenticated user.
 
 ```
 list-es-api-keys \
-    --endpoint https://elastic.example.com:9200 \
+    --elasticsearch-endpoint https://elastic.example.com:9200 \
     --username elastic
 ```
 
@@ -182,13 +182,13 @@ Invalidates an Elasticsearch API key by ID or by name.
 ```
 # By ID:
 delete-es-api-key \
-    --endpoint https://elastic.example.com:9200 \
+    --elasticsearch-endpoint https://elastic.example.com:9200 \
     --username elastic \
     --id AbCdEfGhIjKlMnOp
 
 # By name:
 delete-es-api-key \
-    --endpoint https://elastic.example.com:9200 \
+    --elasticsearch-endpoint https://elastic.example.com:9200 \
     --username elastic \
     --name push-servers-key
 ```
