@@ -16,7 +16,14 @@ from app.time_utils import get_now_ms
 
 
 def _ms_to_datetime(ms: int | None) -> str:
-    """Convert a millisecond epoch timestamp to a human-readable UTC string."""
+    """Convert a millisecond epoch timestamp to a human-readable UTC string.
+
+    Args:
+        ms: Millisecond epoch timestamp, or None for keys that have never expired
+
+    Returns:
+        Formatted UTC datetime string, or ``"Never"`` when *ms* is None
+    """
     if ms is None:
         return "Never"
     return datetime.datetime.fromtimestamp(
@@ -25,7 +32,14 @@ def _ms_to_datetime(ms: int | None) -> str:
 
 
 def _key_status_tags(key: dict[str, Any]) -> list[str]:
-    """Return status tags for a key that is not fully active."""
+    """Return status tags for a key that is not fully active.
+
+    Args:
+        key: API key dict as returned by the Elasticsearch list-API-keys endpoint
+
+    Returns:
+        List of status tag strings (e.g. ``["invalidated"]``, ``["expired"]``)
+    """
     tags = []
     if key.get("invalidated"):
         tags.append("invalidated")

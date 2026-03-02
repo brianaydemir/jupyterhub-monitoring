@@ -82,7 +82,16 @@ def _html_table_footer(tz_name: str) -> str:
 
 
 def _format_created(created_str: str, strftime_fmt: str, tz: "tzinfo") -> str:
-    """Reformat a JupyterHub ISO 8601 creation timestamp in a given timezone."""
+    """Reformat a JupyterHub ISO 8601 creation timestamp in a given timezone.
+
+    Args:
+        created_str: ISO 8601 timestamp string from the JupyterHub API
+        strftime_fmt: strftime format string for the output
+        tz: Target timezone for the converted datetime
+
+    Returns:
+        Formatted datetime string, or the original string on parse failure
+    """
     try:
         dt = datetime.fromisoformat(created_str.replace("Z", "+00:00")).astimezone(tz)
         return dt.strftime(strftime_fmt)
@@ -355,7 +364,14 @@ def format_users_csv(
 
 
 def _format_duration(seconds: float) -> str:
-    """Format a duration in seconds as HH:MM."""
+    """Format a duration in seconds as HH:MM.
+
+    Args:
+        seconds: Duration in seconds
+
+    Returns:
+        Duration string formatted as ``H:MM``
+    """
     total_minutes = int(seconds) // 60
     hours, minutes = divmod(total_minutes, 60)
     return f"{hours}:{minutes:02d}"
@@ -364,7 +380,15 @@ def _format_duration(seconds: float) -> str:
 def _sorted_activity_rows(
     totals: dict[str, float], show_method: bool
 ) -> list[tuple[str, float]]:
-    """Return (user, seconds) pairs sorted by time descending, then by parsed name."""
+    """Return (user, seconds) pairs sorted by time descending, then by parsed name.
+
+    Args:
+        totals: Mapping of username to total active seconds
+        show_method: When True, sort by full parsed name including login method
+
+    Returns:
+        List of ``(username, seconds)`` tuples in descending activity order
+    """
 
     def name_key(user: str) -> tuple:
         name = parse_name(user)

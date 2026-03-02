@@ -12,7 +12,14 @@ TRAILING_SORT_DOMAINS: list[str] = ["orcid.org"]
 
 
 def _trailing_domain_key(domain: str) -> tuple[int, int]:
-    """Return a sort key that pushes listed domains to the end."""
+    """Return a sort key that pushes listed domains to the end.
+
+    Args:
+        domain: Domain string extracted from a parsed JupyterHub username
+
+    Returns:
+        A ``(group, index)`` tuple; unlisted domains sort before listed ones
+    """
     try:
         return (1, TRAILING_SORT_DOMAINS.index(domain))
     except ValueError:
