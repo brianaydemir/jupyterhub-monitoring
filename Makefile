@@ -4,7 +4,7 @@
 IMAGE ?= hub.osg-htc.org/brian.aydemir/jupyterhub-monitoring
 PY_PACKAGE_SRC := app
 
-.PHONY: all build clean distclean init lint reformat update
+.PHONY: all build clean distclean docs init lint reformat update
 
 all: reformat lint build
 
@@ -40,6 +40,10 @@ build: clean
 	    --build-arg VERSION=$${VERSION} \
 	    --pull \
 	    -t $(IMAGE):$${VERSION}
+
+docs:
+	poetry run sphinx-apidoc -o docs/api $(PY_PACKAGE_SRC)
+	poetry run sphinx-build -b html docs docs/_build/html
 
 clean:
 	rm -rf dist

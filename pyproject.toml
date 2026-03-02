@@ -77,14 +77,16 @@ requests       = "~2.32"
 
 
 [tool.poetry.group.dev.dependencies]
-bandit      = "~1.9"
-black       = "~26.1"
-isort       = "~8.0"
-mypy        = "~1.19"
-pre-commit  = "~4.5"
-pylint      = "~4.0"
-toml-cli    = "~0.8"
-typos       = "~1.44"
+bandit             = "~1.9"
+black              = "~26.1"
+isort              = "~8.0"
+mypy               = "~1.19"
+pre-commit         = "~4.5"
+pylint             = "~4.0"
+sphinx             = "~9.1"
+sphinx-rtd-theme   = "~3.1"
+toml-cli           = "~0.8"
+typos              = "~1.44"
 
 
 [tool.poetry.requires-plugins]
