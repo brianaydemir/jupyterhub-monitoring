@@ -8,14 +8,15 @@ import os
 import smtplib
 import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pytimeparse2
 
 from app.cli_utils import (
+    add_elasticsearch_argument_group,
     add_email_argument_group,
     add_output_argument_group,
     add_query_argument_group,
+    validate_elasticsearch_arguments,
     validate_email_arguments,
     validate_query_arguments,
 )
@@ -377,33 +378,10 @@ Environment variables:
     )
 
     # Elasticsearch connection parameters
-    es_group = parser.add_argument_group("Elasticsearch")
-    es_group.add_argument(
-        "--elasticsearch-endpoint",
-        required=True,
-        help="Elasticsearch API endpoint URL (e.g., https://localhost:9200)",
-    )
-    es_group.add_argument(
-        "--elasticsearch-api-key",
-        type=Path,
-        help=(
-            "Path to file containing the Elasticsearch API key for authentication "
-            "(or set ELASTICSEARCH_API_KEY)"
-        ),
-    )
-    es_group.add_argument(
-        "--elasticsearch-ca-cert",
-        type=Path,
-        help="Path to CA certificate file for TLS verification",
-    )
+    add_elasticsearch_argument_group(parser)
 
     # Query parameters
     query_group = add_query_argument_group(parser)
-    query_group.add_argument(
-        "--elasticsearch-index",
-        required=True,
-        help="Name of the Elasticsearch index to query",
-    )
     query_group.add_argument(
         "--hub",
         help="Filter results to documents with this meta.hub value",
@@ -417,18 +395,8 @@ Environment variables:
 
     args = parser.parse_args()
 
-    # Validate CA certificate exists if provided
-    if args.elasticsearch_ca_cert and not args.elasticsearch_ca_cert.exists():
-        parser.error(f"CA certificate file not found: {args.elasticsearch_ca_cert}")
-
-    # Validate API key: file arg takes precedence over env var
-    if args.elasticsearch_api_key is not None:
-        if not args.elasticsearch_api_key.exists():
-            parser.error(f"API key file not found: {args.elasticsearch_api_key}")
-    elif not os.environ.get("ELASTICSEARCH_API_KEY"):
-        parser.error(
-            "--elasticsearch-api-key or the ELASTICSEARCH_API_KEY environment variable is required"
-        )
+    # Validate Elasticsearch API key and CA certificate
+    validate_elasticsearch_arguments(args, parser)
 
     # Validate --time and --timezone
     validate_query_arguments(args, parser)

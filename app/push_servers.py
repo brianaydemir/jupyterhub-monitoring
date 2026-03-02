@@ -5,9 +5,13 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
-from app.cli_utils import add_jupyterhub_argument_group, validate_jupyterhub_arguments
+from app.cli_utils import (
+    add_elasticsearch_argument_group,
+    add_jupyterhub_argument_group,
+    validate_elasticsearch_arguments,
+    validate_jupyterhub_arguments,
+)
 from app.elasticsearch_client import ElasticsearchClient
 from app.jupyterhub_client import JupyterHubClient
 
@@ -146,27 +150,7 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
     add_jupyterhub_argument_group(parser)
 
     # Elasticsearch settings (required unless --debug)
-    parser.add_argument(
-        "--elasticsearch-endpoint",
-        help='Elasticsearch API endpoint URL (e.g., "https://localhost:9200")',
-    )
-    parser.add_argument(
-        "--elasticsearch-api-key",
-        type=Path,
-        help=(
-            "Path to file containing the Elasticsearch API key for authentication "
-            "(or set ELASTICSEARCH_API_KEY)"
-        ),
-    )
-    parser.add_argument(
-        "--elasticsearch-index",
-        help="Elasticsearch index name to push documents to",
-    )
-    parser.add_argument(
-        "--elasticsearch-ca-cert",
-        type=Path,
-        help="Path to CA certificate file for Elasticsearch TLS verification",
-    )
+    add_elasticsearch_argument_group(parser, required=False)
 
     # Optional flags
     parser.add_argument(
@@ -196,15 +180,9 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
     if not args.debug:
         if not args.elasticsearch_endpoint:
             parser.error("--elasticsearch-endpoint is required unless --debug is used")
-        if not args.elasticsearch_api_key and not os.environ.get(
-            "ELASTICSEARCH_API_KEY"
-        ):
-            parser.error(
-                "--elasticsearch-api-key or ELASTICSEARCH_API_KEY is required "
-                "unless --debug is used"
-            )
         if not args.elasticsearch_index:
             parser.error("--elasticsearch-index is required unless --debug is used")
+        validate_elasticsearch_arguments(args, parser)
 
     # Validate limit is positive if provided
     if args.limit is not None and args.limit < 1:
@@ -212,15 +190,6 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
 
     # Parse and validate metadata key-value pairs
     metadata_dict = _parse_metadata(args.metadata, parser)
-
-    # Validate that path-type arguments point to existing files
-    path_args = [
-        (args.elasticsearch_api_key, "Elasticsearch API key file"),
-        (args.elasticsearch_ca_cert, "Elasticsearch CA certificate file"),
-    ]
-    for path, label in path_args:
-        if path is not None and not path.exists():
-            parser.error(f"{label} not found: {path}")
 
     return args, metadata_dict
 

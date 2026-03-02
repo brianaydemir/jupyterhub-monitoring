@@ -3,8 +3,11 @@
 import argparse
 import getpass
 import sys
-from pathlib import Path
 
+from app.cli_utils import (
+    add_elasticsearch_basic_argument_group,
+    validate_elasticsearch_basic_arguments,
+)
 from app.elasticsearch_client import ElasticsearchClient
 
 
@@ -26,16 +29,7 @@ Examples:
     )
 
     # Elasticsearch connection parameters
-    parser.add_argument(
-        "--elasticsearch-endpoint",
-        required=True,
-        help="Elasticsearch API endpoint URL (e.g., https://elastic.example.com:9200)",
-    )
-    parser.add_argument(
-        "--elasticsearch-ca-cert",
-        type=Path,
-        help="Path to CA certificate file for TLS verification",
-    )
+    add_elasticsearch_basic_argument_group(parser)
 
     # Authentication parameters
     parser.add_argument(
@@ -61,8 +55,7 @@ Examples:
     args = parser.parse_args()
 
     # Validate CA certificate exists if provided
-    if args.elasticsearch_ca_cert and not args.elasticsearch_ca_cert.exists():
-        parser.error(f"CA certificate file not found: {args.elasticsearch_ca_cert}")
+    validate_elasticsearch_basic_arguments(args, parser)
 
     return args
 

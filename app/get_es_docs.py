@@ -4,8 +4,11 @@ import argparse
 import json
 import os
 import sys
-from pathlib import Path
 
+from app.cli_utils import (
+    add_elasticsearch_argument_group,
+    validate_elasticsearch_arguments,
+)
 from app.elasticsearch_client import ElasticsearchClient
 
 
@@ -33,31 +36,9 @@ Environment variables:
     )
 
     # Elasticsearch connection parameters
-    parser.add_argument(
-        "--elasticsearch-endpoint",
-        required=True,
-        help="Elasticsearch API endpoint URL (e.g., https://localhost:9200)",
-    )
-    parser.add_argument(
-        "--elasticsearch-api-key",
-        type=Path,
-        help=(
-            "Path to file containing the Elasticsearch API key for authentication "
-            "(or set ELASTICSEARCH_API_KEY)"
-        ),
-    )
-    parser.add_argument(
-        "--elasticsearch-ca-cert",
-        type=Path,
-        help="Path to CA certificate file for TLS verification",
-    )
+    add_elasticsearch_argument_group(parser)
 
     # Query parameters
-    parser.add_argument(
-        "--elasticsearch-index",
-        required=True,
-        help="Name of the Elasticsearch index to query",
-    )
     parser.add_argument(
         "--query",
         required=True,
@@ -66,18 +47,8 @@ Environment variables:
 
     args = parser.parse_args()
 
-    # Validate CA certificate exists if provided
-    if args.elasticsearch_ca_cert and not args.elasticsearch_ca_cert.exists():
-        parser.error(f"CA certificate file not found: {args.elasticsearch_ca_cert}")
-
-    # Validate API key: file arg takes precedence over env var
-    if args.elasticsearch_api_key is not None:
-        if not args.elasticsearch_api_key.exists():
-            parser.error(f"API key file not found: {args.elasticsearch_api_key}")
-    elif not os.environ.get("ELASTICSEARCH_API_KEY"):
-        parser.error(
-            "--elasticsearch-api-key or the ELASTICSEARCH_API_KEY environment variable is required"
-        )
+    # Validate Elasticsearch API key and CA certificate
+    validate_elasticsearch_arguments(args, parser)
 
     return args
 
