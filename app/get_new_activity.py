@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytimeparse2
 
+from app.cli_utils import add_email_argument_group, validate_email_arguments
 from app.elasticsearch_client import ElasticsearchClient
 from app.name_utils import _trailing_domain_key, parse_name
 from app.send_email import create_message as create_email_message
@@ -452,47 +453,7 @@ Environment variables:
     )
 
     # Email options
-    email_group = parser.add_argument_group("Email")
-    email_group.add_argument(
-        "--send-email",
-        action="store_true",
-        help="Send the report via email in addition to any file output",
-    )
-    email_group.add_argument(
-        "--sender-email",
-        help="Sender email address (required with --send-email)",
-    )
-    email_group.add_argument(
-        "--recipient-email",
-        help="Recipient email address (required with --send-email)",
-    )
-    email_group.add_argument(
-        "--sender-name",
-        help="Sender display name",
-    )
-    email_group.add_argument(
-        "--recipient-name",
-        help="Recipient display name",
-    )
-    email_group.add_argument(
-        "--subject",
-        default="JupyterHub Activity Report",
-        help='Email subject line (default: "JupyterHub Activity Report")',
-    )
-    email_group.add_argument(
-        "--smtp-host",
-        help="SMTP server hostname (required with --send-email)",
-    )
-    email_group.add_argument(
-        "--smtp-port",
-        type=int,
-        help="SMTP server port (required with --send-email)",
-    )
-    email_group.add_argument(
-        "--smtp-no-ssl",
-        action="store_true",
-        help="Disable SSL/TLS for the SMTP connection (SSL enabled by default)",
-    )
+    add_email_argument_group(parser, default_subject="JupyterHub Activity Report")
 
     args = parser.parse_args()
 
@@ -521,15 +482,7 @@ Environment variables:
         parser.error(str(e))
 
     # Validate email arguments
-    if args.send_email:
-        for flag, attr in [
-            ("--sender-email", "sender_email"),
-            ("--recipient-email", "recipient_email"),
-            ("--smtp-host", "smtp_host"),
-            ("--smtp-port", "smtp_port"),
-        ]:
-            if getattr(args, attr) is None:
-                parser.error(f"{flag} is required when --send-email is set")
+    validate_email_arguments(args, parser)
 
     return args
 

@@ -11,6 +11,8 @@ from email.mime.text import MIMEText
 from email.utils import formataddr
 from pathlib import Path
 
+from app.cli_utils import add_email_arguments
+
 
 def create_message(
     sender_name: str | None,
@@ -129,53 +131,11 @@ def parse_arguments() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    # Email addresses (required)
-    parser.add_argument(
-        "--sender-email",
+    # Email sender, recipient, subject, and SMTP settings
+    add_email_arguments(
+        parser,
+        default_subject="JupyterHub Monitoring Report",
         required=True,
-        help="The sender's email address",
-    )
-    parser.add_argument(
-        "--recipient-email",
-        required=True,
-        help="The recipient's email address",
-    )
-
-    # Names (optional)
-    parser.add_argument(
-        "--sender-name",
-        help="The sender's display name",
-    )
-    parser.add_argument(
-        "--recipient-name",
-        help="The recipient's display name",
-    )
-
-    # Subject (optional with default)
-    parser.add_argument(
-        "--subject",
-        default="JupyterHub Monitoring Report",
-        help='Email subject line (default: "JupyterHub Monitoring Report")',
-    )
-
-    # SMTP server settings (required)
-    parser.add_argument(
-        "--smtp-host",
-        required=True,
-        help="SMTP server hostname",
-    )
-    parser.add_argument(
-        "--smtp-port",
-        type=int,
-        required=True,
-        help="SMTP server port",
-    )
-
-    # SSL/TLS (optional with default)
-    parser.add_argument(
-        "--smtp-no-ssl",
-        action="store_true",
-        help="Disable SSL/TLS (enabled by default)",
     )
 
     # Email content (at least one required)
