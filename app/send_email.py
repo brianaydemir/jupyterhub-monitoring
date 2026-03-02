@@ -173,7 +173,7 @@ def parse_arguments() -> argparse.Namespace:
 
     # SSL/TLS (optional with default)
     parser.add_argument(
-        "--no-ssl",
+        "--smtp-no-ssl",
         action="store_true",
         help="Disable SSL/TLS (enabled by default)",
     )
@@ -244,7 +244,7 @@ def main() -> int:
         send_email(
             smtp_host=args.smtp_host,
             smtp_port=args.smtp_port,
-            use_ssl=not args.no_ssl,
+            use_ssl=not args.smtp_no_ssl,
             sender_email=args.sender_email,
             recipient_email=args.recipient_email,
             message=message,

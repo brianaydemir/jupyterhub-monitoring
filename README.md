@@ -212,4 +212,4 @@ send-email \
 ```
 
 Use `--attachment` (repeatable) to attach one or more files to the message.
-Use `--no-ssl` if your SMTP server does not use SSL/TLS.
+Use `--smtp-no-ssl` if your SMTP server does not use SSL/TLS.
