@@ -1,7 +1,79 @@
 """Helper functions for building command-line interfaces."""
 
 import argparse
+import re
 from pathlib import Path
+
+from app.time_utils import parse_timezone
+
+
+def add_query_argument_group(
+    parser: argparse.ArgumentParser,
+) -> argparse._ArgumentGroup:
+    """Add a "Query" argument group to a parser and return it.
+
+    Adds ``--duration``, ``--time``, and ``--timezone``. The returned group
+    can be used to append additional script-specific arguments.
+
+    Use :func:`validate_query_arguments` after parsing to validate ``--time``
+    and ``--timezone``.
+
+    Args:
+        parser: The argument parser to add the group to
+
+    Returns:
+        The newly created argument group
+    """
+    query_group = parser.add_argument_group("Query")
+    query_group.add_argument(
+        "--duration",
+        required=True,
+        help=(
+            'Time window to look back from now (e.g., "30 seconds", "15 min", '
+            '"12h", "7 days", "3d 6h 12m")'
+        ),
+    )
+    query_group.add_argument(
+        "--time",
+        metavar="HH:MM",
+        help=(
+            "Interpret --duration as ending at the most recent occurrence of this "
+            "wall-clock time (in the given timezone) within the past 24 hours"
+        ),
+    )
+    query_group.add_argument(
+        "--timezone",
+        default="America/Chicago",
+        metavar="TZ",
+        help=(
+            "Timezone for --time and all output timestamps "
+            '(e.g., "America/Chicago", "MST", "+04:00"); default: America/Chicago'
+        ),
+    )
+    return query_group
+
+
+def validate_query_arguments(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Validate ``--time`` format and ``--timezone`` after parsing.
+
+    Calls ``parser.error`` if ``--time`` is not in HH:MM format or if
+    ``--timezone`` is not a recognized timezone.
+
+    Args:
+        args: Parsed command-line arguments
+        parser: The argument parser (used to report errors)
+    """
+    if args.time is not None:
+        if not re.fullmatch(r"\d{1,2}:\d{2}", args.time):
+            parser.error("--time must be in HH:MM format")
+
+    try:
+        parse_timezone(args.timezone)
+    except ValueError as e:
+        parser.error(str(e))
 
 
 def add_output_argument_group(

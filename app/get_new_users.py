@@ -5,7 +5,6 @@ import csv
 import html
 import io
 import os
-import re
 import smtplib
 import sys
 from collections.abc import Iterable
@@ -17,7 +16,9 @@ import pytimeparse2
 from app.cli_utils import (
     add_email_argument_group,
     add_output_argument_group,
+    add_query_argument_group,
     validate_email_arguments,
+    validate_query_arguments,
 )
 from app.jupyterhub_client import JupyterHubClient
 from app.name_utils import _trailing_domain_key, parse_name
@@ -385,32 +386,7 @@ Environment variables:
     )
 
     # Query parameters
-    query_group = parser.add_argument_group("Query")
-    query_group.add_argument(
-        "--duration",
-        required=True,
-        help=(
-            'Time duration to look back (e.g., "30 seconds", "15 min", '
-            '"12h", "7 days", "3d 6h 12m")'
-        ),
-    )
-    query_group.add_argument(
-        "--time",
-        metavar="HH:MM",
-        help=(
-            "Interpret --duration as ending at the most recent occurrence of this "
-            "wall-clock time (in the given timezone) within the past 24 hours"
-        ),
-    )
-    query_group.add_argument(
-        "--timezone",
-        default="America/Chicago",
-        metavar="TZ",
-        help=(
-            "Timezone for --time and all output timestamps "
-            '(e.g., "America/Chicago", "MST", "+04:00"); default: America/Chicago'
-        ),
-    )
+    add_query_argument_group(parser)
 
     # Output options
     add_output_argument_group(parser)
@@ -433,16 +409,8 @@ Environment variables:
             "--api-key or the JUPYTERHUB_API_KEY environment variable is required"
         )
 
-    # Validate --time format
-    if args.time is not None:
-        if not re.fullmatch(r"\d{1,2}:\d{2}", args.time):
-            parser.error("--time must be in HH:MM format")
-
-    # Validate --timezone
-    try:
-        parse_timezone(args.timezone)
-    except ValueError as e:
-        parser.error(str(e))
+    # Validate --time and --timezone
+    validate_query_arguments(args, parser)
 
     # Validate email arguments
     validate_email_arguments(args, parser)
