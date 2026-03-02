@@ -1,6 +1,50 @@
 """Helper functions for building command-line interfaces."""
 
 import argparse
+from pathlib import Path
+
+
+def add_output_argument_group(
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Add an "Output" argument group to a parser.
+
+    Adds ``--text-file``, ``--html-file``, ``--csv-file``,
+    ``--date-format``, and ``--detailed-usernames``.
+
+    Args:
+        parser: The argument parser to add the group to
+    """
+    output_group = parser.add_argument_group("Output")
+    output_group.add_argument(
+        "--text-file",
+        type=Path,
+        help="Write output as plain text to the specified file",
+    )
+    output_group.add_argument(
+        "--html-file",
+        type=Path,
+        help="Write output as HTML to the specified file (suitable for email body)",
+    )
+    output_group.add_argument(
+        "--csv-file",
+        type=Path,
+        help="Write output as CSV to the specified file",
+    )
+    output_group.add_argument(
+        "--date-format",
+        choices=["date", "datetime"],
+        default="date",
+        help=(
+            "Format for creation timestamps: 'date' (default, YYYY-MM-DD) or "
+            "'datetime' (YYYY-MM-DD HH:MM)"
+        ),
+    )
+    output_group.add_argument(
+        "--detailed-usernames",
+        action="store_true",
+        help='Always show the "Login method" column in the output',
+    )
 
 
 def add_email_arguments(

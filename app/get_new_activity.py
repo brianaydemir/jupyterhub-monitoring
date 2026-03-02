@@ -13,7 +13,11 @@ from pathlib import Path
 
 import pytimeparse2
 
-from app.cli_utils import add_email_argument_group, validate_email_arguments
+from app.cli_utils import (
+    add_email_argument_group,
+    add_output_argument_group,
+    validate_email_arguments,
+)
 from app.elasticsearch_client import ElasticsearchClient
 from app.name_utils import _trailing_domain_key, parse_name
 from app.send_email import create_message as create_email_message
@@ -430,27 +434,7 @@ Environment variables:
     )
 
     # Output options
-    output_group = parser.add_argument_group("Output")
-    output_group.add_argument(
-        "--text-file",
-        type=Path,
-        help="Write output as plain text to the specified file",
-    )
-    output_group.add_argument(
-        "--csv-file",
-        type=Path,
-        help="Write output as CSV to the specified file",
-    )
-    output_group.add_argument(
-        "--html-file",
-        type=Path,
-        help="Write output as HTML to the specified file (suitable for email body)",
-    )
-    output_group.add_argument(
-        "--detailed-usernames",
-        action="store_true",
-        help='Always show the "Login method" column in the output',
-    )
+    add_output_argument_group(parser)
 
     # Email options
     add_email_argument_group(parser, default_subject="JupyterHub Activity Report")
