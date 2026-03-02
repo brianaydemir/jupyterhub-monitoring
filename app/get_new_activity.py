@@ -1,13 +1,10 @@
 """Command-line tool for reporting active server time per JupyterHub user."""
 
 import argparse
-import csv
-import html
-import io
 import os
 import smtplib
 import sys
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytimeparse2
 
@@ -21,7 +18,11 @@ from app.cli_utils import (
     validate_query_arguments,
 )
 from app.elasticsearch_client import ElasticsearchClient
-from app.name_utils import _trailing_domain_key, parse_name
+from app.output_formatters import (
+    format_activity_csv,
+    format_activity_html,
+    format_activity_text,
+)
 from app.send_email import create_message as create_email_message
 from app.send_email import send_email as send_email_message
 from app.time_utils import compute_time_range, parse_timezone
@@ -96,265 +97,6 @@ def compute_activity(documents: list[dict]) -> dict[str, float]:
         totals[user] = totals.get(user, 0.0) + interval_seconds
 
     return totals
-
-
-def _format_duration(seconds: float) -> str:
-    """Format a duration in seconds as HH:MM.
-
-    Args:
-        seconds: Duration in seconds
-
-    Returns:
-        Duration string in ``HH:MM`` format (hours may exceed 23)
-    """
-    total_minutes = int(seconds) // 60
-    hours, minutes = divmod(total_minutes, 60)
-    return f"{hours}:{minutes:02d}"
-
-
-def _sorted_rows(
-    totals: dict[str, float], show_method: bool
-) -> list[tuple[str, float]]:
-    """Return (user, seconds) pairs sorted by time descending, then by parsed name.
-
-    When *show_method* is True, sorts by (priority, domain, id) as a tiebreaker.
-    When False, sorts by (trailing_domain_key, domain, id) so trailing domains
-    (e.g. orcid.org) sort last regardless of login method.
-    """
-
-    def name_key(user: str) -> tuple:
-        name = parse_name(user)
-        if show_method:
-            return name[:3]
-        return (_trailing_domain_key(name[1]), name[1], name[2])
-
-    return sorted(totals.items(), key=lambda item: (-item[1], name_key(item[0])))
-
-
-def format_output_text(
-    totals: dict[str, float],
-    start_time: datetime,
-    end_time: datetime,
-    tz_name: str,
-    detailed_usernames: bool = False,
-) -> str:
-    """Format per-user activity as plain text.
-
-    Args:
-        totals: Dictionary mapping user name to total active seconds
-        start_time: Start of the reporting window (timezone-aware)
-        end_time: End of the reporting window (timezone-aware)
-        tz_name: Timezone name for the footnote
-        detailed_usernames: Always show the "Login method" column
-
-    Returns:
-        Plain text formatted string with a table
-    """
-    fmt = "%Y-%m-%d %H:%M"
-    range_str = f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}"
-    n = len(totals)
-    if n == 0:
-        lines = [
-            f"No users were active between {start_time.strftime(fmt)} and {end_time.strftime(fmt)}."
-        ]
-    else:
-        noun = "user" if n == 1 else "users"
-        lines = [f"{n} {noun} were active {range_str}:", ""]
-        parsed_names = {user: parse_name(user) for user in totals}
-        domain_id_pairs = [(p[1], p[2]) for p in parsed_names.values()]
-        show_method = detailed_usernames or (
-            len(domain_id_pairs) != len(set(domain_id_pairs))
-        )
-        rows = [
-            (*parsed_names[user], _format_duration(seconds))
-            for user, seconds in _sorted_rows(totals, show_method)
-        ]
-        domain_width = max(len("Institution"), max(len(r[1]) for r in rows))
-        id_width = max(len("ID"), max(len(r[2]) for r in rows))
-        time_width = max(len("Time (HH:MM)"), max(len(r[4]) for r in rows))
-        if show_method:
-            method_width = max(len("Login method"), max(len(r[3]) for r in rows))
-            lines.append(
-                f"{'Time (HH:MM)':>{time_width}}  {'Institution':<{domain_width}}  "
-                f"{'ID':<{id_width}}  {'Login method':<{method_width}}"
-            )
-            lines.append(
-                f"{'-' * time_width}  {'-' * domain_width}  "
-                f"{'-' * id_width}  {'-' * method_width}"
-            )
-            for _priority, domain, uid, method, active_time in rows:
-                lines.append(
-                    f"{active_time:>{time_width}}  {domain:<{domain_width}}  "
-                    f"{uid:<{id_width}}  {method:<{method_width}}"
-                )
-        else:
-            lines.append(
-                f"{'Time (HH:MM)':>{time_width}}  {'Institution':<{domain_width}}  "
-                f"{'ID':<{id_width}}"
-            )
-            lines.append(f"{'-' * time_width}  {'-' * domain_width}  {'-' * id_width}")
-            for _priority, domain, uid, _method, active_time in rows:
-                lines.append(
-                    f"{active_time:>{time_width}}  {domain:<{domain_width}}  "
-                    f"{uid:<{id_width}}"
-                )
-
-    lines.append("")
-    lines.append(f"Timezone: {tz_name}")
-    return "\n".join(lines)
-
-
-def format_output_html(
-    totals: dict[str, float],
-    start_time: datetime,
-    end_time: datetime,
-    tz_name: str,
-    detailed_usernames: bool = False,
-) -> str:
-    """Format per-user activity as HTML suitable for an email body.
-
-    Args:
-        totals: Dictionary mapping user name to total active seconds
-        start_time: Start of the reporting window (timezone-aware)
-        end_time: End of the reporting window (timezone-aware)
-        tz_name: Timezone name for the footnote
-        detailed_usernames: Always show the "Login method" column
-
-    Returns:
-        HTML formatted string (body content only)
-    """
-    fmt = "%Y-%m-%d %H:%M"
-    range_str = f"from {html.escape(start_time.strftime(fmt))} to {html.escape(end_time.strftime(fmt))}"
-    n = len(totals)
-
-    if not totals:
-        html_lines = [
-            f"<p>No users were active between "
-            f"{html.escape(start_time.strftime(fmt))} and "
-            f"{html.escape(end_time.strftime(fmt))}.</p>"
-        ]
-    else:
-        noun = "user" if n == 1 else "users"
-        html_lines = [f"<p>{n} {noun} were active {range_str}:</p>"]
-        parsed_names = {user: parse_name(user) for user in totals}
-        domain_id_pairs = [(p[1], p[2]) for p in parsed_names.values()]
-        show_method = detailed_usernames or (
-            len(domain_id_pairs) != len(set(domain_id_pairs))
-        )
-        TH = "text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#a6c9e8; color:#000000"
-        TH_R = "text-align:right; border:1px solid #9ab3c8; padding:2px 8px; background:#a6c9e8; color:#000000"
-        html_lines.append('<table style="border-collapse:collapse">')
-        html_lines.append("  <thead>")
-        if show_method:
-            html_lines.append(
-                f"    <tr>"
-                f'<th style="{TH_R}">Time (HH:MM)</th>'
-                f'<th style="{TH}">Institution</th>'
-                f'<th style="{TH}">ID</th>'
-                f'<th style="{TH}">Login method</th>'
-                f"</tr>"
-            )
-        else:
-            html_lines.append(
-                f"    <tr>"
-                f'<th style="{TH_R}">Time (HH:MM)</th>'
-                f'<th style="{TH}">Institution</th>'
-                f'<th style="{TH}">ID</th>'
-                f"</tr>"
-            )
-        html_lines.append("  </thead>")
-        html_lines.append("  <tbody>")
-        for i, (user, seconds) in enumerate(_sorted_rows(totals, show_method)):
-            bg = "#e6eff4" if i % 2 else "#ffffff"
-            TD = f"border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
-            TD_R = f"text-align:right; border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
-            _priority, domain, uid, method = parsed_names[user]
-            active_time = html.escape(_format_duration(seconds))
-            if show_method:
-                html_lines.append(
-                    f"    <tr>"
-                    f'<td style="{TD_R}">{active_time}</td>'
-                    f'<td style="{TD}">{html.escape(domain)}</td>'
-                    f'<td style="{TD}">{html.escape(uid)}</td>'
-                    f'<td style="{TD}">{html.escape(method)}</td>'
-                    f"</tr>"
-                )
-            else:
-                html_lines.append(
-                    f"    <tr>"
-                    f'<td style="{TD_R}">{active_time}</td>'
-                    f'<td style="{TD}">{html.escape(domain)}</td>'
-                    f'<td style="{TD}">{html.escape(uid)}</td>'
-                    f"</tr>"
-                )
-        html_lines.append("  </tbody>")
-        html_lines.append("</table>")
-
-    html_lines.append(f"<p><em>Timezone: {html.escape(tz_name)}</em></p>")
-    return "\n".join(html_lines)
-
-
-def format_output_csv(
-    totals: dict[str, float],
-    start_time: datetime,
-    end_time: datetime,
-    tz_name: str,
-    detailed_usernames: bool = False,
-) -> str:
-    """Format per-user activity as CSV.
-
-    The CSV starts with the data table (header row plus one row per user),
-    followed by an empty row, a summary line, and a timezone line.
-
-    Args:
-        totals: Dictionary mapping user name to total active seconds
-        start_time: Start of the reporting window (timezone-aware)
-        end_time: End of the reporting window (timezone-aware)
-        tz_name: Timezone name for the footer
-        detailed_usernames: Always show the "Login method" column
-
-    Returns:
-        CSV formatted string
-    """
-    fmt = "%Y-%m-%d %H:%M"
-    n = len(totals)
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-
-    parsed_names = {user: parse_name(user) for user in totals}
-    domain_id_pairs = [(p[1], p[2]) for p in parsed_names.values()]
-    show_method = detailed_usernames or (
-        len(domain_id_pairs) != len(set(domain_id_pairs))
-    )
-    if show_method:
-        writer.writerow(["Time (HH:MM)", "Institution", "ID", "Login method"])
-        for user, seconds in _sorted_rows(totals, show_method):
-            _priority, domain, uid, method = parsed_names[user]
-            writer.writerow([_format_duration(seconds), domain, uid, method])
-    else:
-        writer.writerow(["Time (HH:MM)", "Institution", "ID"])
-        for user, seconds in _sorted_rows(totals, show_method):
-            _priority, domain, uid, _method = parsed_names[user]
-            writer.writerow([_format_duration(seconds), domain, uid])
-
-    writer.writerow([])
-    if n == 0:
-        writer.writerow(
-            [
-                f"No users were active between "
-                f"{start_time.strftime(fmt)} and {end_time.strftime(fmt)}."
-            ]
-        )
-    else:
-        noun = "user" if n == 1 else "users"
-        writer.writerow(
-            [
-                f"{n} {noun} were active "
-                f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}"
-            ]
-        )
-    writer.writerow([f"Timezone: {tz_name}"])
-    return buf.getvalue()
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -464,7 +206,7 @@ def main() -> int:
 
         # Always print the text report to stdout, bracketed by separator lines
         # so it remains visually distinct when stderr is merged into stdout
-        text_content = format_output_text(
+        text_content = format_activity_text(
             totals, start_time, end_time, args.timezone, args.detailed_usernames
         )
         print(f"---\n{text_content}\n---")
@@ -476,7 +218,7 @@ def main() -> int:
 
         # Output to HTML file if specified
         if args.html_file:
-            html_content = format_output_html(
+            html_content = format_activity_html(
                 totals, start_time, end_time, args.timezone, args.detailed_usernames
             )
             args.html_file.write_text(html_content + "\n", encoding="utf-8")
@@ -484,7 +226,7 @@ def main() -> int:
 
         # Output to CSV file if specified
         if args.csv_file:
-            csv_content = format_output_csv(
+            csv_content = format_activity_csv(
                 totals, start_time, end_time, args.timezone, args.detailed_usernames
             )
             args.csv_file.write_text(csv_content, encoding="utf-8")
@@ -492,10 +234,10 @@ def main() -> int:
 
         # Send email if requested
         if args.send_email:
-            html_content = format_output_html(
+            html_content = format_activity_html(
                 totals, start_time, end_time, args.timezone, args.detailed_usernames
             )
-            csv_content = format_output_csv(
+            csv_content = format_activity_csv(
                 totals, start_time, end_time, args.timezone, args.detailed_usernames
             )
             try:

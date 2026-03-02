@@ -1,11 +1,42 @@
 """Helper functions for building command-line interfaces."""
 
 import argparse
+import getpass
 import os
 import re
+import sys
 from pathlib import Path
 
 from app.time_utils import parse_timezone
+
+
+def prompt_credentials(
+    username_arg: str | None,
+) -> tuple[str, str] | None:
+    """Prompt for username and password interactively.
+
+    Args:
+        username_arg: Pre-supplied username, or None to prompt.
+
+    Returns:
+        A (username, password) tuple, or None if the user cancelled.
+    """
+    if username_arg:
+        username = username_arg
+    else:
+        try:
+            username = input("Username: ")
+        except EOFError, KeyboardInterrupt:
+            print("\nOperation cancelled.", file=sys.stderr)
+            return None
+
+    try:
+        password = getpass.getpass("Password: ")
+    except EOFError, KeyboardInterrupt:
+        print("\nOperation cancelled.", file=sys.stderr)
+        return None
+
+    return username, password
 
 
 def add_jupyterhub_argument_group(

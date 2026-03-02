@@ -1,13 +1,13 @@
 """Command-line tool for obtaining Elasticsearch API keys."""
 
 import argparse
-import getpass
 import json
 import sys
 from typing import Any
 
 from app.cli_utils import (
     add_elasticsearch_basic_argument_group,
+    prompt_credentials,
     validate_elasticsearch_basic_arguments,
 )
 from app.elasticsearch_client import ElasticsearchClient
@@ -155,22 +155,11 @@ def main() -> int:
     try:
         args = parse_arguments()
 
-        # Get username (either from command line or prompt)
-        if args.username:
-            username = args.username
-        else:
-            try:
-                username = input("Username: ")
-            except EOFError, KeyboardInterrupt:
-                print("\nOperation cancelled.", file=sys.stderr)
-                return 1
-
-        # Prompt for password (always interactive for security)
-        try:
-            password = getpass.getpass("Password: ")
-        except EOFError, KeyboardInterrupt:
-            print("\nOperation cancelled.", file=sys.stderr)
+        # Get credentials (username from CLI or prompt; password always prompted)
+        credentials = prompt_credentials(args.username)
+        if credentials is None:
             return 1
+        username, password = credentials
 
         # Validate that username and password are not empty
         if not username or not password:

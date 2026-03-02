@@ -1,11 +1,11 @@
 """Command-line tool for deleting Elasticsearch API keys."""
 
 import argparse
-import getpass
 import sys
 
 from app.cli_utils import (
     add_elasticsearch_basic_argument_group,
+    prompt_credentials,
     validate_elasticsearch_basic_arguments,
 )
 from app.elasticsearch_client import ElasticsearchClient
@@ -60,33 +60,6 @@ Examples:
     return args
 
 
-def _get_credentials(username_arg: str | None) -> tuple[str, str] | None:
-    """Prompt for username and password interactively.
-
-    Args:
-        username_arg: Pre-supplied username, or None to prompt.
-
-    Returns:
-        A (username, password) tuple, or None if the user cancelled.
-    """
-    if username_arg:
-        username = username_arg
-    else:
-        try:
-            username = input("Username: ")
-        except EOFError, KeyboardInterrupt:
-            print("\nOperation cancelled.", file=sys.stderr)
-            return None
-
-    try:
-        password = getpass.getpass("Password: ")
-    except EOFError, KeyboardInterrupt:
-        print("\nOperation cancelled.", file=sys.stderr)
-        return None
-
-    return username, password
-
-
 def main() -> int:
     """Main entry point for the delete-es-api-key script.
 
@@ -97,7 +70,7 @@ def main() -> int:
         args = parse_arguments()
 
         # Get credentials interactively
-        credentials = _get_credentials(args.username)
+        credentials = prompt_credentials(args.username)
         if credentials is None:
             return 1
         username, password = credentials

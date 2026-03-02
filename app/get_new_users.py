@@ -1,14 +1,11 @@
 """Command-line tool for listing new JupyterHub users."""
 
 import argparse
-import csv
-import html
-import io
 import os
 import smtplib
 import sys
 from collections.abc import Iterable
-from datetime import datetime, timedelta, tzinfo
+from datetime import datetime, timedelta
 
 import pytimeparse2
 
@@ -22,7 +19,7 @@ from app.cli_utils import (
     validate_query_arguments,
 )
 from app.jupyterhub_client import JupyterHubClient
-from app.name_utils import _trailing_domain_key, parse_name
+from app.output_formatters import format_users_csv, format_users_html, format_users_text
 from app.send_email import create_message as create_email_message
 from app.send_email import send_email as send_email_message
 from app.time_utils import compute_time_range, parse_timezone
@@ -57,292 +54,6 @@ def filter_new_users(
             continue
 
     return new_users
-
-
-def _format_created(created_str: str, strftime_fmt: str, tz: tzinfo) -> str:
-    """Reformat a JupyterHub ISO 8601 creation timestamp in a given timezone.
-
-    Args:
-        created_str: ISO 8601 timestamp string from JupyterHub
-        strftime_fmt: strftime format string to apply
-        tz: Timezone to convert the timestamp into before formatting
-
-    Returns:
-        Formatted timestamp string, or the original string if parsing fails
-    """
-    try:
-        dt = datetime.fromisoformat(created_str.replace("Z", "+00:00")).astimezone(tz)
-        return dt.strftime(strftime_fmt)
-    except ValueError, AttributeError:
-        return created_str
-
-
-def format_output_text(
-    users: list[dict],
-    start_time: datetime,
-    end_time: datetime,
-    tz_name: str,
-    tz: tzinfo,
-    strftime_fmt: str,
-    detailed_usernames: bool = False,
-) -> str:
-    """Format users as plain text output.
-
-    Args:
-        users: List of user dictionaries with 'name' and 'created' keys
-        start_time: Start of the reporting window (timezone-aware)
-        end_time: End of the reporting window (timezone-aware)
-        tz_name: Timezone name for the footnote
-        tz: Timezone for converting creation timestamps
-        strftime_fmt: strftime format string for creation timestamps
-        detailed_usernames: Always show the "Login method" column
-
-    Returns:
-        Plain text formatted string with a table of creation date and name columns
-    """
-    fmt = "%Y-%m-%d %H:%M"
-    range_str = f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}"
-    n = len(users)
-    if n == 0:
-        lines = [
-            f"No new users created between "
-            f"{start_time.strftime(fmt)} and {end_time.strftime(fmt)}."
-        ]
-    else:
-        noun = "user" if n == 1 else "users"
-        lines = [f"{n} new {noun} created {range_str}:", ""]
-        parsed = [
-            (
-                _format_created(user.get("created", ""), strftime_fmt, tz),
-                *parse_name(user.get("name", "")),
-            )
-            for user in users
-        ]
-        # Determine whether the "Login method" column is needed
-        domain_id_pairs = [(r[2], r[3]) for r in parsed]
-        show_method = detailed_usernames or (
-            len(domain_id_pairs) != len(set(domain_id_pairs))
-        )
-        if show_method:
-            rows = sorted(parsed, key=lambda r: (r[0], r[1], r[2], r[3]))
-        else:
-            rows = sorted(
-                parsed,
-                key=lambda r: (r[0], _trailing_domain_key(r[2]), r[2], r[3]),
-            )
-        created_width = max(len("Created"), max(len(r[0]) for r in rows))
-        domain_width = max(len("Institution"), max(len(r[2]) for r in rows))
-        id_width = max(len("ID"), max(len(r[3]) for r in rows))
-        if show_method:
-            method_width = max(len("Login method"), max(len(r[4]) for r in rows))
-            lines.append(
-                f"{'Created':<{created_width}}  {'Institution':<{domain_width}}  "
-                f"{'ID':<{id_width}}  {'Login method':<{method_width}}"
-            )
-            lines.append(
-                f"{'-' * created_width}  {'-' * domain_width}  "
-                f"{'-' * id_width}  {'-' * method_width}"
-            )
-            for created, _priority, domain, uid, method in rows:
-                lines.append(
-                    f"{created:<{created_width}}  {domain:<{domain_width}}  "
-                    f"{uid:<{id_width}}  {method:<{method_width}}"
-                )
-        else:
-            lines.append(
-                f"{'Created':<{created_width}}  {'Institution':<{domain_width}}  "
-                f"{'ID':<{id_width}}"
-            )
-            lines.append(
-                f"{'-' * created_width}  {'-' * domain_width}  {'-' * id_width}"
-            )
-            for created, _priority, domain, uid, _method in rows:
-                lines.append(
-                    f"{created:<{created_width}}  {domain:<{domain_width}}  "
-                    f"{uid:<{id_width}}"
-                )
-
-    lines.append("")
-    lines.append(f"Timezone: {tz_name}")
-    return "\n".join(lines)
-
-
-def format_output_html(
-    users: list[dict],
-    start_time: datetime,
-    end_time: datetime,
-    tz_name: str,
-    tz: tzinfo,
-    strftime_fmt: str,
-    detailed_usernames: bool = False,
-) -> str:
-    """Format users as HTML output suitable for email body.
-
-    Args:
-        users: List of user dictionaries with 'name' and 'created' keys
-        start_time: Start of the reporting window (timezone-aware)
-        end_time: End of the reporting window (timezone-aware)
-        tz_name: Timezone name for the footnote
-        tz: Timezone for converting creation timestamps
-        strftime_fmt: strftime format string for creation timestamps
-        detailed_usernames: Always show the "Login method" column
-
-    Returns:
-        HTML formatted string (body content only) with a table of creation date and name columns
-    """
-    fmt = "%Y-%m-%d %H:%M"
-    range_str = f"from {html.escape(start_time.strftime(fmt))} to {html.escape(end_time.strftime(fmt))}"
-    n = len(users)
-
-    if not users:
-        html_lines = [
-            f"<p>No new users created between "
-            f"{html.escape(start_time.strftime(fmt))} and "
-            f"{html.escape(end_time.strftime(fmt))}.</p>"
-        ]
-    else:
-        noun = "user" if n == 1 else "users"
-        html_lines = [f"<p>{n} new {noun} created {range_str}:</p>"]
-        parsed = [parse_name(user.get("name", "")) for user in users]
-        domain_id_pairs = [(p[1], p[2]) for p in parsed]
-        show_method = detailed_usernames or (
-            len(domain_id_pairs) != len(set(domain_id_pairs))
-        )
-        TH = "text-align:left; border:1px solid #9ab3c8; padding:2px 8px; background:#a6c9e8; color:#000000"
-        html_lines.append('<table style="border-collapse:collapse">')
-        html_lines.append("  <thead>")
-        if show_method:
-            html_lines.append(
-                f"    <tr>"
-                f'<th style="{TH}">Created</th>'
-                f'<th style="{TH}">Institution</th>'
-                f'<th style="{TH}">ID</th>'
-                f'<th style="{TH}">Login method</th>'
-                f"</tr>"
-            )
-        else:
-            html_lines.append(
-                f"    <tr>"
-                f'<th style="{TH}">Created</th>'
-                f'<th style="{TH}">Institution</th>'
-                f'<th style="{TH}">ID</th>'
-                f"</tr>"
-            )
-        html_lines.append("  </thead>")
-        html_lines.append("  <tbody>")
-
-        def sort_key(u: dict) -> tuple:
-            created = _format_created(u.get("created", ""), strftime_fmt, tz)
-            name = parse_name(u.get("name", ""))
-            if show_method:
-                return (created, *name[:3])
-            return (created, _trailing_domain_key(name[1]), name[1], name[2])
-
-        for i, user in enumerate(sorted(users, key=sort_key)):
-            bg = "#e6eff4" if i % 2 else "#ffffff"
-            TD = f"border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
-            created = html.escape(
-                _format_created(user.get("created", ""), strftime_fmt, tz)
-            )
-            _priority, domain, uid, method = parse_name(user.get("name", ""))
-            if show_method:
-                html_lines.append(
-                    f"    <tr>"
-                    f'<td style="{TD}">{created}</td>'
-                    f'<td style="{TD}">{html.escape(domain)}</td>'
-                    f'<td style="{TD}">{html.escape(uid)}</td>'
-                    f'<td style="{TD}">{html.escape(method)}</td>'
-                    f"</tr>"
-                )
-            else:
-                html_lines.append(
-                    f"    <tr>"
-                    f'<td style="{TD}">{created}</td>'
-                    f'<td style="{TD}">{html.escape(domain)}</td>'
-                    f'<td style="{TD}">{html.escape(uid)}</td>'
-                    f"</tr>"
-                )
-        html_lines.append("  </tbody>")
-        html_lines.append("</table>")
-
-    html_lines.append(f"<p><em>Timezone: {html.escape(tz_name)}</em></p>")
-    return "\n".join(html_lines)
-
-
-def format_output_csv(
-    users: list[dict],
-    start_time: datetime,
-    end_time: datetime,
-    tz_name: str,
-    tz: tzinfo,
-    strftime_fmt: str,
-    detailed_usernames: bool = False,
-) -> str:
-    """Format users as CSV output.
-
-    The CSV starts with the data table (header row plus one row per user),
-    followed by an empty row, a summary line, and a timezone line.
-
-    Args:
-        users: List of user dictionaries with 'name' and 'created' keys
-        start_time: Start of the reporting window (timezone-aware)
-        end_time: End of the reporting window (timezone-aware)
-        tz_name: Timezone name for the footer
-        tz: Timezone for converting creation timestamps
-        strftime_fmt: strftime format string for creation timestamps
-        detailed_usernames: Always show the "Login method" column
-
-    Returns:
-        CSV formatted string
-    """
-    fmt = "%Y-%m-%d %H:%M"
-    n = len(users)
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-
-    parsed = [
-        (
-            _format_created(user.get("created", ""), strftime_fmt, tz),
-            *parse_name(user.get("name", "")),
-        )
-        for user in users
-    ]
-    domain_id_pairs = [(r[2], r[3]) for r in parsed]
-    show_method = detailed_usernames or (
-        len(domain_id_pairs) != len(set(domain_id_pairs))
-    )
-    if show_method:
-        writer.writerow(["Created", "Institution", "ID", "Login method"])
-        rows = sorted(parsed, key=lambda r: (r[0], r[1], r[2], r[3]))
-        for created, _priority, domain, uid, method in rows:
-            writer.writerow([created, domain, uid, method])
-    else:
-        writer.writerow(["Created", "Institution", "ID"])
-        rows = sorted(
-            parsed,
-            key=lambda r: (r[0], _trailing_domain_key(r[2]), r[2], r[3]),
-        )
-        for created, _priority, domain, uid, _method in rows:
-            writer.writerow([created, domain, uid])
-
-    writer.writerow([])
-    if n == 0:
-        writer.writerow(
-            [
-                f"No new users created between "
-                f"{start_time.strftime(fmt)} and {end_time.strftime(fmt)}."
-            ]
-        )
-    else:
-        noun = "user" if n == 1 else "users"
-        writer.writerow(
-            [
-                f"{n} new {noun} created "
-                f"from {start_time.strftime(fmt)} to {end_time.strftime(fmt)}"
-            ]
-        )
-    writer.writerow([f"Timezone: {tz_name}"])
-    return buf.getvalue()
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -448,7 +159,7 @@ def main() -> int:
 
         # Always print the text report to stdout, bracketed by separator lines
         # so it remains visually distinct when stderr is merged into stdout
-        text_content = format_output_text(
+        text_content = format_users_text(
             new_users,
             start_time,
             end_time,
@@ -466,7 +177,7 @@ def main() -> int:
 
         # Output to HTML file if specified
         if args.html_file:
-            html_content = format_output_html(
+            html_content = format_users_html(
                 new_users,
                 start_time,
                 end_time,
@@ -480,7 +191,7 @@ def main() -> int:
 
         # Output to CSV file if specified
         if args.csv_file:
-            csv_content = format_output_csv(
+            csv_content = format_users_csv(
                 new_users,
                 start_time,
                 end_time,
@@ -494,7 +205,7 @@ def main() -> int:
 
         # Send email if requested
         if args.send_email:
-            html_content = format_output_html(
+            html_content = format_users_html(
                 new_users,
                 start_time,
                 end_time,
@@ -503,7 +214,7 @@ def main() -> int:
                 strftime_fmt,
                 args.detailed_usernames,
             )
-            csv_content = format_output_csv(
+            csv_content = format_users_csv(
                 new_users,
                 start_time,
                 end_time,

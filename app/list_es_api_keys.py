@@ -2,13 +2,13 @@
 
 import argparse
 import datetime
-import getpass
 import json
 import sys
 from typing import Any
 
 from app.cli_utils import (
     add_elasticsearch_basic_argument_group,
+    prompt_credentials,
     validate_elasticsearch_basic_arguments,
 )
 from app.elasticsearch_client import ElasticsearchClient
@@ -105,33 +105,6 @@ def format_output_full(keys: list[dict[str, Any]], *, active_only: bool = True) 
     return "\n".join(lines).rstrip()
 
 
-def _get_credentials(username_arg: str | None) -> tuple[str, str] | None:
-    """Prompt for username and password interactively.
-
-    Args:
-        username_arg: Pre-supplied username, or None to prompt.
-
-    Returns:
-        A (username, password) tuple, or None if the user cancelled.
-    """
-    if username_arg:
-        username = username_arg
-    else:
-        try:
-            username = input("Username: ")
-        except EOFError, KeyboardInterrupt:
-            print("\nOperation cancelled.", file=sys.stderr)
-            return None
-
-    try:
-        password = getpass.getpass("Password: ")
-    except EOFError, KeyboardInterrupt:
-        print("\nOperation cancelled.", file=sys.stderr)
-        return None
-
-    return username, password
-
-
 def parse_arguments() -> argparse.Namespace:
     """Parse command-line arguments.
 
@@ -196,7 +169,7 @@ def main() -> int:
     try:
         args = parse_arguments()
 
-        credentials = _get_credentials(args.username)
+        credentials = prompt_credentials(args.username)
         if credentials is None:
             return 1
         username, password = credentials
