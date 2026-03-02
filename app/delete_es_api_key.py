@@ -75,11 +75,6 @@ def main() -> int:
             return 1
         username, password = credentials
 
-        # Validate that username and password are not empty
-        if not username or not password:
-            print("Error: Username and password are required.", file=sys.stderr)
-            return 1
-
         # Invalidate the API key
         try:
             result = ElasticsearchClient.delete_api_key_with_basic_auth(

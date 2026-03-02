@@ -1,8 +1,6 @@
 """Command-line tool for reporting active server time per JupyterHub user."""
 
 import argparse
-import os
-import smtplib
 import sys
 from datetime import timedelta
 
@@ -13,6 +11,8 @@ from app.cli_utils import (
     add_email_argument_group,
     add_output_argument_group,
     add_query_argument_group,
+    parse_duration,
+    read_api_key,
     validate_elasticsearch_arguments,
     validate_email_arguments,
     validate_query_arguments,
@@ -23,8 +23,7 @@ from app.output_formatters import (
     format_activity_html,
     format_activity_text,
 )
-from app.send_email import create_message as create_email_message
-from app.send_email import send_email as send_email_message
+from app.send_email import send_report_email
 from app.time_utils import compute_time_range, parse_timezone
 
 
@@ -159,16 +158,10 @@ def main() -> int:
         args = parse_arguments()
 
         # Parse the duration string
-        duration_seconds = pytimeparse2.parse(args.duration)
-        if duration_seconds is None:
+        duration_td = parse_duration(args.duration)
+        if duration_td is None:
             print(f"Error: Invalid duration format: {args.duration}", file=sys.stderr)
             return 1
-
-        duration_td = (
-            duration_seconds
-            if isinstance(duration_seconds, timedelta)
-            else timedelta(seconds=duration_seconds)
-        )
 
         # Resolve timezone and compute time range
         tz = parse_timezone(args.timezone)
@@ -176,14 +169,9 @@ def main() -> int:
         cutoff = int(start_time.timestamp())
 
         # Initialize the Elasticsearch client
-        api_key = (
-            args.elasticsearch_api_key.read_text().strip()
-            if args.elasticsearch_api_key
-            else os.environ["ELASTICSEARCH_API_KEY"]
-        )
         client = ElasticsearchClient(
             endpoint=args.elasticsearch_endpoint,
-            api_key=api_key,
+            api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
             ca_cert=(
                 str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
             ),
@@ -240,28 +228,9 @@ def main() -> int:
             csv_content = format_activity_csv(
                 totals, start_time, end_time, args.timezone, args.detailed_usernames
             )
-            try:
-                message = create_email_message(
-                    sender_name=args.sender_name,
-                    sender_email=args.sender_email,
-                    recipient_name=args.recipient_name,
-                    recipient_email=args.recipient_email,
-                    subject=args.subject,
-                    text_content=text_content,
-                    html_content=html_content,
-                    attachment_data=[("activity.csv", csv_content.encode("utf-8"))],
-                )
-                send_email_message(
-                    smtp_host=args.smtp_host,
-                    smtp_port=args.smtp_port,
-                    use_ssl=not args.smtp_no_ssl,
-                    sender_email=args.sender_email,
-                    recipient_email=args.recipient_email,
-                    message=message,
-                )
-                print("Email sent successfully", file=sys.stderr)
-            except (OSError, smtplib.SMTPException) as e:
-                print(f"Error sending email: {e}", file=sys.stderr)
+            if send_report_email(
+                args, text_content, html_content, csv_content, "activity.csv"
+            ):
                 return 1
 
         return 0

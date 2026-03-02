@@ -2,12 +2,13 @@
 Elasticsearch API client wrapper.
 """
 
-import datetime
 from typing import Any, Iterator, cast
 
 import requests
 from elasticsearch import Elasticsearch
 from requests.auth import HTTPBasicAuth
+
+from app.time_utils import get_now_ms
 
 
 class ElasticsearchClient:
@@ -456,7 +457,7 @@ class ElasticsearchClient:
 
         # Filter to active (non-expired, non-invalidated) keys client-side,
         # since the active_only query parameter is not available in all versions.
-        now_ms = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000)
+        now_ms = get_now_ms()
         return [
             key
             for key in all_keys

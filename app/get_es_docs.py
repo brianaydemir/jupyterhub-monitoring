@@ -2,11 +2,11 @@
 
 import argparse
 import json
-import os
 import sys
 
 from app.cli_utils import (
     add_elasticsearch_argument_group,
+    read_api_key,
     validate_elasticsearch_arguments,
 )
 from app.elasticsearch_client import ElasticsearchClient
@@ -63,14 +63,9 @@ def main() -> int:
         args = parse_arguments()
 
         # Initialize the Elasticsearch client
-        api_key = (
-            args.elasticsearch_api_key.read_text().strip()
-            if args.elasticsearch_api_key
-            else os.environ["ELASTICSEARCH_API_KEY"]
-        )
         client = ElasticsearchClient(
             endpoint=args.elasticsearch_endpoint,
-            api_key=api_key,
+            api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
             ca_cert=(
                 str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
             ),

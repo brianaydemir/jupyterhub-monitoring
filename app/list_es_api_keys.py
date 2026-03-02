@@ -12,6 +12,7 @@ from app.cli_utils import (
     validate_elasticsearch_basic_arguments,
 )
 from app.elasticsearch_client import ElasticsearchClient
+from app.time_utils import get_now_ms
 
 
 def _ms_to_datetime(ms: int | None) -> str:
@@ -30,7 +31,7 @@ def _key_status_tags(key: dict[str, Any]) -> list[str]:
         tags.append("invalidated")
     expiration = key.get("expiration")
     if expiration is not None:
-        now_ms = int(datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000)
+        now_ms = get_now_ms()
         if expiration <= now_ms:
             tags.append("expired")
     return tags
@@ -92,9 +93,7 @@ def format_output_full(keys: list[dict[str, Any]], *, active_only: bool = True) 
         expiration = key.get("expiration")
         expiration_str = _ms_to_datetime(expiration)
         if expiration is not None:
-            now_ms = int(
-                datetime.datetime.now(tz=datetime.timezone.utc).timestamp() * 1000
-            )
+            now_ms = get_now_ms()
             if expiration <= now_ms:
                 expiration_str += "  (expired)"
         lines.append(f"  Expires:     {expiration_str}")
@@ -173,10 +172,6 @@ def main() -> int:
         if credentials is None:
             return 1
         username, password = credentials
-
-        if not username or not password:
-            print("Error: Username and password are required.", file=sys.stderr)
-            return 1
 
         try:
             keys = ElasticsearchClient.list_api_keys_with_basic_auth(

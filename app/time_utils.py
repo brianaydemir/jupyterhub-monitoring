@@ -72,3 +72,12 @@ def compute_time_range(
 
     start = end - duration_td
     return start, end
+
+
+def get_now_ms() -> int:
+    """Return the current UTC time as a millisecond epoch timestamp.
+
+    Returns:
+        Current time in milliseconds since the Unix epoch
+    """
+    return int(datetime.now(tz=timezone.utc).timestamp() * 1000)

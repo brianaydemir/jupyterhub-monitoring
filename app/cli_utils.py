@@ -5,7 +5,10 @@ import getpass
 import os
 import re
 import sys
+from datetime import timedelta
 from pathlib import Path
+
+import pytimeparse2
 
 from app.time_utils import parse_timezone
 
@@ -15,11 +18,15 @@ def prompt_credentials(
 ) -> tuple[str, str] | None:
     """Prompt for username and password interactively.
 
+    Returns *None* if the user cancels (Ctrl-C / EOF) or if either value is
+    empty after entry.
+
     Args:
         username_arg: Pre-supplied username, or None to prompt.
 
     Returns:
-        A (username, password) tuple, or None if the user cancelled.
+        A (username, password) tuple, or None if the user cancelled or
+        provided empty credentials.
     """
     if username_arg:
         username = username_arg
@@ -34,6 +41,10 @@ def prompt_credentials(
         password = getpass.getpass("Password: ")
     except EOFError, KeyboardInterrupt:
         print("\nOperation cancelled.", file=sys.stderr)
+        return None
+
+    if not username or not password:
+        print("Error: Username and password are required.", file=sys.stderr)
         return None
 
     return username, password
@@ -455,3 +466,41 @@ def validate_email_arguments(
         ]:
             if getattr(args, attr) is None:
                 parser.error(f"{flag} is required when --send-email is set")
+
+
+def read_api_key(file: Path | None, env_var: str) -> str:
+    """Read an API key from a file, falling back to an environment variable.
+
+    Args:
+        file: Path to a file containing the API key, or None to use the
+            environment variable
+        env_var: Name of the environment variable to read when *file* is None
+
+    Returns:
+        The API key string (stripped of leading/trailing whitespace when read
+        from a file)
+    """
+    if file is not None:
+        return file.read_text().strip()
+    return os.environ[env_var]
+
+
+def parse_duration(duration_str: str) -> timedelta | None:
+    """Parse a human-readable duration string into a :class:`datetime.timedelta`.
+
+    Uses :func:`pytimeparse2.parse` internally. Returns *None* if the string
+    cannot be parsed.
+
+    Args:
+        duration_str: Human-readable duration string (e.g. ``"7 days"``,
+            ``"12h"``, ``"3d 6h 12m"``)
+
+    Returns:
+        A :class:`datetime.timedelta`, or *None* if *duration_str* is invalid
+    """
+    seconds = pytimeparse2.parse(duration_str)
+    if seconds is None:
+        return None
+    return (
+        seconds if isinstance(seconds, timedelta) else timedelta(seconds=float(seconds))
+    )

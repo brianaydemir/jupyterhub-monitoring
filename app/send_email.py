@@ -120,6 +120,53 @@ def send_email(
             server.send_message(message, sender_email, recipient_email)
 
 
+def send_report_email(
+    args: argparse.Namespace,
+    text_content: str,
+    html_content: str,
+    csv_content: str,
+    attachment_filename: str,
+) -> int:
+    """Build and send a report email with a CSV attachment.
+
+    Args:
+        args: Parsed command-line arguments (must include ``sender_name``,
+            ``sender_email``, ``recipient_name``, ``recipient_email``,
+            ``subject``, ``smtp_host``, ``smtp_port``, ``smtp_no_ssl``)
+        text_content: Plain-text body for the email
+        html_content: HTML body for the email
+        csv_content: CSV data to attach
+        attachment_filename: Filename for the CSV attachment
+
+    Returns:
+        0 on success, 1 on failure (error is printed to stderr)
+    """
+    try:
+        message = create_message(
+            sender_name=args.sender_name,
+            sender_email=args.sender_email,
+            recipient_name=args.recipient_name,
+            recipient_email=args.recipient_email,
+            subject=args.subject,
+            text_content=text_content,
+            html_content=html_content,
+            attachment_data=[(attachment_filename, csv_content.encode("utf-8"))],
+        )
+        send_email(
+            smtp_host=args.smtp_host,
+            smtp_port=args.smtp_port,
+            use_ssl=not args.smtp_no_ssl,
+            sender_email=args.sender_email,
+            recipient_email=args.recipient_email,
+            message=message,
+        )
+        print("Email sent successfully", file=sys.stderr)
+        return 0
+    except (OSError, smtplib.SMTPException) as e:
+        print(f"Error sending email: {e}", file=sys.stderr)
+        return 1
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse command-line arguments.
 

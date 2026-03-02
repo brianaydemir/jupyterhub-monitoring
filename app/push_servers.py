@@ -2,13 +2,13 @@
 
 import argparse
 import json
-import os
 import sys
 from datetime import datetime, timezone
 
 from app.cli_utils import (
     add_elasticsearch_argument_group,
     add_jupyterhub_argument_group,
+    read_api_key,
     validate_elasticsearch_arguments,
     validate_jupyterhub_arguments,
 )
@@ -206,14 +206,9 @@ def main() -> int:
 
         # Initialize JupyterHub client
         print("Connecting to JupyterHub...")
-        jupyterhub_api_key = (
-            args.jupyterhub_api_key.read_text().strip()
-            if args.jupyterhub_api_key
-            else os.environ["JUPYTERHUB_API_KEY"]
-        )
         jupyterhub_client = JupyterHubClient(
             endpoint=args.jupyterhub_endpoint,
-            api_key=jupyterhub_api_key,
+            api_key=read_api_key(args.jupyterhub_api_key, "JUPYTERHUB_API_KEY"),
             ca_cert=str(args.jupyterhub_ca_cert) if args.jupyterhub_ca_cert else None,
         )
         print("Connected to JupyterHub")
@@ -222,14 +217,11 @@ def main() -> int:
         elasticsearch_client = None
         if not args.debug:
             print("Connecting to Elasticsearch...")
-            elasticsearch_api_key = (
-                args.elasticsearch_api_key.read_text().strip()
-                if args.elasticsearch_api_key
-                else os.environ["ELASTICSEARCH_API_KEY"]
-            )
             elasticsearch_client = ElasticsearchClient(
                 endpoint=args.elasticsearch_endpoint,
-                api_key=elasticsearch_api_key,
+                api_key=read_api_key(
+                    args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"
+                ),
                 ca_cert=(
                     str(args.elasticsearch_ca_cert)
                     if args.elasticsearch_ca_cert
