@@ -129,17 +129,19 @@ class ElasticsearchClient:
             elasticsearch.TransportError: If a connection-level error occurs
 
         Example:
-            # Using Query DSL
-            client.query(
-                index="logs",
-                query={"match": {"status": "error"}}
-            )
+            .. code-block:: python
 
-            # Using Kibana-style query string
-            client.query(
-                index="logs",
-                query_string="status:error AND level:critical"
-            )
+                # Using Query DSL
+                client.query(
+                    index="logs",
+                    query={"match": {"status": "error"}},
+                )
+
+                # Using Kibana-style query string
+                client.query(
+                    index="logs",
+                    query_string="status:error AND level:critical",
+                )
         """
         # Build the query body
         query_body: dict[str, Any] = {}
@@ -253,14 +255,16 @@ class ElasticsearchClient:
             ValueError: If authentication fails or the response is invalid
 
         Example:
-            result = ElasticsearchClient.create_api_key_with_basic_auth(
-                endpoint="https://localhost:9200",
-                username="myuser",
-                password="mypassword",
-                key_name="my-api-key",
-                expiration="7d"
-            )
-            print(result["encoded"])  # Use this for authentication
+            .. code-block:: python
+
+                result = ElasticsearchClient.create_api_key_with_basic_auth(
+                    endpoint="https://localhost:9200",
+                    username="myuser",
+                    password="mypassword",
+                    key_name="my-api-key",
+                    expiration="7d",
+                )
+                print(result["encoded"])  # Use this for authentication
         """
         # Build the API key request body
         # Note: By not specifying role_descriptors, the API key will

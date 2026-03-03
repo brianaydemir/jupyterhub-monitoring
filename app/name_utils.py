@@ -34,6 +34,7 @@ def parse_name(name: str) -> tuple[int, str, str, str]:
       - ``eppn:{id}@{domain}``     — legacy ePPN (priority 1)
       - ``email:{id}@{domain}``    — explicit email (priority 2)
       - ``orcid:{id}``             — ORCID (priority 3)
+
     Unrecognised names are returned with an empty domain (priority 4).
 
     Args:

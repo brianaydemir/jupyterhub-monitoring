@@ -90,13 +90,15 @@ class JupyterHubClient:
             ConnectionError: If the API request fails
 
         Example:
-            # Get all users
-            for user in client.list_users():
-                print(user["name"])
+            .. code-block:: python
 
-            # Get only active users
-            for user in client.list_users(state="active"):
-                print(user["name"])
+                # Get all users
+                for user in client.list_users():
+                    print(user["name"])
+
+                # Get only active users
+                for user in client.list_users(state="active"):
+                    print(user["name"])
         """
         url = f"{self._endpoint}/users"
         offset = 0
@@ -141,9 +143,11 @@ class JupyterHubClient:
             ConnectionError: If the API request fails
 
         Example:
-            servers = client.list_servers()
-            for server in servers:
-                print(f"User: {server['user.name']}, State: {server.get('server.state')}")
+            .. code-block:: python
+
+                servers = client.list_servers()
+                for server in servers:
+                    print(f"User: {server['user.name']}, State: {server.get('server.state')}")
         """
         users = self.list_users()
         result = []

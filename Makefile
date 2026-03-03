@@ -43,7 +43,8 @@ build: clean
 	    -t $(IMAGE):$${VERSION}
 
 docs:
-	poetry run sphinx-apidoc -o docs/api $(PY_PACKAGE_SRC)
+	poetry run sphinx-apidoc --separate --no-toc -o docs/api $(PY_PACKAGE_SRC)
+	rm -f docs/api/app.rst
 	poetry run sphinx-build -b html docs docs/_build/html
 
 clean:

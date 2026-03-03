@@ -79,6 +79,7 @@ requests = "~2.32"
 [tool.poetry.group.dev.dependencies]
 bandit = "~1.9"
 black = "~26.1"
+furo = "~2025.12"
 isort = "~8.0"
 mdformat = "~1.0"
 mdformat-gfm = "~1.0"
