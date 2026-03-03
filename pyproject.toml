@@ -69,24 +69,29 @@ packages = [{ include = "app" }]
 
 
 [tool.poetry.dependencies]
-python         = "^3.14"
-elasticsearch  = "~9.3"
-humanize       = "~4.15"
-pytimeparse2   = "~1.7"
-requests       = "~2.32"
+python = "^3.14"
+elasticsearch = "~9.3"
+humanize = "~4.15"
+pytimeparse2 = "~1.7"
+requests = "~2.32"
 
 
 [tool.poetry.group.dev.dependencies]
-bandit             = "~1.9"
-black              = "~26.1"
-isort              = "~8.0"
-mypy               = "~1.19"
-pre-commit         = "~4.5"
-pylint             = "~4.0"
-sphinx             = "~9.1"
-shibuya            = "~2026.1"
-toml-cli           = "~0.8"
-typos              = "~1.44"
+bandit = "~1.9"
+black = "~26.1"
+isort = "~8.0"
+mdformat = "~1.0"
+mdformat-gfm = "~1.0"
+mdformat-gfm-alerts = "~2.0"
+mdformat-footnote = "~0.1"
+mdformat-frontmatter = "~2.0"
+mypy = "~1.19"
+pre-commit = "~4.5"
+pylint = "~4.0"
+sphinx = "~9.1"
+shibuya = "~2026.1"
+toml-cli = "~0.8"
+typos = "~1.44"
 
 
 [tool.poetry.requires-plugins]

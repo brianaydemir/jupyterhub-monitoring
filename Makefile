@@ -14,6 +14,7 @@ init:
 	poetry install
 
 reformat:
+	poetry run mdformat .
 	poetry run isort -q $(PY_PACKAGE_SRC)
 	poetry run black -q $(PY_PACKAGE_SRC)
 
@@ -46,7 +47,7 @@ docs:
 	poetry run sphinx-build -b html docs docs/_build/html
 
 clean:
-	rm -rf dist
+	rm -rf dist docs/_build docs/api
 
 distclean:
 	git clean -x -d --force --exclude=.python-version

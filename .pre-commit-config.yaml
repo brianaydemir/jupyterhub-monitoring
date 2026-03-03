@@ -39,6 +39,15 @@ repos:
   #
   # Standardize formatting
   #
+  - repo: https://github.com/hukkin/mdformat
+    rev: 1.0.0
+    hooks:
+      - id: mdformat
+        additional_dependencies:
+          - mdformat-gfm
+          - mdformat-gfm-alerts
+          - mdformat-footnote
+          - mdformat-frontmatter
   - repo: https://github.com/PyCQA/isort
     rev: 8.0.0
     hooks:

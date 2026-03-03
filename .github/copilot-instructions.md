@@ -29,6 +29,7 @@ instance and push it to Elasticsearch, plus utilities for managing
 Elasticsearch API keys and sending emails.
 
 **Two client wrappers** in `app/`:
+
 - `JupyterHubClient` — wraps JupyterHub REST API; `list_servers()` returns
   flattened dicts with dot-notation keys (e.g., `user.name`, `server.state`)
 - `ElasticsearchClient` — wraps the official Python client; constructor uses
@@ -37,10 +38,12 @@ Elasticsearch API keys and sending emails.
   basic auth via HTTP requests directly
 
 **Utility modules** in `app/`:
+
 - `name_utils.py` — helpers for parsing and normalizing JupyterHub usernames
 - `time_utils.py` — helpers for time range computation and timezone parsing
 
 **CLI scripts** (each maps to a `[project.scripts]` entry):
+
 - `push-servers` — main pipeline: JupyterHub → Elasticsearch
 - `get-new-activity` — report active server time per user from Elasticsearch
 - `get-new-users` — filter/report new JupyterHub users
