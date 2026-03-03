@@ -36,8 +36,8 @@ Build the image with:
 make build IMAGE=myregistry.example.com/me/jupyterhub-monitoring
 ```
 
-Omit `IMAGE` to default to `jupyterhub-monitoring:<version>`. Run a script
-inside the container by passing it as the command:
+`IMAGE` must be set to the desired registry and image name. Run a script inside
+the container by passing it as the command:
 
 ```
 docker run --rm myregistry.example.com/me/jupyterhub-monitoring:latest \
@@ -102,8 +102,8 @@ Elasticsearch.
 ### `get-new-users`
 
 Lists JupyterHub users whose accounts were created within a given time window.
-Optionally writes plain-text, HTML, and/or CSV output files for use with
-`send-email`.
+Optionally writes plain-text, HTML, and/or CSV output files, and can send a
+report email directly.
 
 ```
 get-new-users \
@@ -116,13 +116,29 @@ get-new-users \
 ```
 
 Use `--time HH:MM` to anchor the end of the window to a specific wall-clock
-time (within the past 24 hours) rather than the current moment.
+time (within the past 24 hours) rather than the current moment. Use
+`--timezone TZ` to set the timezone for `--time` and all output timestamps
+(default: `America/Chicago`).
+
+Use `--send-email` to deliver the report by email directly from this script:
+
+```
+get-new-users \
+    --jupyterhub-endpoint https://hub.example.com/hub/api \
+    --jupyterhub-api-key ~/secrets/jh-api-key.txt \
+    --duration "7 days" \
+    --send-email \
+    --sender-email monitoring@example.com \
+    --recipient-email admin@example.com \
+    --smtp-host smtp.example.com \
+    --smtp-port 465
+```
 
 ### `get-new-activity`
 
 Reports active server time per user within a given time window, pulling data
 from Elasticsearch. Optionally writes plain-text, HTML, and/or CSV output
-files.
+files, and can send a report email directly.
 
 ```
 get-new-activity \
@@ -134,6 +150,27 @@ get-new-activity \
     --text-file activity.txt \
     --html-file activity.html \
     --csv-file activity.csv
+```
+
+Use `--time HH:MM` to anchor the end of the window to a specific wall-clock
+time (within the past 24 hours) rather than the current moment. Use
+`--timezone TZ` to set the timezone for `--time` and all output timestamps
+(default: `America/Chicago`).
+
+Use `--send-email` to deliver the report by email directly from this script:
+
+```
+get-new-activity \
+    --elasticsearch-endpoint https://elastic.example.com:9200 \
+    --elasticsearch-api-key ~/secrets/es-api-key.txt \
+    --elasticsearch-index jupyterhub-servers \
+    --duration "24 hours" \
+    --hub production \
+    --send-email \
+    --sender-email monitoring@example.com \
+    --recipient-email admin@example.com \
+    --smtp-host smtp.example.com \
+    --smtp-port 465
 ```
 
 ### `get-es-docs`
