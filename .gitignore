@@ -1,6 +1,7 @@
 # Build artifacts
 /dist/
 /docs/_build/
+/docs/api/
 
 # Python caches and configuration
 /.mypy_cache/
