@@ -4,11 +4,12 @@
 
 ```bash
 make init       # Install dependencies (poetry install)
-make reformat   # Format code with isort + black
+make reformat   # Format code with mdformat, isort, and black
 make lint       # Run bandit, mypy, and pylint
 make build      # Clean dist/, build Python wheel, build Docker image
-make clean      # Remove the dist/ directory
+make clean      # Remove dist/, docs/_build/, and docs/api/
 make distclean  # Remove all untracked/ignored files except .python-version
+make docs       # Build Sphinx HTML documentation
 make update     # Update dependencies and regenerate requirements.txt
 make all        # reformat + lint + build
 ```
@@ -35,24 +36,23 @@ plus utilities for managing Elasticsearch API keys and sending emails.
   (e.g., `user.name`, `server.state`)
 - `ElasticsearchClient` — wraps the official Python client;
   constructor uses API key auth,
-  class methods (`create_api_key_with_basic_auth`,
-  `delete_api_key_with_basic_auth`,
-  `list_api_keys_with_basic_auth`) use basic auth via HTTP requests directly
+  class methods for API key management use basic auth via HTTP requests directly
 
 **Utility modules** in `app/`:
 
+- `cli_utils.py` — reusable argument-group builders and validators used by
+  all CLI scripts (JupyterHub, Elasticsearch, query, output, and email groups)
 - `name_utils.py` — helpers for parsing and normalizing JupyterHub usernames
+- `output_formatters.py` — text, HTML, and CSV formatters for user lists and
+  activity reports
 - `time_utils.py` — helpers for time range computation and timezone parsing
 
-**CLI scripts** (each maps to a `[project.scripts]` entry):
-
-- `push-servers` — main pipeline: JupyterHub → Elasticsearch
-- `get-new-activity` — report active server time per user from Elasticsearch
-- `get-new-users` — filter/report new JupyterHub users
-- `get-es-docs` — query and dump Elasticsearch documents
-- `create-es-api-key` / `delete-es-api-key` / `list-es-api-keys` —
-  API key management
-- `send-email` — send SMTP email from file-based body
+**CLI scripts** map to `[project.scripts]` entries in `pyproject.toml`.
+They fall into four categories: data pipeline (JupyterHub → Elasticsearch),
+reporting (user lists and activity reports),
+Elasticsearch API key management,
+and email.
+See `pyproject.toml` for the current list.
 
 **Deployment**: `make build` cleans `dist/`,
 builds a Python wheel with `poetry build`,
@@ -85,9 +85,8 @@ The keys `snapshot-time` and `snapshot-time-iso` are reserved.
 
 **Formatting**: black with line-length 88, isort with `profile = "black"`.
 
-**Pre-commit**: The repo uses `pre-commit` with hooks for file hygiene
-(trailing whitespace, merge conflicts, etc.),
-`shellcheck`, `isort`, `black`, and `typos` (spell-checker).
+**Pre-commit**: The repo uses `pre-commit`; see `.pre-commit-config.yaml` for
+the full list of hooks.
 Run `pre-commit run --all-files` to check everything at once.
 
 ## Commit Preferences
