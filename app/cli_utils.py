@@ -33,13 +33,13 @@ def prompt_credentials(
     else:
         try:
             username = input("Username: ")
-        except EOFError, KeyboardInterrupt:
+        except (EOFError, KeyboardInterrupt):
             print("\nOperation cancelled.", file=sys.stderr)
             return None
 
     try:
         password = getpass.getpass("Password: ")
-    except EOFError, KeyboardInterrupt:
+    except (EOFError, KeyboardInterrupt):
         print("\nOperation cancelled.", file=sys.stderr)
         return None
 
