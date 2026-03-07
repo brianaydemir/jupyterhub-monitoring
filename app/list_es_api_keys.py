@@ -26,9 +26,9 @@ def _ms_to_datetime(ms: int | None) -> str:
     """
     if ms is None:
         return "Never"
-    return datetime.datetime.fromtimestamp(
-        ms / 1000, tz=datetime.timezone.utc
-    ).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return datetime.datetime.fromtimestamp(ms / 1000, tz=datetime.timezone.utc).strftime(
+        "%Y-%m-%d %H:%M:%S UTC"
+    )
 
 
 def _key_status_tags(key: dict[str, Any]) -> list[str]:
@@ -40,7 +40,7 @@ def _key_status_tags(key: dict[str, Any]) -> list[str]:
     Returns:
         List of status tag strings (e.g. ``["invalidated"]``, ``["expired"]``)
     """
-    tags = []
+    tags: list[str] = []
     if key.get("invalidated"):
         tags.append("invalidated")
     expiration = key.get("expiration")
@@ -63,7 +63,7 @@ def format_output_key(keys: list[dict[str, Any]], *, active_only: bool = True) -
     """
     if not keys:
         return "(no active API keys)" if active_only else "(no API keys)"
-    lines = []
+    lines: list[str] = []
     for key in keys:
         line = f"{key.get('id', '')}  {key.get('name', '')}"
         tags = _key_status_tags(key)
@@ -193,9 +193,7 @@ def main() -> int:
                 username=username,
                 password=password,
                 ca_cert=(
-                    str(args.elasticsearch_ca_cert)
-                    if args.elasticsearch_ca_cert
-                    else None
+                    str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
                 ),
                 active_only=not args.all_keys,
             )

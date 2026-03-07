@@ -150,7 +150,7 @@ class JupyterHubClient:
                     print(f"User: {server['user.name']}, State: {server.get('server.state')}")
         """
         users = self.list_users()
-        result = []
+        result: list[dict[str, Any]] = []
 
         for user in users:
             # Check if this user has any servers
@@ -190,11 +190,13 @@ class JupyterHubClient:
         Returns:
             Flattened dictionary with concatenated keys
         """
-        items: list[tuple] = []
+        items: list[tuple[str, Any]] = []
         for k, v in d.items():
             new_key = f"{parent_key}{sep}{k}" if parent_key else k
             if isinstance(v, dict):
-                items.extend(self._flatten_dict(v, new_key, sep=sep).items())
+                items.extend(
+                    self._flatten_dict(cast(dict[str, Any], v), new_key, sep=sep).items()
+                )
             else:
                 items.append((new_key, v))
         return dict(items)

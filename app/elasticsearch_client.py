@@ -94,7 +94,7 @@ class ElasticsearchClient:
             elasticsearch.ApiError: If Elasticsearch rejects a document upload
             elasticsearch.TransportError: If a connection-level error occurs
         """
-        results = []
+        results: list[dict[str, Any]] = []
         for document in documents:
             result = self.upload_document(index=index, document=document)
             results.append(result)
@@ -311,15 +311,11 @@ class ElasticsearchClient:
         try:
             result = response.json()
         except ValueError as e:
-            raise ValueError(
-                f"Invalid JSON response from Elasticsearch: {str(e)}"
-            ) from e
+            raise ValueError(f"Invalid JSON response from Elasticsearch: {str(e)}") from e
 
         # Validate that we got the expected fields
         if "id" not in result or "api_key" not in result:
-            raise ValueError(
-                "Unexpected response from Elasticsearch: missing required fields"
-            )
+            raise ValueError("Unexpected response from Elasticsearch: missing required fields")
 
         return cast(dict[str, Any], result)
 
@@ -392,9 +388,7 @@ class ElasticsearchClient:
         try:
             result = response.json()
         except ValueError as e:
-            raise ValueError(
-                f"Invalid JSON response from Elasticsearch: {str(e)}"
-            ) from e
+            raise ValueError(f"Invalid JSON response from Elasticsearch: {str(e)}") from e
 
         return cast(dict[str, Any], result)
 
@@ -450,9 +444,7 @@ class ElasticsearchClient:
         try:
             result = response.json()
         except ValueError as e:
-            raise ValueError(
-                f"Invalid JSON response from Elasticsearch: {str(e)}"
-            ) from e
+            raise ValueError(f"Invalid JSON response from Elasticsearch: {str(e)}") from e
 
         all_keys = cast(list[dict[str, Any]], result.get("api_keys", []))
 

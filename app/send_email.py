@@ -14,6 +14,28 @@ from pathlib import Path
 from app.cli_utils import add_email_arguments
 
 
+def _make_attachment_part(mime_hint: str, payload: bytes, filename: str) -> MIMEBase:
+    """Create a base64-encoded MIME attachment part.
+
+    Args:
+        mime_hint: Filename or path string used to guess the MIME type
+        payload: Raw bytes to embed as the attachment payload
+        filename: Filename to use in the Content-Disposition header
+
+    Returns:
+        A base64-encoded MIMEBase part ready to attach to a message
+    """
+    mime_type, _ = mimetypes.guess_type(mime_hint)
+    if mime_type is None:
+        mime_type = "application/octet-stream"
+    maintype, subtype = mime_type.split("/", 1)
+    part = MIMEBase(maintype, subtype)
+    part.set_payload(payload)
+    encoders.encode_base64(part)
+    part.add_header("Content-Disposition", "attachment", filename=filename)
+    return part
+
+
 def create_message(
     sender_name: str | None,
     sender_email: str,
@@ -56,25 +78,9 @@ def create_message(
         msg = MIMEMultipart("mixed")
         msg.attach(body)
         for path in attachments or []:
-            mime_type, _ = mimetypes.guess_type(str(path))
-            if mime_type is None:
-                mime_type = "application/octet-stream"
-            maintype, subtype = mime_type.split("/", 1)
-            part = MIMEBase(maintype, subtype)
-            part.set_payload(path.read_bytes())
-            encoders.encode_base64(part)
-            part.add_header("Content-Disposition", "attachment", filename=path.name)
-            msg.attach(part)
+            msg.attach(_make_attachment_part(str(path), path.read_bytes(), path.name))
         for filename, data in attachment_data or []:
-            mime_type, _ = mimetypes.guess_type(filename)
-            if mime_type is None:
-                mime_type = "application/octet-stream"
-            maintype, subtype = mime_type.split("/", 1)
-            part = MIMEBase(maintype, subtype)
-            part.set_payload(data)
-            encoders.encode_base64(part)
-            part.add_header("Content-Disposition", "attachment", filename=filename)
-            msg.attach(part)
+            msg.attach(_make_attachment_part(filename, data, filename))
     else:
         msg = body
 
@@ -215,7 +221,8 @@ def parse_arguments() -> argparse.Namespace:
         parser.error(f"Text file not found: {args.text_file}")
     if args.html_file and not args.html_file.exists():
         parser.error(f"HTML file not found: {args.html_file}")
-    for path in args.attachment or []:
+    attachment_paths: list[Path] = args.attachment or []
+    for path in attachment_paths:
         if not path.exists():
             parser.error(f"Attachment file not found: {path}")
 

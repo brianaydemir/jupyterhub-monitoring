@@ -3,6 +3,7 @@
 import argparse
 import sys
 from datetime import timedelta
+from typing import Any
 
 import pytimeparse2
 
@@ -31,7 +32,7 @@ def build_query(
     cutoff: int,
     end: int,
     hub: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Build the Elasticsearch Query DSL for active server documents.
 
     Args:
@@ -42,7 +43,7 @@ def build_query(
     Returns:
         Elasticsearch Query DSL dictionary
     """
-    filters: list[dict] = [
+    filters: list[dict[str, Any]] = [
         {"range": {"meta.snapshot-time": {"gte": cutoff, "lte": end}}},
         {
             "bool": {
@@ -66,7 +67,7 @@ def build_query(
     }
 
 
-def compute_activity(documents: list[dict]) -> dict[str, float]:
+def compute_activity(documents: list[dict[str, Any]]) -> dict[str, float]:
     """Sum active server time per user from a list of Elasticsearch documents.
 
     Documents missing meta.interval are silently skipped.
@@ -172,16 +173,12 @@ def main() -> int:
         client = ElasticsearchClient(
             endpoint=args.elasticsearch_endpoint,
             api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
-            ca_cert=(
-                str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
-            ),
+            ca_cert=(str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None),
         )
 
         # Query Elasticsearch
         try:
-            query = build_query(
-                cutoff=cutoff, end=int(end_time.timestamp()), hub=args.hub
-            )
+            query = build_query(cutoff=cutoff, end=int(end_time.timestamp()), hub=args.hub)
             documents = list(client.query(index=args.elasticsearch_index, query=query))
         except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"Error querying Elasticsearch: {e}", file=sys.stderr)
@@ -228,9 +225,7 @@ def main() -> int:
             csv_content = format_activity_csv(
                 totals, start_time, end_time, args.timezone, args.detailed_usernames
             )
-            if send_report_email(
-                args, text_content, html_content, csv_content, "activity.csv"
-            ):
+            if send_report_email(args, text_content, html_content, csv_content, "activity.csv"):
                 return 1
 
         return 0

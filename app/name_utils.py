@@ -11,7 +11,7 @@ _ORCID_RE = re.compile(r"^orcid:(.+)$")
 TRAILING_SORT_DOMAINS: list[str] = ["orcid.org"]
 
 
-def _trailing_domain_key(domain: str) -> tuple[int, int]:
+def trailing_domain_key(domain: str) -> tuple[int, int]:
     """Return a sort key that pushes listed domains to the end.
 
     Args:

@@ -3,111 +3,97 @@
 ## Commands
 
 ```bash
-make init       # Install dependencies (poetry install)
-make reformat   # Format code with mdformat, isort, and black
-make lint       # Run bandit, mypy, and pylint
-make build      # Clean dist/, build Python wheel, build Docker image
-make clean      # Remove dist/, docs/_build/, and docs/api/
-make distclean  # Remove all untracked/ignored files except .python-version
+make init       # Install dependencies
+make update     # Update dependencies; show outdated packages
+make reformat   # Format code with mdformat, isort, black, and typos
+make lint       # Run bandit, mypy, pyright, and pylint
+make build      # Clean artifacts, build Python distribution, build Docker image
 make docs       # Build Sphinx HTML documentation
-make update     # Update dependencies and regenerate requirements.txt
-make all        # reformat + lint + build
+make clean      # Remove artifacts
+make distclean  # Remove all untracked/ignored files except .python-version
+make all        # reformat + lint + build + docs
 ```
 
 There are no automated tests.
 Linters run with `-` prefix (non-fatal) in the Makefile.
-
-Pre-commit hooks can be run manually with:
-
-```bash
-pre-commit run --all-files
-```
+Run pre-commit hooks with `pre-commit run --all-files`.
 
 ## Architecture
 
-This project provides CLI scripts that pull data from a JupyterHub instance
-and push it to Elasticsearch,
-plus utilities for managing Elasticsearch API keys and sending emails.
+This project provides CLI scripts for monitoring JupyterHub:
 
-**Two client wrappers** in `app/`:
+- pushing server-state snapshots from JupyterHub into Elasticsearch
 
-- `JupyterHubClient` — wraps JupyterHub REST API;
+- querying Elasticsearch to produce reports formatted as text, HTML, and CSV
+
+- sending emails via SMTP
+
+- managing Elasticsearch API keys
+
+**Two client wrappers** are in `app/`:
+
+- `ElasticsearchClient` — wraps the official Python client
+
+- `JupyterHubClient` — wraps the JupyterHub REST API;
   `list_servers()` returns flattened dicts with dot-notation keys
   (e.g., `user.name`, `server.state`)
-- `ElasticsearchClient` — wraps the official Python client;
-  constructor uses API key auth,
-  class methods for API key management use basic auth via HTTP requests directly
 
-**Utility modules** in `app/`:
+**Utility modules** are in `app/`:
 
-- `cli_utils.py` — reusable argument-group builders and validators used by
-  all CLI scripts (JupyterHub, Elasticsearch, query, output, and email groups)
-- `name_utils.py` — helpers for parsing and normalizing JupyterHub usernames
-- `output_formatters.py` — text, HTML, and CSV formatters for user lists and
-  activity reports
-- `time_utils.py` — helpers for time range computation and timezone parsing
+- `cli_utils` — reusable argument-group builders and validators
+
+- `name_utils` — JupyterHub username parsing and sort-priority logic
+
+- `output_formatters` — produces text, HTML, and CSV report output
+
+- `time_utils` — timezone parsing and time-range computation
 
 **CLI scripts** map to `[project.scripts]` entries in `pyproject.toml`.
-They fall into four categories: data pipeline (JupyterHub → Elasticsearch),
-reporting (user lists and activity reports),
-Elasticsearch API key management,
-and email.
-See `pyproject.toml` for the current list.
-
-**Deployment**: `make build` cleans `dist/`,
-builds a Python wheel with `poetry build`,
-and then builds a Docker image from the installed wheel.
 
 ## Conventions
 
-**Script structure**: Every CLI script follows:
-argparse argument parsing in `parse_arguments()`,
-`main()` returning `int` exit code,
-errors printed to `sys.stderr`.
+**Python version**: Requires Python ≥ 3.14.
 
-**API key input**: Secrets are accepted as either a file path argument
-(`--*-api-key`)
-or an environment variable (`JUPYTERHUB_API_KEY`, `ELASTICSEARCH_API_KEY`).
-File contents are `.strip()`ped.
+**Formatting**: black with line-length 96, isort with `profile = "black"`.
 
-**CA certificates**: All external connections accept an optional
-`--*-ca-cert` path argument for TLS verification.
-
-**Document field naming**: Elasticsearch documents use dot-notation keys.
-Metadata added by scripts uses the `meta.` prefix
-(e.g., `meta.snapshot-time`).
-The keys `snapshot-time` and `snapshot-time-iso` are reserved.
+**`pyright` runs in strict type-checking mode** (`typeCheckingMode = "strict"`).
 
 **`[project.scripts]` entries must be in alphabetical order.**
 
-**Python version**: Requires Python ≥ 3.14
-(uses union type syntax `X | Y`, `match` etc.).
+**Pre-commit**: This repository uses `pre-commit`.
 
-**Formatting**: black with line-length 88, isort with `profile = "black"`.
+## Post-Edit Workflow
 
-**Pre-commit**: The repo uses `pre-commit`; see `.pre-commit-config.yaml` for
-the full list of hooks.
-Run `pre-commit run --all-files` to check everything at once.
+After modifying code files, run the following steps in order:
+
+1. **`make reformat`** — auto-format all code.
+
+2. **`make lint`** — run linters;
+   address all warnings and errors before proceeding.
+
+3. **`make docs`** — build documentation;
+   address all warnings and errors before proceeding.
+
+4. **`pre-commit run --files <edited files>`** —
+   run pre-commit hooks on the files that were edited.
+   If hooks auto-fix any files,
+   re-run the affected steps above before proceeding.
 
 ## Commit Preferences
 
-- **Subject line**: Short imperative phrase,
-  no trailing period
-  (e.g., `Add --subject argument to send-email`)
-- **Body**: Wrap at ~72 characters;
-  use `-` bullet lists for multi-item changes
-- **Workflow**: Never commit automatically or speculatively.
-  Only create a commit if the user has just explicitly asked you to commit.
-  Always run `make reformat && make lint` before staging.
-  Stage changes with `git add` and ask the user to review before committing.
-- **Planning**: The final step of every implementation plan must be to ask
-  the user to review the staged changes before committing.
-- **Authorship**: Unless told otherwise,
-  Copilot should be the commit author
-  and the user should be left as the committer.
+- **Staging and committing**:
+  Only stage or commit changes
+  when the user's current message explicitly asks you to.
+  Never stage or commit
+  speculatively, automatically, or as part of an implementation workflow.
+
+- **Subject line**:
+  Short imperative phrase, no trailing period
+
+- **Authorship**:
+  Unless told otherwise, Copilot should be the commit author.
   Use `--author` to set the author to
   `Copilot <223556219+Copilot@users.noreply.github.com>`
   and include the trailer
-  `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
-- **Dependencies**: Pin to the latest minor release at update time
-  using `~X.Y` (e.g., `humanize = "~4.15"`)
+  `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`.
+  The user should be left as the committer.

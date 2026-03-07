@@ -168,9 +168,7 @@ def main() -> int:
                 username=username,
                 password=password,
                 ca_cert=(
-                    str(args.elasticsearch_ca_cert)
-                    if args.elasticsearch_ca_cert
-                    else None
+                    str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
                 ),
                 key_name=args.name,
                 expiration=args.expiration,

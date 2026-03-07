@@ -20,8 +20,7 @@ def parse_arguments() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         description=(
-            "Query Elasticsearch and retrieve documents using "
-            "a Kibana-style query string"
+            "Query Elasticsearch and retrieve documents using " "a Kibana-style query string"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -66,9 +65,7 @@ def main() -> int:
         client = ElasticsearchClient(
             endpoint=args.elasticsearch_endpoint,
             api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
-            ca_cert=(
-                str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
-            ),
+            ca_cert=(str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None),
         )
 
         # Query Elasticsearch and print results

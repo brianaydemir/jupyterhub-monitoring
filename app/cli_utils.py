@@ -52,7 +52,7 @@ def prompt_credentials(
 
 def add_jupyterhub_argument_group(
     parser: argparse.ArgumentParser,
-) -> argparse._ArgumentGroup:
+) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Add a "JupyterHub API" argument group to a parser and return it.
 
     Adds ``--jupyterhub-endpoint``, ``--jupyterhub-api-key``, and
@@ -121,7 +121,7 @@ def add_elasticsearch_argument_group(
     parser: argparse.ArgumentParser,
     *,
     required: bool = True,
-) -> argparse._ArgumentGroup:
+) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Add an "Elasticsearch" argument group to a parser and return it.
 
     Adds ``--elasticsearch-endpoint``, ``--elasticsearch-ca-cert``,
@@ -188,7 +188,7 @@ def add_elasticsearch_basic_argument_group(
     parser: argparse.ArgumentParser,
     *,
     required: bool = True,
-) -> argparse._ArgumentGroup:
+) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Add an "Elasticsearch" argument group to a parser and return it.
 
     Adds ``--elasticsearch-endpoint`` and ``--elasticsearch-ca-cert``. The
@@ -235,16 +235,13 @@ def validate_elasticsearch_basic_arguments(
         args: Parsed command-line arguments
         parser: The argument parser (used to report errors)
     """
-    if (
-        args.elasticsearch_ca_cert is not None
-        and not args.elasticsearch_ca_cert.exists()
-    ):
+    if args.elasticsearch_ca_cert is not None and not args.elasticsearch_ca_cert.exists():
         parser.error(f"CA certificate file not found: {args.elasticsearch_ca_cert}")
 
 
 def add_query_argument_group(
     parser: argparse.ArgumentParser,
-) -> argparse._ArgumentGroup:
+) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Add a "Query" argument group to a parser and return it.
 
     Adds ``--duration``, ``--time``, and ``--timezone``. The returned group
@@ -355,7 +352,7 @@ def add_output_argument_group(
 
 
 def add_email_arguments(
-    group: argparse._ActionsContainer,
+    group: argparse._ActionsContainer,  # pyright: ignore[reportPrivateUsage]
     *,
     default_subject: str,
     required: bool = False,
@@ -378,8 +375,7 @@ def add_email_arguments(
     group.add_argument(
         "--sender-email",
         required=required,
-        help="Sender email address"
-        + (" (required with --send-email)" if not required else ""),
+        help="Sender email address" + (" (required with --send-email)" if not required else ""),
     )
     group.add_argument(
         "--recipient-email",
@@ -403,15 +399,13 @@ def add_email_arguments(
     group.add_argument(
         "--smtp-host",
         required=required,
-        help="SMTP server hostname"
-        + (" (required with --send-email)" if not required else ""),
+        help="SMTP server hostname" + (" (required with --send-email)" if not required else ""),
     )
     group.add_argument(
         "--smtp-port",
         type=int,
         required=required,
-        help="SMTP server port"
-        + (" (required with --send-email)" if not required else ""),
+        help="SMTP server port" + (" (required with --send-email)" if not required else ""),
     )
     group.add_argument(
         "--smtp-no-ssl",
@@ -501,6 +495,4 @@ def parse_duration(duration_str: str) -> timedelta | None:
     seconds = pytimeparse2.parse(duration_str)
     if seconds is None:
         return None
-    return (
-        seconds if isinstance(seconds, timedelta) else timedelta(seconds=float(seconds))
-    )
+    return seconds if isinstance(seconds, timedelta) else timedelta(seconds=float(seconds))

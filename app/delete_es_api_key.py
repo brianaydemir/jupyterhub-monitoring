@@ -82,9 +82,7 @@ def main() -> int:
                 username=username,
                 password=password,
                 ca_cert=(
-                    str(args.elasticsearch_ca_cert)
-                    if args.elasticsearch_ca_cert
-                    else None
+                    str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
                 ),
                 key_id=args.key_id,
                 key_name=args.key_name,
@@ -98,14 +96,9 @@ def main() -> int:
         error_count = result.get("error_count", 0)
 
         if invalidated:
-            print(
-                f"Invalidated {len(invalidated)} API key(s): {', '.join(invalidated)}"
-            )
+            print(f"Invalidated {len(invalidated)} API key(s): {', '.join(invalidated)}")
         if previously:
-            print(
-                f"Already invalidated: {len(previously)} key(s): "
-                f"{', '.join(previously)}"
-            )
+            print(f"Already invalidated: {len(previously)} key(s): " f"{', '.join(previously)}")
         if not invalidated and not previously:
             print("No matching API keys found.")
         if error_count:

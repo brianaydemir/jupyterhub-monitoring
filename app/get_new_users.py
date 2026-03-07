@@ -4,6 +4,7 @@ import argparse
 import sys
 from collections.abc import Iterable
 from datetime import datetime
+from typing import Any
 
 from app.cli_utils import (
     add_email_argument_group,
@@ -23,8 +24,8 @@ from app.time_utils import compute_time_range, parse_timezone
 
 
 def filter_new_users(
-    users: Iterable[dict], cutoff_time: datetime, end_time: datetime
-) -> list[dict]:
+    users: Iterable[dict[str, Any]], cutoff_time: datetime, end_time: datetime
+) -> list[dict[str, Any]]:
     """Filter users created within [*cutoff_time*, *end_time*].
 
     Args:
@@ -37,7 +38,7 @@ def filter_new_users(
     Returns:
         List of user dictionaries (with 'name' and 'created' keys)
     """
-    new_users = []
+    new_users: list[dict[str, Any]] = []
     for user in users:
         created_str = user.get("created")
         if not created_str:
@@ -123,9 +124,7 @@ def main() -> int:
             client = JupyterHubClient(
                 endpoint=args.jupyterhub_endpoint,
                 api_key=read_api_key(args.jupyterhub_api_key, "JUPYTERHUB_API_KEY"),
-                ca_cert=(
-                    str(args.jupyterhub_ca_cert) if args.jupyterhub_ca_cert else None
-                ),
+                ca_cert=(str(args.jupyterhub_ca_cert) if args.jupyterhub_ca_cert else None),
             )
         except ConnectionError as e:
             print(f"Error connecting to JupyterHub: {e}", file=sys.stderr)

@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from datetime import datetime, timezone
+from typing import Any
 
 from app.cli_utils import (
     add_elasticsearch_argument_group,
@@ -14,6 +15,63 @@ from app.cli_utils import (
 )
 from app.elasticsearch_client import ElasticsearchClient
 from app.jupyterhub_client import JupyterHubClient
+
+
+def _process_single_server(
+    server: dict[str, Any],
+    metadata: dict[str, str] | None,
+    debug: bool,
+    elasticsearch_client: ElasticsearchClient | None,
+    elasticsearch_index: str,
+    i: int,
+    total_servers: int,
+) -> bool:
+    """Add metadata fields to a server document and push or print it.
+
+    Args:
+        server: Server document dict (mutated in-place to add metadata fields)
+        metadata: Optional extra metadata key-value pairs to embed
+        debug: If True, print the document instead of pushing
+        elasticsearch_client: Elasticsearch client (None in debug mode)
+        elasticsearch_index: Target Elasticsearch index
+        i: 1-based index of this server in the current batch
+        total_servers: Total number of servers being processed
+
+    Returns:
+        True on success, False on error
+    """
+    try:
+        if metadata:
+            for key, value in metadata.items():
+                server[f"meta.{key}"] = value
+
+        now = datetime.now(timezone.utc)
+        server["meta.snapshot-time"] = int(now.timestamp())
+        server["meta.snapshot-time-iso"] = now.replace(microsecond=0).isoformat()
+
+        if debug:
+            print(f"\n--- Document {i}/{total_servers} ---")
+            print(json.dumps(server, indent=2))
+        elif elasticsearch_client is not None:
+            result = elasticsearch_client.upload_document(
+                index=elasticsearch_index,
+                document=server,
+            )
+            print(
+                f"Pushed server {i}/{total_servers}: "
+                f"{server.get('user.name', 'unknown')}/"
+                f"{server.get('server.name', 'unknown')} "
+                f"(result: {result.get('result', 'unknown')})"
+            )
+        return True
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(
+            f"Error pushing server {i}/{total_servers} "
+            f"({server.get('user.name', 'unknown')}/"
+            f"{server.get('server.name', 'unknown')}): {e}",
+            file=sys.stderr,
+        )
+        return False
 
 
 def push_servers(
@@ -60,43 +118,11 @@ def push_servers(
     errors = 0
 
     for i, server in enumerate(servers, 1):
-        try:
-            # Add metadata fields to the document
-            if metadata:
-                for key, value in metadata.items():
-                    server[f"meta.{key}"] = value
-
-            # Add reserved snapshot-time fields
-            now = datetime.now(timezone.utc)
-            server["meta.snapshot-time"] = int(now.timestamp())
-            server["meta.snapshot-time-iso"] = now.replace(microsecond=0).isoformat()
-
-            if debug:
-                # In debug mode, just print the document
-                print(f"\n--- Document {i}/{total_servers} ---")
-                print(json.dumps(server, indent=2))
-                successful += 1
-            elif elasticsearch_client is not None:
-                # Push to Elasticsearch
-                result = elasticsearch_client.upload_document(
-                    index=elasticsearch_index,
-                    document=server,
-                )
-                print(
-                    f"Pushed server {i}/{total_servers}: "
-                    f"{server.get('user.name', 'unknown')}/"
-                    f"{server.get('server.name', 'unknown')} "
-                    f"(result: {result.get('result', 'unknown')})"
-                )
-                successful += 1
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            # Continue processing other servers even if one fails
-            print(
-                f"Error pushing server {i}/{total_servers} "
-                f"({server.get('user.name', 'unknown')}/"
-                f"{server.get('server.name', 'unknown')}): {e}",
-                file=sys.stderr,
-            )
+        if _process_single_server(
+            server, metadata, debug, elasticsearch_client, elasticsearch_index, i, total_servers
+        ):
+            successful += 1
+        else:
             errors += 1
 
     return (successful, errors)
@@ -219,13 +245,9 @@ def main() -> int:
             print("Connecting to Elasticsearch...")
             elasticsearch_client = ElasticsearchClient(
                 endpoint=args.elasticsearch_endpoint,
-                api_key=read_api_key(
-                    args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"
-                ),
+                api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
                 ca_cert=(
-                    str(args.elasticsearch_ca_cert)
-                    if args.elasticsearch_ca_cert
-                    else None
+                    str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
                 ),
             )
             print("Connected to Elasticsearch")
