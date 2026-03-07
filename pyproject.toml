@@ -94,12 +94,7 @@ toml-cli = "~0.8"
 typos = "~1.44"
 
 
-[tool.poetry.requires-plugins]
-poetry-plugin-export = ">=1.0.0"
-
-
 [tool.pyright]
-pythonVersion = "3.14"
 reportMissingTypeStubs = "none"
 typeCheckingMode = "strict"
 
