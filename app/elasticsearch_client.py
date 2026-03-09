@@ -194,9 +194,9 @@ class ElasticsearchClient:
             if scroll_id:
                 try:
                     self._client.clear_scroll(scroll_id=scroll_id)
-                except Exception:  # nosec  # pylint: disable=broad-exception-caught
-                    # Ignore errors when clearing scroll - cleanup failures
-                    # should not mask results
+                except Exception:  # nosec B110  # pylint: disable=broad-exception-caught
+                    # Ignore errors when clearing scroll -
+                    # cleanup failures should not mask results
                     pass
 
     def close(self) -> None:

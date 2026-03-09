@@ -4,9 +4,9 @@
 IMAGE ?= hub.osg-htc.org/brian.aydemir/jupyterhub-monitoring
 PY_PACKAGE_SRC := app
 
-.PHONY: all build clean distclean docs init lint reformat update
+.PHONY: all build clean distclean docs init lint tidy update
 
-all: reformat lint build docs
+all: tidy lint build docs
 
 #---------------------------------------------------------------------------
 
@@ -17,7 +17,7 @@ update:
 	poetry update
 	poetry show --outdated
 
-reformat:
+tidy:
 	poetry run mdformat .
 	poetry run isort -q $(PY_PACKAGE_SRC)
 	poetry run black -q $(PY_PACKAGE_SRC)
