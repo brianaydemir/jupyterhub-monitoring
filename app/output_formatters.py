@@ -29,6 +29,30 @@ _TH_STYLE_R = (
     " background:#a6c9e8; color:#000000"
 )
 
+# Prepended to every HTML email body to adapt table colors to the viewer's
+# preferred color scheme.  Inline styles above are the light-mode fallback;
+# the media query overrides them for dark-mode clients via !important.
+_HTML_STYLE_BLOCK = """\
+<style>
+  @media (prefers-color-scheme: dark) {
+    .th {
+      background: #1d4060 !important;
+      color: #d0e8f8 !important;
+      border-color: #3a607a !important;
+    }
+    .td {
+      background: #18232d !important;
+      color: #d8e8f0 !important;
+      border-color: #3a607a !important;
+    }
+    .td-alt {
+      background: #1e2f3d !important;
+      color: #d8e8f0 !important;
+      border-color: #3a607a !important;
+    }
+  }
+</style>"""
+
 
 def _show_method(
     domain_id_pairs: list[tuple[str, str]],
@@ -189,25 +213,28 @@ def _html_user_rows(
 
     lines: list[str] = []
     for i, user in enumerate(sorted(users, key=sort_key)):
-        bg = "#e6eff4" if i % 2 else "#ffffff"
-        td = f"border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
+        cls = "td-alt" if i % 2 else "td"
+        td = (
+            f"border:1px solid #9ab3c8; padding:2px 8px;"
+            f" background:{'#e6eff4' if i % 2 else '#ffffff'}; color:#000000"
+        )
         created = html.escape(_format_created(user.get("created", ""), strftime_fmt, tz))
         _priority, domain, uid, method = parse_name(user.get("name", ""))
         if show_method:
             lines.append(
                 f"    <tr>"
-                f'<td style="{td}">{created}</td>'
-                f'<td style="{td}">{html.escape(domain)}</td>'
-                f'<td style="{td}">{html.escape(uid)}</td>'
-                f'<td style="{td}">{html.escape(method)}</td>'
+                f'<td class="{cls}" style="{td}">{created}</td>'
+                f'<td class="{cls}" style="{td}">{html.escape(domain)}</td>'
+                f'<td class="{cls}" style="{td}">{html.escape(uid)}</td>'
+                f'<td class="{cls}" style="{td}">{html.escape(method)}</td>'
                 f"</tr>"
             )
         else:
             lines.append(
                 f"    <tr>"
-                f'<td style="{td}">{created}</td>'
-                f'<td style="{td}">{html.escape(domain)}</td>'
-                f'<td style="{td}">{html.escape(uid)}</td>'
+                f'<td class="{cls}" style="{td}">{created}</td>'
+                f'<td class="{cls}" style="{td}">{html.escape(domain)}</td>'
+                f'<td class="{cls}" style="{td}">{html.escape(uid)}</td>'
                 f"</tr>"
             )
     return lines
@@ -331,29 +358,32 @@ def _html_activity_rows(
     """
     lines: list[str] = []
     for i, (user, seconds) in enumerate(_sorted_activity_rows(totals, show_method)):
-        bg = "#e6eff4" if i % 2 else "#ffffff"
-        td = f"border:1px solid #9ab3c8; padding:2px 8px; background:{bg}; color:#000000"
+        cls = "td-alt" if i % 2 else "td"
+        td = (
+            f"border:1px solid #9ab3c8; padding:2px 8px;"
+            f" background:{'#e6eff4' if i % 2 else '#ffffff'}; color:#000000"
+        )
         td_r = (
             f"text-align:right; border:1px solid #9ab3c8; padding:2px 8px;"
-            f" background:{bg}; color:#000000"
+            f" background:{'#e6eff4' if i % 2 else '#ffffff'}; color:#000000"
         )
         _priority, domain, uid, method = parsed_names[user]
         active_time = html.escape(_format_duration(seconds))
         if show_method:
             lines.append(
                 f"    <tr>"
-                f'<td style="{td_r}">{active_time}</td>'
-                f'<td style="{td}">{html.escape(domain)}</td>'
-                f'<td style="{td}">{html.escape(uid)}</td>'
-                f'<td style="{td}">{html.escape(method)}</td>'
+                f'<td class="{cls}" style="{td_r}">{active_time}</td>'
+                f'<td class="{cls}" style="{td}">{html.escape(domain)}</td>'
+                f'<td class="{cls}" style="{td}">{html.escape(uid)}</td>'
+                f'<td class="{cls}" style="{td}">{html.escape(method)}</td>'
                 f"</tr>"
             )
         else:
             lines.append(
                 f"    <tr>"
-                f'<td style="{td_r}">{active_time}</td>'
-                f'<td style="{td}">{html.escape(domain)}</td>'
-                f'<td style="{td}">{html.escape(uid)}</td>'
+                f'<td class="{cls}" style="{td_r}">{active_time}</td>'
+                f'<td class="{cls}" style="{td}">{html.escape(domain)}</td>'
+                f'<td class="{cls}" style="{td}">{html.escape(uid)}</td>'
                 f"</tr>"
             )
     return lines
@@ -491,18 +521,18 @@ def format_users_html(
         if show_method:
             html_lines.append(
                 f"    <tr>"
-                f'<th style="{_TH_STYLE}">Created</th>'
-                f'<th style="{_TH_STYLE}">Institution</th>'
-                f'<th style="{_TH_STYLE}">ID</th>'
-                f'<th style="{_TH_STYLE}">Login method</th>'
+                f'<th class="th" style="{_TH_STYLE}">Created</th>'
+                f'<th class="th" style="{_TH_STYLE}">Institution</th>'
+                f'<th class="th" style="{_TH_STYLE}">ID</th>'
+                f'<th class="th" style="{_TH_STYLE}">Login method</th>'
                 f"</tr>"
             )
         else:
             html_lines.append(
                 f"    <tr>"
-                f'<th style="{_TH_STYLE}">Created</th>'
-                f'<th style="{_TH_STYLE}">Institution</th>'
-                f'<th style="{_TH_STYLE}">ID</th>'
+                f'<th class="th" style="{_TH_STYLE}">Created</th>'
+                f'<th class="th" style="{_TH_STYLE}">Institution</th>'
+                f'<th class="th" style="{_TH_STYLE}">ID</th>'
                 f"</tr>"
             )
         html_lines.append("  </thead>")
@@ -512,7 +542,7 @@ def format_users_html(
         html_lines.append("</table>")
 
     html_lines.append(_html_table_footer(tz_name))
-    return "\n".join(html_lines)
+    return "\n".join([_HTML_STYLE_BLOCK, *html_lines])
 
 
 def format_users_csv(
@@ -679,18 +709,18 @@ def format_activity_html(
         if show_method:
             html_lines.append(
                 f"    <tr>"
-                f'<th style="{_TH_STYLE_R}">Time (HH:MM)</th>'
-                f'<th style="{_TH_STYLE}">Institution</th>'
-                f'<th style="{_TH_STYLE}">ID</th>'
-                f'<th style="{_TH_STYLE}">Login method</th>'
+                f'<th class="th" style="{_TH_STYLE_R}">Time (HH:MM)</th>'
+                f'<th class="th" style="{_TH_STYLE}">Institution</th>'
+                f'<th class="th" style="{_TH_STYLE}">ID</th>'
+                f'<th class="th" style="{_TH_STYLE}">Login method</th>'
                 f"</tr>"
             )
         else:
             html_lines.append(
                 f"    <tr>"
-                f'<th style="{_TH_STYLE_R}">Time (HH:MM)</th>'
-                f'<th style="{_TH_STYLE}">Institution</th>'
-                f'<th style="{_TH_STYLE}">ID</th>'
+                f'<th class="th" style="{_TH_STYLE_R}">Time (HH:MM)</th>'
+                f'<th class="th" style="{_TH_STYLE}">Institution</th>'
+                f'<th class="th" style="{_TH_STYLE}">ID</th>'
                 f"</tr>"
             )
         html_lines.append("  </thead>")
@@ -700,7 +730,7 @@ def format_activity_html(
         html_lines.append("</table>")
 
     html_lines.append(_html_table_footer(tz_name))
-    return "\n".join(html_lines)
+    return "\n".join([_HTML_STYLE_BLOCK, *html_lines])
 
 
 def format_activity_csv(
