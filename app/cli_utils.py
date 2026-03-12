@@ -125,11 +125,12 @@ def add_elasticsearch_argument_group(
     """Add an "Elasticsearch" argument group to a parser and return it.
 
     Adds ``--elasticsearch-endpoint``, ``--elasticsearch-ca-cert``,
-    ``--elasticsearch-api-key``, and ``--elasticsearch-index``. The returned
-    group can be used to append additional script-specific arguments.
+    ``--elasticsearch-api-key``, ``--elasticsearch-username``, and
+    ``--elasticsearch-index``. The returned group can be used to append
+    additional script-specific arguments.
 
     Use :func:`validate_elasticsearch_arguments` after parsing to validate the
-    API key and CA certificate.
+    credentials and CA certificate.
 
     Args:
         parser: The argument parser to add the group to
@@ -143,14 +144,6 @@ def add_elasticsearch_argument_group(
     """
     es_group = add_elasticsearch_basic_argument_group(parser, required=required)
     es_group.add_argument(
-        "--elasticsearch-api-key",
-        type=Path,
-        help=(
-            "Path to file containing the Elasticsearch API key for authentication "
-            "(or set ELASTICSEARCH_API_KEY)"
-        ),
-    )
-    es_group.add_argument(
         "--elasticsearch-index",
         required=required,
         help="Name of the Elasticsearch index",
@@ -162,26 +155,15 @@ def validate_elasticsearch_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
-    """Validate Elasticsearch API key and CA certificate arguments after parsing.
+    """Validate Elasticsearch credentials and CA certificate arguments after parsing.
 
-    Calls ``parser.error`` if the CA certificate file does not exist (when
-    provided), the API key file does not exist (when provided), or neither
-    ``--elasticsearch-api-key`` nor the ``ELASTICSEARCH_API_KEY`` environment
-    variable is set.
+    Delegates to :func:`validate_elasticsearch_basic_arguments`.
 
     Args:
         args: Parsed command-line arguments
         parser: The argument parser (used to report errors)
     """
     validate_elasticsearch_basic_arguments(args, parser)
-
-    if args.elasticsearch_api_key is not None:
-        if not args.elasticsearch_api_key.exists():
-            parser.error(f"API key file not found: {args.elasticsearch_api_key}")
-    elif not os.environ.get("ELASTICSEARCH_API_KEY"):
-        parser.error(
-            "--elasticsearch-api-key or the ELASTICSEARCH_API_KEY environment variable is required"
-        )
 
 
 def add_elasticsearch_basic_argument_group(
@@ -191,14 +173,15 @@ def add_elasticsearch_basic_argument_group(
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Add an "Elasticsearch" argument group to a parser and return it.
 
-    Adds ``--elasticsearch-endpoint`` and ``--elasticsearch-ca-cert``. The
+    Adds ``--elasticsearch-endpoint``, ``--elasticsearch-ca-cert``,
+    ``--elasticsearch-api-key``, and ``--elasticsearch-username``. The
     returned group can be used to append additional script-specific arguments.
 
-    This variant is for scripts that authenticate via basic auth (username and
-    password) rather than an API key.
+    Exactly one of ``--elasticsearch-api-key`` / ``ELASTICSEARCH_API_KEY``
+    or ``--elasticsearch-username`` must be supplied.
 
     Use :func:`validate_elasticsearch_basic_arguments` after parsing to
-    validate the CA certificate.
+    validate the credentials and CA certificate.
 
     Args:
         parser: The argument parser to add the group to
@@ -219,6 +202,19 @@ def add_elasticsearch_basic_argument_group(
         type=Path,
         help="Path to CA certificate file for TLS verification",
     )
+    es_group.add_argument(
+        "--elasticsearch-api-key",
+        type=Path,
+        help=(
+            "Path to file containing the Elasticsearch API key for authentication "
+            "(or set ELASTICSEARCH_API_KEY)"
+        ),
+    )
+    es_group.add_argument(
+        "--elasticsearch-username",
+        metavar="USERNAME",
+        help="Username for basic authentication (password will be prompted)",
+    )
     return es_group
 
 
@@ -226,10 +222,15 @@ def validate_elasticsearch_basic_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
-    """Validate the Elasticsearch CA certificate argument after parsing.
+    """Validate Elasticsearch credentials and CA certificate after parsing.
 
-    Calls ``parser.error`` if the CA certificate file does not exist (when
-    provided).
+    Calls ``parser.error`` if:
+
+    - The CA certificate file does not exist (when provided).
+    - Both ``--elasticsearch-api-key`` / ``ELASTICSEARCH_API_KEY`` and
+      ``--elasticsearch-username`` are provided (mutually exclusive).
+    - Neither is provided.
+    - The ``--elasticsearch-api-key`` file does not exist (when provided).
 
     Args:
         args: Parsed command-line arguments
@@ -237,6 +238,25 @@ def validate_elasticsearch_basic_arguments(
     """
     if args.elasticsearch_ca_cert is not None and not args.elasticsearch_ca_cert.exists():
         parser.error(f"CA certificate file not found: {args.elasticsearch_ca_cert}")
+
+    has_api_key = args.elasticsearch_api_key is not None or bool(
+        os.environ.get("ELASTICSEARCH_API_KEY")
+    )
+    has_username = bool(getattr(args, "elasticsearch_username", None))
+
+    if has_api_key and has_username:
+        parser.error(
+            "--elasticsearch-api-key / ELASTICSEARCH_API_KEY and "
+            "--elasticsearch-username are mutually exclusive"
+        )
+    if not has_api_key and not has_username:
+        parser.error(
+            "one of --elasticsearch-api-key, ELASTICSEARCH_API_KEY, or "
+            "--elasticsearch-username is required"
+        )
+    if has_api_key and args.elasticsearch_api_key is not None:
+        if not args.elasticsearch_api_key.exists():
+            parser.error(f"API key file not found: {args.elasticsearch_api_key}")
 
 
 def add_query_argument_group(

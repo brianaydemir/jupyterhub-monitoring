@@ -6,6 +6,7 @@ import sys
 from app.cli_utils import (
     add_elasticsearch_basic_argument_group,
     prompt_credentials,
+    read_api_key,
     validate_elasticsearch_basic_arguments,
 )
 from app.elasticsearch_client import ElasticsearchClient
@@ -30,12 +31,6 @@ Examples:
 
     # Elasticsearch connection parameters
     add_elasticsearch_basic_argument_group(parser)
-
-    # Authentication parameters
-    parser.add_argument(
-        "--username",
-        help="Username for authentication (will prompt if not provided)",
-    )
 
     # API key selection (exactly one required)
     key_group = parser.add_mutually_exclusive_group(required=True)
@@ -69,25 +64,31 @@ def main() -> int:
     try:
         args = parse_arguments()
 
-        # Get credentials interactively
-        credentials = prompt_credentials(args.username)
-        if credentials is None:
-            return 1
-        username, password = credentials
+        ca_cert = str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
+        if args.elasticsearch_username:
+            credentials = prompt_credentials(args.elasticsearch_username)
+            if credentials is None:
+                return 1
+            _, password = credentials
+            client = ElasticsearchClient(
+                endpoint=args.elasticsearch_endpoint,
+                basic_auth=(args.elasticsearch_username, password),
+                ca_cert=ca_cert,
+            )
+        else:
+            client = ElasticsearchClient(
+                endpoint=args.elasticsearch_endpoint,
+                api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
+                ca_cert=ca_cert,
+            )
 
         # Invalidate the API key
         try:
-            result = ElasticsearchClient.delete_api_key_with_basic_auth(
-                endpoint=args.elasticsearch_endpoint,
-                username=username,
-                password=password,
-                ca_cert=(
-                    str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
-                ),
+            result = client.delete_api_key(
                 key_id=args.key_id,
                 key_name=args.key_name,
             )
-        except ValueError as e:
+        except (ValueError, Exception) as e:  # pylint: disable=broad-exception-caught
             print(f"Error invalidating API key: {e}", file=sys.stderr)
             return 1
 

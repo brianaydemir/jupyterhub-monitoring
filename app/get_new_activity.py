@@ -13,6 +13,7 @@ from app.cli_utils import (
     add_output_argument_group,
     add_query_argument_group,
     parse_duration,
+    prompt_credentials,
     read_api_key,
     validate_elasticsearch_arguments,
     validate_email_arguments,
@@ -149,7 +150,7 @@ Environment variables:
     return args
 
 
-def main() -> int:
+def main() -> int:  # pylint: disable=too-many-locals
     """Main entry point for the get-new-activity script.
 
     Returns:
@@ -170,11 +171,23 @@ def main() -> int:
         cutoff = int(start_time.timestamp())
 
         # Initialize the Elasticsearch client
-        client = ElasticsearchClient(
-            endpoint=args.elasticsearch_endpoint,
-            api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
-            ca_cert=(str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None),
-        )
+        ca_cert = str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
+        if args.elasticsearch_username:
+            credentials = prompt_credentials(args.elasticsearch_username)
+            if credentials is None:
+                return 1
+            username, password = credentials
+            client = ElasticsearchClient(
+                endpoint=args.elasticsearch_endpoint,
+                basic_auth=(username, password),
+                ca_cert=ca_cert,
+            )
+        else:
+            client = ElasticsearchClient(
+                endpoint=args.elasticsearch_endpoint,
+                api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
+                ca_cert=ca_cert,
+            )
 
         # Query Elasticsearch
         try:

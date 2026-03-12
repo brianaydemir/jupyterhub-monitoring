@@ -8,6 +8,7 @@ from typing import Any
 from app.cli_utils import (
     add_elasticsearch_basic_argument_group,
     prompt_credentials,
+    read_api_key,
     validate_elasticsearch_basic_arguments,
 )
 from app.elasticsearch_client import ElasticsearchClient
@@ -121,12 +122,6 @@ Expiration format:
         ),
     )
 
-    # Authentication parameters
-    parser.add_argument(
-        "--username",
-        help="Username for authentication (will prompt if not provided)",
-    )
-
     # Output format
     parser.add_argument(
         "--format",
@@ -155,25 +150,33 @@ def main() -> int:
     try:
         args = parse_arguments()
 
-        # Get credentials (username from CLI or prompt; password always prompted)
-        credentials = prompt_credentials(args.username)
-        if credentials is None:
-            return 1
-        username, password = credentials
+        ca_cert = str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
+        if args.elasticsearch_username:
+            credentials = prompt_credentials(args.elasticsearch_username)
+            if credentials is None:
+                return 1
+            username, password = credentials
+            client = ElasticsearchClient(
+                endpoint=args.elasticsearch_endpoint,
+                basic_auth=(username, password),
+                ca_cert=ca_cert,
+            )
+        else:
+            client = ElasticsearchClient(
+                endpoint=args.elasticsearch_endpoint,
+                api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
+                ca_cert=ca_cert,
+            )
+            username = None
 
         # Create the API key
         try:
-            result = ElasticsearchClient.create_api_key_with_basic_auth(
-                endpoint=args.elasticsearch_endpoint,
-                username=username,
-                password=password,
-                ca_cert=(
-                    str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
-                ),
+            result = client.create_api_key(
                 key_name=args.name,
                 expiration=args.expiration,
+                username=username,
             )
-        except ValueError as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"Error creating API key: {e}", file=sys.stderr)
             return 1
 

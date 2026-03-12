@@ -9,6 +9,7 @@ from typing import Any
 from app.cli_utils import (
     add_elasticsearch_argument_group,
     add_jupyterhub_argument_group,
+    prompt_credentials,
     read_api_key,
     validate_elasticsearch_arguments,
     validate_jupyterhub_arguments,
@@ -243,13 +244,23 @@ def main() -> int:
         elasticsearch_client = None
         if not args.debug:
             print("Connecting to Elasticsearch...")
-            elasticsearch_client = ElasticsearchClient(
-                endpoint=args.elasticsearch_endpoint,
-                api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
-                ca_cert=(
-                    str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
-                ),
-            )
+            ca_cert = str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
+            if args.elasticsearch_username:
+                credentials = prompt_credentials(args.elasticsearch_username)
+                if credentials is None:
+                    return 1
+                username, password = credentials
+                elasticsearch_client = ElasticsearchClient(
+                    endpoint=args.elasticsearch_endpoint,
+                    basic_auth=(username, password),
+                    ca_cert=ca_cert,
+                )
+            else:
+                elasticsearch_client = ElasticsearchClient(
+                    endpoint=args.elasticsearch_endpoint,
+                    api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
+                    ca_cert=ca_cert,
+                )
             print("Connected to Elasticsearch")
         else:
             print("Debug mode: Documents will be printed, not pushed to Elasticsearch")
