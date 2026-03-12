@@ -43,6 +43,15 @@ Environment variables:
         required=True,
         help='Kibana-style query string (e.g., "status:200", "field:value AND other:*")',
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        metavar="N",
+        help=(
+            "Maximum number of documents to retrieve and display. "
+            "Results are sorted in descending order by meta.snapshot-time."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -70,8 +79,14 @@ def main() -> int:
 
         # Query Elasticsearch and print results
         try:
+            sort = (
+                [{"meta.snapshot-time": {"order": "desc"}}] if args.limit is not None else None
+            )
             for document in client.query(
-                index=args.elasticsearch_index, query_string=args.query
+                index=args.elasticsearch_index,
+                query_string=args.query,
+                sort=sort,
+                limit=args.limit,
             ):
                 print(json.dumps(document, indent=2))
         except Exception as e:  # pylint: disable=broad-exception-caught

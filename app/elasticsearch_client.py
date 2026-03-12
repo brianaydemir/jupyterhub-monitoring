@@ -106,6 +106,8 @@ class ElasticsearchClient:
         query: dict[str, Any] | None = None,
         query_string: str | None = None,
         size: int = 100,
+        sort: list[dict[str, Any]] | None = None,
+        limit: int | None = None,
     ) -> Iterator[dict[str, Any]]:
         """
         Query an Elasticsearch index and return an iterator over the results.
@@ -120,6 +122,11 @@ class ElasticsearchClient:
             query: Optional Query DSL query (as a dictionary)
             query_string: Optional Kibana-style query string (e.g., "status:200 AND user:alice")
             size: Number of documents to retrieve per scroll request (default: 100)
+            sort: Optional list of sort criteria in Elasticsearch sort syntax
+                (e.g., ``[{"timestamp": {"order": "desc"}}]``)
+            limit: Optional maximum total number of documents to yield. When set,
+                the scroll page size is also capped at *limit* to avoid
+                over-fetching.
 
         Returns:
             An iterator yielding documents matching the query
@@ -142,6 +149,14 @@ class ElasticsearchClient:
                     index="logs",
                     query_string="status:error AND level:critical",
                 )
+
+                # With sort and limit
+                client.query(
+                    index="logs",
+                    query_string="level:error",
+                    sort=[{"timestamp": {"order": "desc"}}],
+                    limit=10,
+                )
         """
         # Build the query body
         query_body: dict[str, Any] = {}
@@ -160,34 +175,40 @@ class ElasticsearchClient:
             # If no query provided, match all documents
             query_body["query"] = {"match_all": {}}
 
+        if sort is not None:
+            query_body["sort"] = sort
+
+        # Cap the page size at the limit to avoid fetching more than needed
+        page_size = min(size, limit) if limit is not None else size
+
         # Initialize scroll
         scroll_timeout = "2m"
         response = self._client.search(
             index=index,
             body=query_body,
             scroll=scroll_timeout,
-            size=size,
+            size=page_size,
         )
 
         # Get the scroll ID
         scroll_id = response.get("_scroll_id")
 
         try:
-            # Yield documents from the first batch
+            count = 0
             hits = response["hits"]["hits"]
-            for hit in hits:
-                yield hit["_source"]
 
-            # Continue scrolling until no more results
             while hits:
+                for hit in hits:
+                    yield hit["_source"]
+                    count += 1
+                    if limit is not None and count >= limit:
+                        return
                 response = self._client.scroll(
                     scroll_id=scroll_id,
                     scroll=scroll_timeout,
                 )
                 scroll_id = response.get("_scroll_id")
                 hits = response["hits"]["hits"]
-                for hit in hits:
-                    yield hit["_source"]
 
         finally:
             # Clean up the scroll context
