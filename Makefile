@@ -1,5 +1,4 @@
-# This Makefile provides a set of targets for running
-# a variety of development-related tasks.
+# This Makefile provides targets for development-related tasks.
 
 IMAGE ?= hub.osg-htc.org/brian.aydemir/jupyterhub-monitoring
 PY_PACKAGE_SRC := app
@@ -18,10 +17,10 @@ update:
 	poetry show --outdated
 
 tidy:
-	poetry run mdformat .
 	poetry run isort -q $(PY_PACKAGE_SRC)
 	poetry run black -q $(PY_PACKAGE_SRC)
-	poetry run typos --sort --force-exclude
+	poetry run mdformat .
+	poetry run typos --sort .
 
 lint:
 	-poetry run bandit -qr $(PY_PACKAGE_SRC)

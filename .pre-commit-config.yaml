@@ -37,7 +37,7 @@ repos:
         # Require that only the most serious problems be addressed
         args: [--severity=warning]
   #
-  # Standardize formatting
+  # Tidy up files
   #
   - repo: https://github.com/hukkin/mdformat
     rev: 1.0.0
@@ -46,14 +46,12 @@ repos:
         additional_dependencies:
           - mdformat-gfm
           - mdformat-gfm-alerts
-          - mdformat-footnote
-          - mdformat-frontmatter
   - repo: https://github.com/PyCQA/isort
     rev: 8.0.1
     hooks:
       - id: isort
   - repo: https://github.com/psf/black
-    rev: 26.3.0
+    rev: 26.3.1
     hooks:
       - id: black
   - repo: https://github.com/crate-ci/typos

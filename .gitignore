@@ -4,12 +4,11 @@
 /docs/api/
 
 # Python caches and configuration
-/.mypy_cache/
+.mypy_cache/
+__pycache__/
 /.poetry/
 /.python-version
 
-# Temporary files that don't need to be recorded in version control
-/notes/
-
-# Temporary files
+# Scratch files and directories
 *.swp
+/_tbd/
