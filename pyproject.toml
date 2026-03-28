@@ -3,8 +3,9 @@
 
 [project]
 name = "jupyterhub-monitoring"
-version = "2.4.0"
+version = "3.0.0rc1"
 description = "Monitoring and reporting scripts for JupyterHub"
+readme = "README.md"
 license = "Apache-2.0"
 authors = [{ name = "Brian Aydemir", email = "baydemir@morgridge.org" }]
 dynamic = ["dependencies"]
@@ -15,14 +16,13 @@ repository = "https://github.com/brianaydemir/jupyterhub-monitoring"
 
 
 [project.scripts]
-create-es-api-key = "app.create_es_api_key:main"
-delete-es-api-key = "app.delete_es_api_key:main"
-get-es-docs = "app.get_es_docs:main"
-get-new-activity = "app.get_new_activity:main"
-get-new-users = "app.get_new_users:main"
-list-es-api-keys = "app.list_es_api_keys:main"
-push-servers = "app.push_servers:main"
-send-email = "app.send_email:main"
+create-es-api-key = "app.cli.create_es_api_key:main"
+delete-es-api-key = "app.cli.delete_es_api_key:main"
+get-es-docs = "app.cli.get_es_docs:main"
+get-new-activity = "app.cli.get_new_activity:main"
+get-new-users = "app.cli.get_new_users:main"
+list-es-api-keys = "app.cli.list_es_api_keys:main"
+push-servers = "app.cli.push_servers:main"
 
 
 #---------------------------------------------------------------------------
@@ -33,8 +33,14 @@ build-backend = "poetry.core.masonry.api"
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 
 
+[tool.bandit]
+# Referenced explicitly as `bandit -c pyproject.toml`.
+exclude_dirs = ["tests"]
+
+
 [tool.black]
 line-length = 96
+target-version = ["py314"]
 
 
 [tool.isort]
@@ -71,10 +77,13 @@ packages = [{ include = "app" }]
 
 [tool.poetry.dependencies]
 python = "^3.14"
+dateparser = "~1.2"
 elasticsearch = "~9.3"
-humanize = "~4.15"
+jinja2 = "~3.1"
+openpyxl = "~3.1"
 pytimeparse2 = "~1.7"
 requests = "~2.32"
+tabulate = "~0.9"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -82,14 +91,28 @@ bandit = "~1.9"
 black = "~26.3"
 isort = "~8.0"
 mdformat = "~1.0"
-mypy = "~1.19"
-pre-commit = "~4.5"
+mdformat-gfm = "~1.0"
+mdformat-gfm-alerts = "~2.0"
+mypy = "~2.0"
+pre-commit = "~4.6"
 pylint = "~4.0"
 pyright = "~1.1"
-sphinx = "~9.1"
-shibuya = "~2026.1"
+pytest = "~9.1"
 toml-cli = "~0.8"
-typos = "~1.44"
+types-dateparser = "~1.2"
+typos = "~1.46"
+
+
+[tool.pytest.ini_options]
+# Reference: https://docs.pytest.org/en/stable/reference/customize.html
+addopts = "--strict-config --strict-markers"
+testpaths = ["tests"]
+filterwarnings = [
+    "error",
+    # dateparser probes several formats internally, some of which omit the
+    # year. https://github.com/python/cpython/issues/70647
+    "default:Parsing dates involving a day of month without a year:DeprecationWarning:dateparser.utils.strptime",
+]
 
 
 [tool.pyright]

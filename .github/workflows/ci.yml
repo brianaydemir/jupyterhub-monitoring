@@ -1,0 +1,77 @@
+# Lint, test, and package the project on every push and pull request.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - uses: actions/setup-python@v6
+        with:
+          # The code uses PEP 758 syntax, so 3.14 is a hard floor: earlier
+          # interpreters cannot even parse it.
+          python-version: "3.14"
+          cache: poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Check formatting and spelling
+        run: |
+          poetry run isort --check-only app tests
+          poetry run black --check app tests
+          poetry run mdformat --check .
+          poetry run typos --sort .
+
+      # IGNORE_ERRORS= drops the `-` prefixes the Makefile uses locally, so
+      # that a failing linter fails the job.
+      - name: Lint
+        run: make lint IGNORE_ERRORS=
+
+      - name: Test
+        run: make test
+
+  package:
+    name: Build the wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: poetry
+
+      - name: Build
+        run: poetry build
+
+      # A wheel without the interpreter floor would install on 3.13, where
+      # the package's syntax raises SyntaxError on import. The marker file
+      # is what makes the shipped type annotations visible to consumers.
+      - name: Verify wheel metadata
+        run: |
+          set -eux
+          wheel=$(ls dist/*.whl)
+          unzip -l "$wheel" | grep -q 'app/py.typed'
+          unzip -p "$wheel" '*.dist-info/METADATA' | grep -qE '^Requires-Python: >=3\.14'

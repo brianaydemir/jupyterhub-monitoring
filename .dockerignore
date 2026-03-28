@@ -1,0 +1,31 @@
+#───────────────────────────────────────────────────────────────────────────
+# Files the image build does not need.
+#
+# The build bind-mounts dist/ and installs the wheel from it, so that
+# directory must stay in the context.
+
+# Version control and CI
+.git/
+.github/
+.gitignore
+
+# Runtime caches, bytecode, and tool state
+*.py[cod]
+.mypy_cache/
+.poetry/
+.pyright/
+.pytest_cache/
+.python-version
+.venv/
+__pycache__/
+
+# Sources and development configuration, superseded by the built wheel
+.mdformat.toml
+.pre-commit-config.yaml
+.typos.toml
+AGENTS.md
+Makefile
+app/
+poetry.lock
+pyproject.toml
+tests/
