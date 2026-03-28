@@ -67,7 +67,7 @@ or via the environment variable `JUPYTERHUB_API_KEY`.
 Scripts that talk to Elasticsearch require an API key. Pass it via a file:
 
 ```
---elasticsearch-api-key /path/to/es-api-key.txt
+--es-api-key /path/to/es-api-key.txt
 ```
 
 or via the environment variable `ELASTICSEARCH_API_KEY`.
@@ -90,9 +90,9 @@ custom fields to every document (e.g., to identify the hub instance).
 push-servers \
     --jupyterhub-endpoint https://hub.example.com/hub/api \
     --jupyterhub-api-key ~/secrets/jh-api-key.txt \
-    --elasticsearch-endpoint https://elastic.example.com:9200 \
-    --elasticsearch-api-key ~/secrets/es-api-key.txt \
-    --elasticsearch-index jupyterhub-servers \
+    --es-endpoint https://elastic.example.com:9200 \
+    --es-api-key ~/secrets/es-api-key.txt \
+    --es-index jupyterhub-servers \
     --metadata hub=production
 ```
 
@@ -142,9 +142,9 @@ files, and can send a report email directly.
 
 ```
 get-new-activity \
-    --elasticsearch-endpoint https://elastic.example.com:9200 \
-    --elasticsearch-api-key ~/secrets/es-api-key.txt \
-    --elasticsearch-index jupyterhub-servers \
+    --es-endpoint https://elastic.example.com:9200 \
+    --es-api-key ~/secrets/es-api-key.txt \
+    --es-index jupyterhub-servers \
     --duration "24 hours" \
     --hub production \
     --text-file activity.txt \
@@ -161,9 +161,9 @@ Use `--send-email` to deliver the report by email directly from this script:
 
 ```
 get-new-activity \
-    --elasticsearch-endpoint https://elastic.example.com:9200 \
-    --elasticsearch-api-key ~/secrets/es-api-key.txt \
-    --elasticsearch-index jupyterhub-servers \
+    --es-endpoint https://elastic.example.com:9200 \
+    --es-api-key ~/secrets/es-api-key.txt \
+    --es-index jupyterhub-servers \
     --duration "24 hours" \
     --hub production \
     --send-email \
@@ -180,9 +180,9 @@ matching documents as JSON.
 
 ```
 get-es-docs \
-    --elasticsearch-endpoint https://elastic.example.com:9200 \
-    --elasticsearch-api-key ~/secrets/es-api-key.txt \
-    --elasticsearch-index jupyterhub-servers \
+    --es-endpoint https://elastic.example.com:9200 \
+    --es-api-key ~/secrets/es-api-key.txt \
+    --es-index jupyterhub-servers \
     --query "meta.hub:production AND user.admin:true"
 ```
 
@@ -193,8 +193,8 @@ Prints the new key in the requested format.
 
 ```
 create-es-api-key \
-    --elasticsearch-endpoint https://elastic.example.com:9200 \
-    --username elastic \
+    --es-endpoint https://elastic.example.com:9200 \
+    --es-username elastic \
     --name push-servers-key \
     --expiration 30d \
     --format key
@@ -206,8 +206,8 @@ Lists the active Elasticsearch API keys owned by the authenticated user.
 
 ```
 list-es-api-keys \
-    --elasticsearch-endpoint https://elastic.example.com:9200 \
-    --username elastic
+    --es-endpoint https://elastic.example.com:9200 \
+    --es-username elastic
 ```
 
 Use `--all` to include expired and invalidated keys.
@@ -219,34 +219,22 @@ Invalidates an Elasticsearch API key by ID or by name.
 ```
 # By ID:
 delete-es-api-key \
-    --elasticsearch-endpoint https://elastic.example.com:9200 \
-    --username elastic \
+    --es-endpoint https://elastic.example.com:9200 \
+    --es-username elastic \
     --id AbCdEfGhIjKlMnOp
 
 # By name:
 delete-es-api-key \
-    --elasticsearch-endpoint https://elastic.example.com:9200 \
-    --username elastic \
+    --es-endpoint https://elastic.example.com:9200 \
+    --es-username elastic \
     --name push-servers-key
 ```
 
-### `send-email`
+### Email delivery
 
-Sends an email via SMTP. Pair with `get-new-users` or `get-new-activity` to
-deliver reports.
+Use `--send-email` with `get-new-users` or `get-new-activity` to deliver
+reports directly by SMTP.
 
-```
-send-email \
-    --sender-email monitoring@example.com \
-    --sender-name "JupyterHub Monitoring" \
-    --recipient-email admin@example.com \
-    --subject "Weekly New Users Report" \
-    --smtp-host smtp.example.com \
-    --smtp-port 465 \
-    --text-file new-users.txt \
-    --html-file new-users.html \
-    --attachment new-users.csv
-```
-
-Use `--attachment` (repeatable) to attach one or more files to the message.
-Use `--smtp-no-ssl` if your SMTP server does not use SSL/TLS.
+When emailing a report, the message body includes both plain text and HTML
+renderings, and CSV raw-data attachments are included for each tabular report
+section.

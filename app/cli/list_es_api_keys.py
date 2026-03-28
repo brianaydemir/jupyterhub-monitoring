@@ -6,14 +6,14 @@ import json
 import sys
 from typing import Any
 
-from app.cli_utils import (
-    add_elasticsearch_basic_argument_group,
-    prompt_credentials,
-    read_api_key,
-    validate_elasticsearch_basic_arguments,
+from app.cli.runtime import run_command
+from app.cli.utils import (
+    configure_es_admin_parser,
+    make_es_client,
+    validate_es_admin_arguments,
 )
-from app.elasticsearch_client import ElasticsearchClient
-from app.time_utils import get_now_ms
+from app.core.errors import ExternalServiceError
+from app.core.time_utils import get_now_ms
 
 
 def _ms_to_datetime(ms: int | None) -> str:
@@ -32,11 +32,13 @@ def _ms_to_datetime(ms: int | None) -> str:
     )
 
 
-def _key_status_tags(key: dict[str, Any]) -> list[str]:
+def _key_status_tags(key: dict[str, Any], now_ms: int | None = None) -> list[str]:
     """Return status tags for a key that is not fully active.
 
     Args:
         key: API key dict as returned by the Elasticsearch list-API-keys endpoint
+        now_ms: Current time as a millisecond epoch timestamp, or None to call
+            :func:`~app.time_utils.get_now_ms` automatically.
 
     Returns:
         List of status tag strings (e.g. ``["invalidated"]``, ``["expired"]``)
@@ -46,7 +48,8 @@ def _key_status_tags(key: dict[str, Any]) -> list[str]:
         tags.append("invalidated")
     expiration = key.get("expiration")
     if expiration is not None:
-        now_ms = get_now_ms()
+        if now_ms is None:
+            now_ms = get_now_ms()
         if expiration <= now_ms:
             tags.append("expired")
     return tags
@@ -101,16 +104,14 @@ def format_output_full(keys: list[dict[str, Any]], *, active_only: bool = True) 
         return f"No {label.lower()} found."
 
     lines = [f"{label} ({len(keys)}):", ""]
+    now_ms = get_now_ms()
     for key in keys:
         lines.append(f"  ID:          {key.get('id', 'N/A')}")
         lines.append(f"  Name:        {key.get('name', 'N/A')}")
         lines.append(f"  Created:     {_ms_to_datetime(key.get('creation'))}")
-        expiration = key.get("expiration")
-        expiration_str = _ms_to_datetime(expiration)
-        if expiration is not None:
-            now_ms = get_now_ms()
-            if expiration <= now_ms:
-                expiration_str += "  (expired)"
+        expiration_str = _ms_to_datetime(key.get("expiration"))
+        if "expired" in _key_status_tags(key, now_ms):
+            expiration_str += "  (expired)"
         lines.append(f"  Expires:     {expiration_str}")
         if not active_only:
             invalidated = key.get("invalidated", False)
@@ -119,27 +120,22 @@ def format_output_full(keys: list[dict[str, Any]], *, active_only: bool = True) 
     return "\n".join(lines).rstrip()
 
 
-def parse_arguments() -> argparse.Namespace:
-    """Parse command-line arguments.
-
-    Returns:
-        Parsed command-line arguments
-    """
+def _build_parser() -> argparse.ArgumentParser:
+    """Build and return the argument parser for this command."""
     parser = argparse.ArgumentParser(
         description=("List Elasticsearch API keys owned by the authenticated user"),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200
-  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200 --all
-  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200 --format json
-  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200 --format full
-  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200 --elasticsearch-ca-cert /path/to/ca.crt
+  %(prog)s --es-endpoint https://elastic.example.com:9200
+  %(prog)s --es-endpoint https://elastic.example.com:9200 --all
+  %(prog)s --es-endpoint https://elastic.example.com:9200 --format json
+  %(prog)s --es-endpoint https://elastic.example.com:9200 --format full
+  %(prog)s --es-endpoint https://elastic.example.com:9200 --es-ca-cert /path/to/ca.crt
         """,
     )
 
-    # Elasticsearch connection parameters
-    add_elasticsearch_basic_argument_group(parser)
+    configure_es_admin_parser(parser, include_index=False)
 
     # Filter options
     parser.add_argument(
@@ -160,46 +156,23 @@ Examples:
         ),
     )
 
-    args = parser.parse_args()
-
-    # Validate CA certificate exists if provided
-    validate_elasticsearch_basic_arguments(args, parser)
-
-    return args
+    return parser
 
 
-def main() -> int:
-    """Main entry point for the list-es-api-keys script.
+def _validate_arguments(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Run all post-parse argument validation for this command."""
+    validate_es_admin_arguments(args, parser)
 
-    Returns:
-        Exit code (0 for success, non-zero for error)
+
+def _run(args: argparse.Namespace) -> int:
+    """Execute command business logic.
+
+    Raises:
+        app.errors.ExternalServiceError: If listing API keys fails.
     """
     try:
-        args = parse_arguments()
-
-        ca_cert = str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
-        if args.elasticsearch_username:
-            credentials = prompt_credentials(args.elasticsearch_username)
-            if credentials is None:
-                return 1
-            _, password = credentials
-            client = ElasticsearchClient(
-                endpoint=args.elasticsearch_endpoint,
-                basic_auth=(args.elasticsearch_username, password),
-                ca_cert=ca_cert,
-            )
-        else:
-            client = ElasticsearchClient(
-                endpoint=args.elasticsearch_endpoint,
-                api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
-                ca_cert=ca_cert,
-            )
-
-        try:
+        with make_es_client(args) as client:
             keys = client.list_api_keys(active_only=not args.all_keys)
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            print(f"Error listing API keys: {e}", file=sys.stderr)
-            return 1
 
         active_only = not args.all_keys
         if args.format == "key":
@@ -211,10 +184,13 @@ def main() -> int:
 
         print(output)
         return 0
+    except Exception as e:
+        raise ExternalServiceError(f"Listing API keys failed: {e}") from e
 
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"Unexpected error: {e}", file=sys.stderr)
-        return 1
+
+def main() -> int:
+    """Main entry point for the list-es-api-keys script."""
+    return run_command(_build_parser, _run, validators=[_validate_arguments])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,4 @@
-"""
-Monitoring and reporting scripts for JupyterHub.
-"""
+"""Service clients for external APIs."""
 
 from app.clients.elasticsearch_client import ElasticsearchClient
 from app.clients.jupyterhub_client import JupyterHubClient

@@ -1,6 +1,7 @@
 """Utilities for parsing and sorting JupyterHub usernames."""
 
 import re
+from dataclasses import dataclass
 
 _EMAIL_RE = re.compile(r"^email:([^@]+)@(.+)$")
 _EPPN_RE = re.compile(r"^([^@]+)@(.+)$")
@@ -9,6 +10,16 @@ _ORCID_RE = re.compile(r"^orcid:(.+)$")
 
 # Domains listed here sort after all other domains, in the order given.
 TRAILING_SORT_DOMAINS: list[str] = ["orcid.org"]
+
+
+@dataclass(frozen=True)
+class ParsedName:
+    """Parsed components of a JupyterHub username."""
+
+    priority: int
+    domain: str
+    uid: str
+    login_method: str
 
 
 def trailing_domain_key(domain: str) -> tuple[int, int]:
@@ -26,7 +37,7 @@ def trailing_domain_key(domain: str) -> tuple[int, int]:
         return (0, 0)
 
 
-def parse_name(name: str) -> tuple[int, str, str, str]:
+def parse_name(name: str) -> ParsedName:
     """Parse a JupyterHub username into its components.
 
     Names are recognised in four forms:
@@ -41,15 +52,19 @@ def parse_name(name: str) -> tuple[int, str, str, str]:
         name: The raw JupyterHub username string.
 
     Returns:
-        A four-tuple ``(sort_priority, domain, id, login_method)`` where
-        *sort_priority* establishes the ordering between name forms.
+        A :class:`ParsedName` with ``priority``, ``domain``, ``uid``, and
+        ``login_method`` fields.
     """
     if m := _EMAIL_RE.match(name):
-        return (2, m.group(2), m.group(1), "email")
+        return ParsedName(priority=2, domain=m.group(2), uid=m.group(1), login_method="email")
     if m := _LEGACY_EPPN_RE.match(name):
-        return (1, m.group(2), m.group(1), "legacy eppn")
+        return ParsedName(
+            priority=1, domain=m.group(2), uid=m.group(1), login_method="legacy eppn"
+        )
     if m := _EPPN_RE.match(name):
-        return (0, m.group(2), m.group(1), "local NetID")
+        return ParsedName(
+            priority=0, domain=m.group(2), uid=m.group(1), login_method="local NetID"
+        )
     if m := _ORCID_RE.match(name):
-        return (3, "orcid.org", m.group(1), "ORCID")
-    return (4, "", name, "")
+        return ParsedName(priority=3, domain="orcid.org", uid=m.group(1), login_method="ORCID")
+    return ParsedName(priority=4, domain="", uid=name, login_method="")

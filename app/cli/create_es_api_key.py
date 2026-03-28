@@ -5,23 +5,24 @@ import json
 import sys
 from typing import Any
 
-from app.cli_utils import (
-    add_elasticsearch_basic_argument_group,
-    prompt_credentials,
-    read_api_key,
-    validate_elasticsearch_basic_arguments,
+from app.cli.runtime import run_command
+from app.cli.utils import (
+    configure_es_admin_parser,
+    make_es_client,
+    validate_es_admin_arguments,
 )
-from app.elasticsearch_client import ElasticsearchClient
+from app.core.errors import ExternalServiceError
 
 
-def format_output_key_only(result: dict[str, Any]) -> str:
+def format_output_key(result: dict[str, Any]) -> str:
     """Format the API key result as key-only output.
 
     Args:
         result: The API key creation result from Elasticsearch
 
     Returns:
-        The encoded API key string (id:api_key format)
+        The encoded API key string (id:api_key format), or ``""`` when the
+        response does not include a string ``encoded`` value.
     """
     # Get the encoded value, ensuring it's a string
     encoded = result.get("encoded", "")
@@ -31,14 +32,7 @@ def format_output_key_only(result: dict[str, Any]) -> str:
 
 
 def format_output_json(result: dict[str, Any]) -> str:
-    """Format the API key result as JSON.
-
-    Args:
-        result: The API key creation result from Elasticsearch
-
-    Returns:
-        JSON formatted string with id, name, api_key, and encoded fields
-    """
+    """Format the API key result as JSON."""
     # Extract the essential fields for JSON output
     output_data = {
         "id": result.get("id"),
@@ -55,14 +49,7 @@ def format_output_json(result: dict[str, Any]) -> str:
 
 
 def format_output_full(result: dict[str, Any]) -> str:
-    """Format the API key result as full detailed output.
-
-    Args:
-        result: The API key creation result from Elasticsearch
-
-    Returns:
-        Human-readable formatted string with all API key details
-    """
+    """Format the API key result as full detailed output."""
     lines = ["Elasticsearch API Key Created Successfully:", ""]
     lines.append(f"ID:       {result.get('id', 'N/A')}")
     lines.append(f"Name:     {result.get('name', 'N/A')}")
@@ -80,21 +67,17 @@ def format_output_full(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def parse_arguments() -> argparse.Namespace:
-    """Parse command-line arguments.
-
-    Returns:
-        Parsed command-line arguments
-    """
+def _build_parser() -> argparse.ArgumentParser:
+    """Build and return the argument parser for this command."""
     parser = argparse.ArgumentParser(
         description="Obtain an Elasticsearch API key using username and password",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200
-  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200 --name "my-api-key" --expiration "7d"
-  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200 --format json
-  %(prog)s --elasticsearch-endpoint https://elastic.example.com:9200 --elasticsearch-ca-cert /path/to/ca.crt
+  %(prog)s --es-endpoint https://elastic.example.com:9200
+  %(prog)s --es-endpoint https://elastic.example.com:9200 --name "my-api-key" --expiration "7d"
+  %(prog)s --es-endpoint https://elastic.example.com:9200 --format json
+  %(prog)s --es-endpoint https://elastic.example.com:9200 --es-ca-cert /path/to/ca.crt
 
 Expiration format:
   Specify expiration time using Elasticsearch time units:
@@ -106,8 +89,7 @@ Expiration format:
         """,
     )
 
-    # Elasticsearch connection parameters
-    add_elasticsearch_basic_argument_group(parser)
+    configure_es_admin_parser(parser, include_index=False)
 
     # API key parameters
     parser.add_argument(
@@ -133,56 +115,30 @@ Expiration format:
         ),
     )
 
-    args = parser.parse_args()
-
-    # Validate CA certificate exists if provided
-    validate_elasticsearch_basic_arguments(args, parser)
-
-    return args
+    return parser
 
 
-def main() -> int:
-    """Main entry point for the create-es-api-key script.
+def _validate_arguments(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Run all post-parse argument validation for this command."""
+    validate_es_admin_arguments(args, parser)
 
-    Returns:
-        Exit code (0 for success, non-zero for error)
+
+def _run(args: argparse.Namespace) -> int:
+    """Execute command business logic.
+
+    Raises:
+        app.errors.ExternalServiceError: If Elasticsearch API-key creation fails.
     """
     try:
-        args = parse_arguments()
-
-        ca_cert = str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
-        if args.elasticsearch_username:
-            credentials = prompt_credentials(args.elasticsearch_username)
-            if credentials is None:
-                return 1
-            username, password = credentials
-            client = ElasticsearchClient(
-                endpoint=args.elasticsearch_endpoint,
-                basic_auth=(username, password),
-                ca_cert=ca_cert,
-            )
-        else:
-            client = ElasticsearchClient(
-                endpoint=args.elasticsearch_endpoint,
-                api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
-                ca_cert=ca_cert,
-            )
-            username = None
-
-        # Create the API key
-        try:
+        with make_es_client(args) as client:
             result = client.create_api_key(
                 key_name=args.name,
                 expiration=args.expiration,
-                username=username,
+                username=args.es_username,
             )
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            print(f"Error creating API key: {e}", file=sys.stderr)
-            return 1
 
-        # Format and print the output based on the selected format
         if args.format == "key":
-            output = format_output_key_only(result)
+            output = format_output_key(result)
         elif args.format == "json":
             output = format_output_json(result)
         else:  # full
@@ -190,10 +146,13 @@ def main() -> int:
 
         print(output)
         return 0
+    except Exception as e:
+        raise ExternalServiceError(f"Creating API key failed: {e}") from e
 
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"Unexpected error: {e}", file=sys.stderr)
-        return 1
+
+def main() -> int:
+    """Main entry point for the create-es-api-key script."""
+    return run_command(_build_parser, _run, validators=[_validate_arguments])
 
 
 if __name__ == "__main__":

@@ -15,14 +15,13 @@ repository = "https://github.com/brianaydemir/jupyterhub-monitoring"
 
 
 [project.scripts]
-create-es-api-key = "app.create_es_api_key:main"
-delete-es-api-key = "app.delete_es_api_key:main"
-get-es-docs = "app.get_es_docs:main"
-get-new-activity = "app.get_new_activity:main"
-get-new-users = "app.get_new_users:main"
-list-es-api-keys = "app.list_es_api_keys:main"
-push-servers = "app.push_servers:main"
-send-email = "app.send_email:main"
+create-es-api-key = "app.cli.create_es_api_key:main"
+delete-es-api-key = "app.cli.delete_es_api_key:main"
+get-es-docs = "app.cli.get_es_docs:main"
+get-new-activity = "app.cli.get_new_activity:main"
+get-new-users = "app.cli.get_new_users:main"
+list-es-api-keys = "app.cli.list_es_api_keys:main"
+push-servers = "app.cli.push_servers:main"
 
 
 #---------------------------------------------------------------------------
@@ -72,9 +71,10 @@ packages = [{ include = "app" }]
 [tool.poetry.dependencies]
 python = "^3.14"
 elasticsearch = "~9.3"
-humanize = "~4.15"
 pytimeparse2 = "~1.7"
 requests = "~2.32"
+jinja2 = "~3.1"
+tabulate = "~0.9"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -90,6 +90,9 @@ sphinx = "~9.1"
 shibuya = "~2026.1"
 toml-cli = "~0.8"
 typos = "~1.44"
+mdit-py-plugins = "~0.5"
+mdformat-gfm = "~1.0"
+mdformat-gfm-alerts = "~2.0"
 
 
 [tool.pyright]

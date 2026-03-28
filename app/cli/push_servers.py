@@ -6,16 +6,18 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
-from app.cli_utils import (
-    add_elasticsearch_argument_group,
+from app.cli.runtime import positive_int_or_error, run_command
+from app.cli.utils import (
+    add_es_argument_group,
     add_jupyterhub_argument_group,
-    prompt_credentials,
-    read_api_key,
-    validate_elasticsearch_arguments,
+    make_es_client,
+    make_jupyterhub_client,
+    validate_es_arguments,
     validate_jupyterhub_arguments,
 )
-from app.elasticsearch_client import ElasticsearchClient
-from app.jupyterhub_client import JupyterHubClient
+from app.clients.elasticsearch_client import ElasticsearchClient
+from app.clients.jupyterhub_client import JupyterHubClient
+from app.core.errors import ExternalServiceError
 
 
 def _process_single_server(
@@ -23,7 +25,7 @@ def _process_single_server(
     metadata: dict[str, str] | None,
     debug: bool,
     elasticsearch_client: ElasticsearchClient | None,
-    elasticsearch_index: str,
+    elasticsearch_index: str | None,
     i: int,
     total_servers: int,
 ) -> bool:
@@ -41,6 +43,8 @@ def _process_single_server(
     Returns:
         True on success, False on error
     """
+    user_name = server.get("user.name", "unknown")
+    server_name = server.get("server.name", "unknown")
     try:
         if metadata:
             for key, value in metadata.items():
@@ -53,23 +57,20 @@ def _process_single_server(
         if debug:
             print(f"\n--- Document {i}/{total_servers} ---")
             print(json.dumps(server, indent=2))
-        elif elasticsearch_client is not None:
+        elif elasticsearch_client is not None and elasticsearch_index is not None:
             result = elasticsearch_client.upload_document(
                 index=elasticsearch_index,
                 document=server,
             )
+            result_str = result.get("result", "unknown")
             print(
                 f"Pushed server {i}/{total_servers}: "
-                f"{server.get('user.name', 'unknown')}/"
-                f"{server.get('server.name', 'unknown')} "
-                f"(result: {result.get('result', 'unknown')})"
+                + f"{user_name}/{server_name} (result: {result_str})"
             )
         return True
     except Exception as e:  # pylint: disable=broad-exception-caught
         print(
-            f"Error pushing server {i}/{total_servers} "
-            f"({server.get('user.name', 'unknown')}/"
-            f"{server.get('server.name', 'unknown')}): {e}",
+            f"Error pushing server {i}/{total_servers} ({user_name}/{server_name}): {e}",
             file=sys.stderr,
         )
         return False
@@ -78,13 +79,12 @@ def _process_single_server(
 def push_servers(
     jupyterhub_client: JupyterHubClient,
     elasticsearch_client: ElasticsearchClient | None,
-    elasticsearch_index: str,
+    elasticsearch_index: str | None,
     limit: int | None = None,
     debug: bool = False,
     metadata: dict[str, str] | None = None,
 ) -> tuple[int, int]:
-    """
-    Fetch servers from JupyterHub and push them to Elasticsearch.
+    """Fetch servers from JupyterHub and push them to Elasticsearch.
 
     Args:
         jupyterhub_client: The JupyterHub API client
@@ -161,13 +161,8 @@ def _parse_metadata(
     return metadata_dict
 
 
-def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
-    """
-    Parse command-line arguments.
-
-    Returns:
-        A tuple of (parsed arguments, metadata dictionary)
-    """
+def _build_parser() -> argparse.ArgumentParser:
+    """Build and return the argument parser for this command."""
     parser = argparse.ArgumentParser(
         description="Push JupyterHub servers to Elasticsearch",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -177,7 +172,7 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
     add_jupyterhub_argument_group(parser)
 
     # Elasticsearch settings (required unless --debug)
-    add_elasticsearch_argument_group(parser, required=False)
+    add_es_argument_group(parser, required=False)
 
     # Optional flags
     parser.add_argument(
@@ -197,102 +192,68 @@ def parse_arguments() -> tuple[argparse.Namespace, dict[str, str]]:
         metavar="KEY=VALUE",
         help="Additional metadata to add to documents (can be specified multiple times)",
     )
+    return parser
 
-    args = parser.parse_args()
 
-    # Validate JupyterHub API key and CA certificate
+def _validate_arguments(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Run all post-parse argument validation for this command."""
     validate_jupyterhub_arguments(args, parser)
 
-    # Validate that Elasticsearch settings are provided unless in debug mode
     if not args.debug:
-        if not args.elasticsearch_endpoint:
-            parser.error("--elasticsearch-endpoint is required unless --debug is used")
-        if not args.elasticsearch_index:
-            parser.error("--elasticsearch-index is required unless --debug is used")
-        validate_elasticsearch_arguments(args, parser)
+        if not args.es_endpoint:
+            parser.error("--es-endpoint is required unless --debug is used")
+        if not args.es_index:
+            parser.error("--es-index is required unless --debug is used")
+        validate_es_arguments(args, parser)
 
-    # Validate limit is positive if provided
-    if args.limit is not None and args.limit < 1:
-        parser.error("--limit must be a positive integer")
-
-    # Parse and validate metadata key-value pairs
-    metadata_dict = _parse_metadata(args.metadata, parser)
-
-    return args, metadata_dict
+    positive_int_or_error(args.limit, parser=parser, flag="--limit")
+    args.metadata_dict = _parse_metadata(args.metadata, parser)
 
 
-def main() -> int:
-    """
-    Main entry point for the push_servers script.
+def _run(args: argparse.Namespace) -> int:
+    """Execute command business logic.
 
-    Returns:
-        Exit code (0 for success, non-zero for error)
+    Raises:
+        app.errors.ExternalServiceError: If client creation or push execution fails.
     """
     try:
-        args, metadata = parse_arguments()
+        jupyterhub_client = make_jupyterhub_client(args)
+    except ConnectionError as e:
+        raise ExternalServiceError(str(e)) from e
 
-        # Initialize JupyterHub client
-        print("Connecting to JupyterHub...")
-        jupyterhub_client = JupyterHubClient(
-            endpoint=args.jupyterhub_endpoint,
-            api_key=read_api_key(args.jupyterhub_api_key, "JUPYTERHUB_API_KEY"),
-            ca_cert=str(args.jupyterhub_ca_cert) if args.jupyterhub_ca_cert else None,
-        )
-        print("Connected to JupyterHub")
-
-        # Initialize Elasticsearch client (unless in debug mode)
-        elasticsearch_client = None
+    elasticsearch_client: ElasticsearchClient | None = None
+    try:
         if not args.debug:
             print("Connecting to Elasticsearch...")
-            ca_cert = str(args.elasticsearch_ca_cert) if args.elasticsearch_ca_cert else None
-            if args.elasticsearch_username:
-                credentials = prompt_credentials(args.elasticsearch_username)
-                if credentials is None:
-                    return 1
-                username, password = credentials
-                elasticsearch_client = ElasticsearchClient(
-                    endpoint=args.elasticsearch_endpoint,
-                    basic_auth=(username, password),
-                    ca_cert=ca_cert,
-                )
-            else:
-                elasticsearch_client = ElasticsearchClient(
-                    endpoint=args.elasticsearch_endpoint,
-                    api_key=read_api_key(args.elasticsearch_api_key, "ELASTICSEARCH_API_KEY"),
-                    ca_cert=ca_cert,
-                )
+            elasticsearch_client = make_es_client(args)
             print("Connected to Elasticsearch")
         else:
             print("Debug mode: Documents will be printed, not pushed to Elasticsearch")
 
-        # Push servers
         successful, errors = push_servers(
             jupyterhub_client=jupyterhub_client,
             elasticsearch_client=elasticsearch_client,
-            elasticsearch_index=args.elasticsearch_index if not args.debug else "",
+            elasticsearch_index=args.es_index,
             limit=args.limit,
             debug=args.debug,
-            metadata=metadata,
+            metadata=args.metadata_dict,
         )
 
-        # Clean up
         if elasticsearch_client:
             elasticsearch_client.close()
+    except Exception as e:
+        raise ExternalServiceError(f"Pushing servers failed: {e}") from e
 
-        # Report results
-        print(f"\nProcessing complete: {successful} successful, {errors} errors")
+    print(f"\nProcessing complete: {successful} successful, {errors} errors")
 
-        # Return exit code based on results
-        if errors > 0:
-            return 1
-        return 0
-
-    except ConnectionError as e:
-        print(f"Error: {e}", file=sys.stderr)
+    if errors > 0:
         return 1
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"Unexpected error: {e}", file=sys.stderr)
-        return 1
+    return 0
+
+
+def main() -> int:
+    """Main entry point for the push_servers script."""
+    return run_command(_build_parser, _run, validators=[_validate_arguments])
 
 
 if __name__ == "__main__":

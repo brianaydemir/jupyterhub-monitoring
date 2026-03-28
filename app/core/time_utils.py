@@ -4,6 +4,8 @@ import re
 from datetime import datetime, timedelta, timezone, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import pytimeparse2
+
 _OFFSET_RE = re.compile(r"^([+-])(\d{1,2}):(\d{2})$")
 
 
@@ -26,7 +28,7 @@ def parse_timezone(tz_str: str) -> tzinfo:
     # Try IANA name / abbreviation first.
     try:
         return ZoneInfo(tz_str)
-    except ZoneInfoNotFoundError, KeyError:
+    except (ZoneInfoNotFoundError, KeyError):
         pass
 
     # Try fixed UTC offset: ±HH:MM
@@ -75,9 +77,24 @@ def compute_time_range(
 
 
 def get_now_ms() -> int:
-    """Return the current UTC time as a millisecond epoch timestamp.
+    """Return the current UTC time as a millisecond epoch timestamp."""
+    return int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+
+
+def parse_duration(duration_str: str) -> timedelta | None:
+    """Parse a human-readable duration string into a :class:`datetime.timedelta`.
+
+    Uses :func:`pytimeparse2.parse` internally. Returns *None* if the string
+    cannot be parsed.
+
+    Args:
+        duration_str: Human-readable duration string (e.g. ``"7 days"``,
+            ``"12h"``, ``"3d 6h 12m"``)
 
     Returns:
-        Current time in milliseconds since the Unix epoch
+        A :class:`datetime.timedelta`, or *None* if *duration_str* is invalid
     """
-    return int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+    seconds = pytimeparse2.parse(duration_str)
+    if seconds is None:
+        return None
+    return seconds if isinstance(seconds, timedelta) else timedelta(seconds=float(seconds))

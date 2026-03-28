@@ -5,12 +5,12 @@ import getpass
 import os
 import re
 import sys
-from datetime import timedelta
 from pathlib import Path
 
-import pytimeparse2
-
-from app.time_utils import parse_timezone
+from app.clients.elasticsearch_client import ElasticsearchClient
+from app.clients.jupyterhub_client import JupyterHubClient
+from app.core.errors import AuthCancelledError
+from app.core.time_utils import parse_duration, parse_timezone
 
 
 def prompt_credentials(
@@ -20,13 +20,6 @@ def prompt_credentials(
 
     Returns *None* if the user cancels (Ctrl-C / EOF) or if either value is
     empty after entry.
-
-    Args:
-        username_arg: Pre-supplied username, or None to prompt.
-
-    Returns:
-        A (username, password) tuple, or None if the user cancelled or
-        provided empty credentials.
     """
     if username_arg:
         username = username_arg
@@ -62,11 +55,6 @@ def add_jupyterhub_argument_group(
     Use :func:`validate_jupyterhub_arguments` after parsing to validate the
     API key and CA certificate.
 
-    Args:
-        parser: The argument parser to add the group to
-
-    Returns:
-        The newly created argument group
     """
     hub_group = parser.add_argument_group("JupyterHub API")
     hub_group.add_argument(
@@ -101,9 +89,6 @@ def validate_jupyterhub_arguments(
     ``--jupyterhub-api-key`` nor the ``JUPYTERHUB_API_KEY`` environment
     variable is set.
 
-    Args:
-        args: Parsed command-line arguments
-        parser: The argument parser (used to report errors)
     """
     if args.jupyterhub_ca_cert is not None and not args.jupyterhub_ca_cert.exists():
         parser.error(f"CA certificate file not found: {args.jupyterhub_ca_cert}")
@@ -117,93 +102,59 @@ def validate_jupyterhub_arguments(
         )
 
 
-def add_elasticsearch_argument_group(
+def add_es_argument_group(
     parser: argparse.ArgumentParser,
     *,
     required: bool = True,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Add an "Elasticsearch" argument group to a parser and return it.
 
-    Adds ``--elasticsearch-endpoint``, ``--elasticsearch-ca-cert``,
-    ``--elasticsearch-api-key``, ``--elasticsearch-username``, and
-    ``--elasticsearch-index``. The returned group can be used to append
+    Adds ``--es-endpoint``, ``--es-ca-cert``,
+    ``--es-api-key``, ``--es-username``, and
+    ``--es-index``. The returned group can be used to append
     additional script-specific arguments.
 
-    Use :func:`validate_elasticsearch_arguments` after parsing to validate the
-    credentials and CA certificate.
+    Use :func:`validate_es_arguments` after parsing to validate
+    the credentials and CA certificate.
 
-    Args:
-        parser: The argument parser to add the group to
-        required: Whether ``--elasticsearch-endpoint`` and
-            ``--elasticsearch-index`` are argparse-required (default: True).
-            Pass ``False`` when the script makes these conditional on another
-            flag (e.g., ``--debug``).
-
-    Returns:
-        The newly created argument group
     """
-    es_group = add_elasticsearch_basic_argument_group(parser, required=required)
+    es_group = add_es_connection_argument_group(parser, required=required)
     es_group.add_argument(
-        "--elasticsearch-index",
+        "--es-index",
         required=required,
         help="Name of the Elasticsearch index",
     )
     return es_group
 
 
-def validate_elasticsearch_arguments(
-    args: argparse.Namespace,
-    parser: argparse.ArgumentParser,
-) -> None:
-    """Validate Elasticsearch credentials and CA certificate arguments after parsing.
-
-    Delegates to :func:`validate_elasticsearch_basic_arguments`.
-
-    Args:
-        args: Parsed command-line arguments
-        parser: The argument parser (used to report errors)
-    """
-    validate_elasticsearch_basic_arguments(args, parser)
-
-
-def add_elasticsearch_basic_argument_group(
+def add_es_connection_argument_group(
     parser: argparse.ArgumentParser,
     *,
     required: bool = True,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Add an "Elasticsearch" argument group to a parser and return it.
 
-    Adds ``--elasticsearch-endpoint``, ``--elasticsearch-ca-cert``,
-    ``--elasticsearch-api-key``, and ``--elasticsearch-username``. The
+    Adds ``--es-endpoint``, ``--es-ca-cert``,
+    ``--es-api-key``, and ``--es-username``. The
     returned group can be used to append additional script-specific arguments.
 
-    Exactly one of ``--elasticsearch-api-key`` / ``ELASTICSEARCH_API_KEY``
-    or ``--elasticsearch-username`` must be supplied.
+    Use :func:`validate_es_arguments` after parsing to validate
+    the credentials and CA certificate.
 
-    Use :func:`validate_elasticsearch_basic_arguments` after parsing to
-    validate the credentials and CA certificate.
-
-    Args:
-        parser: The argument parser to add the group to
-        required: Whether ``--elasticsearch-endpoint`` is argparse-required
-            (default: True).
-
-    Returns:
-        The newly created argument group
     """
     es_group = parser.add_argument_group("Elasticsearch")
     es_group.add_argument(
-        "--elasticsearch-endpoint",
+        "--es-endpoint",
         required=required,
         help="Elasticsearch API endpoint URL (e.g., https://localhost:9200)",
     )
     es_group.add_argument(
-        "--elasticsearch-ca-cert",
+        "--es-ca-cert",
         type=Path,
         help="Path to CA certificate file for TLS verification",
     )
     es_group.add_argument(
-        "--elasticsearch-api-key",
+        "--es-api-key",
         type=Path,
         help=(
             "Path to file containing the Elasticsearch API key for authentication "
@@ -211,14 +162,14 @@ def add_elasticsearch_basic_argument_group(
         ),
     )
     es_group.add_argument(
-        "--elasticsearch-username",
+        "--es-username",
         metavar="USERNAME",
         help="Username for basic authentication (password will be prompted)",
     )
     return es_group
 
 
-def validate_elasticsearch_basic_arguments(
+def validate_es_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
@@ -227,36 +178,29 @@ def validate_elasticsearch_basic_arguments(
     Calls ``parser.error`` if:
 
     - The CA certificate file does not exist (when provided).
-    - Both ``--elasticsearch-api-key`` / ``ELASTICSEARCH_API_KEY`` and
-      ``--elasticsearch-username`` are provided (mutually exclusive).
+    - Both ``--es-api-key`` / ``ELASTICSEARCH_API_KEY`` and
+      ``--es-username`` are provided (mutually exclusive).
     - Neither is provided.
-    - The ``--elasticsearch-api-key`` file does not exist (when provided).
+    - The ``--es-api-key`` file does not exist (when provided).
 
-    Args:
-        args: Parsed command-line arguments
-        parser: The argument parser (used to report errors)
     """
-    if args.elasticsearch_ca_cert is not None and not args.elasticsearch_ca_cert.exists():
-        parser.error(f"CA certificate file not found: {args.elasticsearch_ca_cert}")
+    if args.es_ca_cert is not None and not args.es_ca_cert.exists():
+        parser.error(f"CA certificate file not found: {args.es_ca_cert}")
 
-    has_api_key = args.elasticsearch_api_key is not None or bool(
-        os.environ.get("ELASTICSEARCH_API_KEY")
-    )
-    has_username = bool(getattr(args, "elasticsearch_username", None))
+    has_api_key = args.es_api_key is not None or bool(os.environ.get("ELASTICSEARCH_API_KEY"))
+    has_username = bool(getattr(args, "es_username", None))
 
     if has_api_key and has_username:
         parser.error(
-            "--elasticsearch-api-key / ELASTICSEARCH_API_KEY and "
-            "--elasticsearch-username are mutually exclusive"
+            "--es-api-key / ELASTICSEARCH_API_KEY and " + "--es-username are mutually exclusive"
         )
     if not has_api_key and not has_username:
         parser.error(
-            "one of --elasticsearch-api-key, ELASTICSEARCH_API_KEY, or "
-            "--elasticsearch-username is required"
+            "one of --es-api-key, ELASTICSEARCH_API_KEY, or " + "--es-username is required"
         )
-    if has_api_key and args.elasticsearch_api_key is not None:
-        if not args.elasticsearch_api_key.exists():
-            parser.error(f"API key file not found: {args.elasticsearch_api_key}")
+    if has_api_key and args.es_api_key is not None:
+        if not args.es_api_key.exists():
+            parser.error(f"API key file not found: {args.es_api_key}")
 
 
 def add_query_argument_group(
@@ -270,11 +214,6 @@ def add_query_argument_group(
     Use :func:`validate_query_arguments` after parsing to validate ``--time``
     and ``--timezone``.
 
-    Args:
-        parser: The argument parser to add the group to
-
-    Returns:
-        The newly created argument group
     """
     query_group = parser.add_argument_group("Query")
     query_group.add_argument(
@@ -309,15 +248,15 @@ def validate_query_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
-    """Validate ``--time`` format and ``--timezone`` after parsing.
+    """Validate ``--duration``, ``--time``, and ``--timezone`` after parsing.
 
-    Calls ``parser.error`` if ``--time`` is not in HH:MM format or if
-    ``--timezone`` is not a recognized timezone.
+    Calls ``parser.error`` if ``--duration`` cannot be parsed, ``--time`` is
+    not in HH:MM format, or ``--timezone`` is not a recognized timezone.
 
-    Args:
-        args: Parsed command-line arguments
-        parser: The argument parser (used to report errors)
     """
+    if parse_duration(args.duration) is None:
+        parser.error(f"Invalid duration format: {args.duration!r}")
+
     if args.time is not None:
         if not re.fullmatch(r"\d{1,2}:\d{2}", args.time):
             parser.error("--time must be in HH:MM format")
@@ -330,14 +269,12 @@ def validate_query_arguments(
 
 def add_output_argument_group(
     parser: argparse.ArgumentParser,
-) -> None:
-    """Add an "Output" argument group to a parser.
+) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
+    """Add an "Output" argument group to a parser and return it.
 
     Adds ``--text-file``, ``--html-file``, ``--csv-file``,
     ``--date-format``, and ``--detailed-usernames``.
 
-    Args:
-        parser: The argument parser to add the group to
     """
     output_group = parser.add_argument_group("Output")
     output_group.add_argument(
@@ -369,6 +306,7 @@ def add_output_argument_group(
         action="store_true",
         help='Always show the "Login method" column in the output',
     )
+    return output_group
 
 
 def add_email_arguments(
@@ -381,16 +319,12 @@ def add_email_arguments(
 
     When *required* is True, ``--sender-email``, ``--recipient-email``,
     ``--smtp-host``, and ``--smtp-port`` are marked as required by argparse.
-    Use this when email sending is always intended (e.g., in ``send-email``).
+    Use this when a command always sends email.
 
     When *required* is False (the default), those four fields are optional at
     the argparse level and should be validated separately (e.g., via
     :func:`validate_email_arguments`).
 
-    Args:
-        group: The argument group or parser to add arguments to
-        default_subject: Default value for the ``--subject`` argument
-        required: Whether sender/recipient/SMTP fields are argparse-required
     """
     group.add_argument(
         "--sender-email",
@@ -438,17 +372,14 @@ def add_email_argument_group(
     parser: argparse.ArgumentParser,
     *,
     default_subject: str,
-) -> None:
-    """Add an "Email" argument group with ``--send-email`` to a parser.
+) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
+    """Add an "Email" argument group with ``--send-email`` to a parser and return it.
 
     Adds ``--send-email`` followed by all core email arguments (via
     :func:`add_email_arguments`). Use :func:`validate_email_arguments` in
     ``parse_arguments`` to enforce the required fields when ``--send-email``
     is set.
 
-    Args:
-        parser: The argument parser to add the group to
-        default_subject: Default value for the ``--subject`` argument
     """
     email_group = parser.add_argument_group("Email")
     email_group.add_argument(
@@ -457,6 +388,7 @@ def add_email_argument_group(
         help="Send the report via email in addition to any file output",
     )
     add_email_arguments(email_group, default_subject=default_subject)
+    return email_group
 
 
 def validate_email_arguments(
@@ -467,9 +399,6 @@ def validate_email_arguments(
 
     Calls ``parser.error`` for each missing required field.
 
-    Args:
-        args: Parsed command-line arguments
-        parser: The argument parser (used to report errors)
     """
     if args.send_email:
         for flag, attr in [
@@ -483,36 +412,117 @@ def validate_email_arguments(
 
 
 def read_api_key(file: Path | None, env_var: str) -> str:
-    """Read an API key from a file, falling back to an environment variable.
-
-    Args:
-        file: Path to a file containing the API key, or None to use the
-            environment variable
-        env_var: Name of the environment variable to read when *file* is None
-
-    Returns:
-        The API key string (stripped of leading/trailing whitespace when read
-        from a file)
-    """
+    """Read an API key from a file, falling back to an environment variable."""
     if file is not None:
         return file.read_text().strip()
     return os.environ[env_var]
 
 
-def parse_duration(duration_str: str) -> timedelta | None:
-    """Parse a human-readable duration string into a :class:`datetime.timedelta`.
+def make_es_client(args: argparse.Namespace) -> ElasticsearchClient:
+    """Construct an :class:`~app.elasticsearch_client.ElasticsearchClient` from parsed args.
 
-    Uses :func:`pytimeparse2.parse` internally. Returns *None* if the string
-    cannot be parsed.
+    When ``args.es_username`` is set, prompts for a password via
+    :func:`prompt_credentials`.
 
-    Args:
-        duration_str: Human-readable duration string (e.g. ``"7 days"``,
-            ``"12h"``, ``"3d 6h 12m"``)
-
-    Returns:
-        A :class:`datetime.timedelta`, or *None* if *duration_str* is invalid
+    Raises:
+        app.errors.AuthCancelledError: If interactive credential entry is cancelled.
     """
-    seconds = pytimeparse2.parse(duration_str)
-    if seconds is None:
-        return None
-    return seconds if isinstance(seconds, timedelta) else timedelta(seconds=float(seconds))
+    if args.es_username:
+        credentials = prompt_credentials(args.es_username)
+        if credentials is None:
+            raise AuthCancelledError("Credential entry cancelled")
+        username, password = credentials
+        return ElasticsearchClient(
+            endpoint=args.es_endpoint,
+            basic_auth=(username, password),
+            ca_cert=args.es_ca_cert,
+        )
+    return ElasticsearchClient(
+        endpoint=args.es_endpoint,
+        api_key=read_api_key(args.es_api_key, "ELASTICSEARCH_API_KEY"),
+        ca_cert=args.es_ca_cert,
+    )
+
+
+def make_jupyterhub_client(args: argparse.Namespace) -> JupyterHubClient:
+    """Construct a :class:`~app.jupyterhub_client.JupyterHubClient` from parsed args.
+
+    Reads ``args.jupyterhub_endpoint``, ``args.jupyterhub_api_key``, and
+    ``args.jupyterhub_ca_cert`` from the parsed namespace.
+
+    """
+    return JupyterHubClient(
+        endpoint=args.jupyterhub_endpoint,
+        api_key=read_api_key(args.jupyterhub_api_key, "JUPYTERHUB_API_KEY"),
+        ca_cert=args.jupyterhub_ca_cert,
+    )
+
+
+def get_strftime_fmt(args: argparse.Namespace) -> str:
+    """Return the strftime format string for ``--date-format``."""
+    return "%Y-%m-%d" if args.date_format == "date" else "%Y-%m-%d %H:%M"
+
+
+def configure_report_parser(
+    parser: argparse.ArgumentParser,
+    *,
+    source: str,
+    default_subject: str,
+) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
+    """Configure shared report command argument groups.
+
+    Raises:
+        ValueError: If *source* is not ``"jupyterhub"`` or ``"es"``.
+    """
+    if source == "jupyterhub":
+        add_jupyterhub_argument_group(parser)
+    elif source == "es":
+        add_es_argument_group(parser)
+    else:
+        raise ValueError(f"Unsupported report source: {source!r}")
+
+    query_group = add_query_argument_group(parser)
+    add_output_argument_group(parser)
+    add_email_argument_group(parser, default_subject=default_subject)
+    return query_group
+
+
+def validate_report_arguments(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+    *,
+    source: str,
+) -> None:
+    """Run shared validation for report commands.
+
+    Raises:
+        ValueError: If *source* is not ``"jupyterhub"`` or ``"es"``.
+    """
+    if source == "jupyterhub":
+        validate_jupyterhub_arguments(args, parser)
+    elif source == "es":
+        validate_es_arguments(args, parser)
+    else:
+        raise ValueError(f"Unsupported report source: {source!r}")
+    validate_query_arguments(args, parser)
+    validate_email_arguments(args, parser)
+
+
+def configure_es_admin_parser(
+    parser: argparse.ArgumentParser,
+    *,
+    include_index: bool = False,
+) -> None:
+    """Configure shared Elasticsearch admin command argument groups."""
+    if include_index:
+        add_es_argument_group(parser)
+    else:
+        add_es_connection_argument_group(parser)
+
+
+def validate_es_admin_arguments(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Run shared validation for Elasticsearch admin commands."""
+    validate_es_arguments(args, parser)
