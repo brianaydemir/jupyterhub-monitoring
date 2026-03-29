@@ -60,7 +60,7 @@ def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
     Raises:
-        app.errors.ExternalServiceError: If Elasticsearch query execution fails.
+        ExternalServiceError: If Elasticsearch query execution fails.
     """
     try:
         with make_es_client(args) as client:

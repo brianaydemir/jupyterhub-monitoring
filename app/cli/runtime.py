@@ -57,7 +57,7 @@ def parse_duration_required(duration: str) -> timedelta:
     """Parse a required duration string.
 
     Raises:
-        app.errors.DataShapeError: If *duration* cannot be parsed.
+        DataShapeError: If *duration* cannot be parsed.
     """
     parsed = parse_duration(duration)
     if parsed is None:

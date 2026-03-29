@@ -16,12 +16,6 @@ def parse_timezone(tz_str: str) -> tzinfo:
     that are valid IANA keys (``"MST"``), or fixed UTC-offset strings in the
     form ``"+HH:MM"`` / ``"-HH:MM"``.
 
-    Args:
-        tz_str: Timezone specification string.
-
-    Returns:
-        A ``tzinfo`` instance representing the specified timezone.
-
     Raises:
         ValueError: If the string cannot be interpreted as a valid timezone.
     """
@@ -46,19 +40,7 @@ def compute_time_range(
     time_str: str | None,
     tz: tzinfo,
 ) -> tuple[datetime, datetime]:
-    """Compute the (start, end) datetime pair for a reporting window.
-
-    Args:
-        duration_td: Length of the reporting window.
-        time_str: Optional ``"HH:MM"`` string.  When given, *end* is the most
-            recent occurrence of that wall-clock time in the past 24 hours (in
-            *tz*).  When ``None``, *end* is the current moment.
-        tz: Timezone in which *time_str* is expressed and to which all returned
-            datetimes are localised.
-
-    Returns:
-        A ``(start, end)`` pair of timezone-aware datetimes, both in *tz*.
-    """
+    """Compute the (start, end) datetime pair for a reporting window."""
     now = datetime.now(tz)
 
     if time_str is not None:
@@ -87,12 +69,7 @@ def parse_duration(duration_str: str) -> timedelta | None:
     Uses :func:`pytimeparse2.parse` internally. Returns *None* if the string
     cannot be parsed.
 
-    Args:
-        duration_str: Human-readable duration string (e.g. ``"7 days"``,
-            ``"12h"``, ``"3d 6h 12m"``)
-
-    Returns:
-        A :class:`datetime.timedelta`, or *None* if *duration_str* is invalid
+    Returns *None* if *duration_str* is invalid.
     """
     seconds = pytimeparse2.parse(duration_str)
     if seconds is None:

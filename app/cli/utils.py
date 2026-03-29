@@ -46,16 +46,7 @@ def prompt_credentials(
 def add_jupyterhub_argument_group(
     parser: argparse.ArgumentParser,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
-    """Add a "JupyterHub API" argument group to a parser and return it.
-
-    Adds ``--jupyterhub-endpoint``, ``--jupyterhub-api-key``, and
-    ``--jupyterhub-ca-cert``. The returned group can be used to append
-    additional script-specific arguments.
-
-    Use :func:`validate_jupyterhub_arguments` after parsing to validate the
-    API key and CA certificate.
-
-    """
+    """Add a "JupyterHub API" argument group and return it."""
     hub_group = parser.add_argument_group("JupyterHub API")
     hub_group.add_argument(
         "--jupyterhub-endpoint",
@@ -82,14 +73,7 @@ def validate_jupyterhub_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
-    """Validate JupyterHub API key and CA certificate arguments after parsing.
-
-    Calls ``parser.error`` if the CA certificate file does not exist (when
-    provided), the API key file does not exist (when provided), or neither
-    ``--jupyterhub-api-key`` nor the ``JUPYTERHUB_API_KEY`` environment
-    variable is set.
-
-    """
+    """Validate JupyterHub credentials and CA certificate arguments."""
     if args.jupyterhub_ca_cert is not None and not args.jupyterhub_ca_cert.exists():
         parser.error(f"CA certificate file not found: {args.jupyterhub_ca_cert}")
 
@@ -107,17 +91,7 @@ def add_es_argument_group(
     *,
     required: bool = True,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
-    """Add an "Elasticsearch" argument group to a parser and return it.
-
-    Adds ``--es-endpoint``, ``--es-ca-cert``,
-    ``--es-api-key``, ``--es-username``, and
-    ``--es-index``. The returned group can be used to append
-    additional script-specific arguments.
-
-    Use :func:`validate_es_arguments` after parsing to validate
-    the credentials and CA certificate.
-
-    """
+    """Add an "Elasticsearch" argument group and return it."""
     es_group = add_es_connection_argument_group(parser, required=required)
     es_group.add_argument(
         "--es-index",
@@ -132,16 +106,7 @@ def add_es_connection_argument_group(
     *,
     required: bool = True,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
-    """Add an "Elasticsearch" argument group to a parser and return it.
-
-    Adds ``--es-endpoint``, ``--es-ca-cert``,
-    ``--es-api-key``, and ``--es-username``. The
-    returned group can be used to append additional script-specific arguments.
-
-    Use :func:`validate_es_arguments` after parsing to validate
-    the credentials and CA certificate.
-
-    """
+    """Add Elasticsearch connection arguments and return the group."""
     es_group = parser.add_argument_group("Elasticsearch")
     es_group.add_argument(
         "--es-endpoint",
@@ -206,15 +171,7 @@ def validate_es_arguments(
 def add_query_argument_group(
     parser: argparse.ArgumentParser,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
-    """Add a "Query" argument group to a parser and return it.
-
-    Adds ``--duration``, ``--time``, and ``--timezone``. The returned group
-    can be used to append additional script-specific arguments.
-
-    Use :func:`validate_query_arguments` after parsing to validate ``--time``
-    and ``--timezone``.
-
-    """
+    """Add query-window arguments and return the group."""
     query_group = parser.add_argument_group("Query")
     query_group.add_argument(
         "--duration",
@@ -248,12 +205,7 @@ def validate_query_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
-    """Validate ``--duration``, ``--time``, and ``--timezone`` after parsing.
-
-    Calls ``parser.error`` if ``--duration`` cannot be parsed, ``--time`` is
-    not in HH:MM format, or ``--timezone`` is not a recognized timezone.
-
-    """
+    """Validate ``--duration``, ``--time``, and ``--timezone``."""
     if parse_duration(args.duration) is None:
         parser.error(f"Invalid duration format: {args.duration!r}")
 
@@ -270,12 +222,7 @@ def validate_query_arguments(
 def add_output_argument_group(
     parser: argparse.ArgumentParser,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
-    """Add an "Output" argument group to a parser and return it.
-
-    Adds ``--text-file``, ``--html-file``, ``--csv-file``,
-    ``--date-format``, and ``--detailed-usernames``.
-
-    """
+    """Add report output-format arguments and return the group."""
     output_group = parser.add_argument_group("Output")
     output_group.add_argument(
         "--text-file",
@@ -323,17 +270,7 @@ def add_email_arguments(
     default_subject: str,
     required: bool = False,
 ) -> None:
-    """Add email-related arguments to an argument group or parser.
-
-    When *required* is True, ``--sender-email``, ``--recipient-email``,
-    ``--smtp-host``, and ``--smtp-port`` are marked as required by argparse.
-    Use this when a command always sends email.
-
-    When *required* is False (the default), those four fields are optional at
-    the argparse level and should be validated separately (e.g., via
-    :func:`validate_email_arguments`).
-
-    """
+    """Add email-related arguments to a parser or argument group."""
     group.add_argument(
         "--sender-email",
         required=required,
@@ -381,14 +318,7 @@ def add_email_argument_group(
     *,
     default_subject: str,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
-    """Add an "Email" argument group with ``--send-email`` to a parser and return it.
-
-    Adds ``--send-email`` followed by all core email arguments (via
-    :func:`add_email_arguments`). Use :func:`validate_email_arguments` in
-    ``parse_arguments`` to enforce the required fields when ``--send-email``
-    is set.
-
-    """
+    """Add an "Email" argument group with ``--send-email`` and return it."""
     email_group = parser.add_argument_group("Email")
     email_group.add_argument(
         "--send-email",
@@ -403,11 +333,7 @@ def validate_email_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
-    """Validate that required email arguments are present when ``--send-email`` is set.
-
-    Calls ``parser.error`` for each missing required field.
-
-    """
+    """Validate required email arguments when ``--send-email`` is set."""
     if args.send_email:
         for flag, attr in [
             ("--sender-email", "sender_email"),
@@ -433,7 +359,7 @@ def make_es_client(args: argparse.Namespace) -> ElasticsearchClient:
     :func:`prompt_credentials`.
 
     Raises:
-        app.errors.AuthCancelledError: If interactive credential entry is cancelled.
+        AuthCancelledError: If interactive credential entry is cancelled.
     """
     if args.es_username:
         credentials = prompt_credentials(args.es_username)
@@ -453,12 +379,7 @@ def make_es_client(args: argparse.Namespace) -> ElasticsearchClient:
 
 
 def make_jupyterhub_client(args: argparse.Namespace) -> JupyterHubClient:
-    """Construct a :class:`~app.jupyterhub_client.JupyterHubClient` from parsed args.
-
-    Reads ``args.jupyterhub_endpoint``, ``args.jupyterhub_api_key``, and
-    ``args.jupyterhub_ca_cert`` from the parsed namespace.
-
-    """
+    """Construct a :class:`~app.jupyterhub_client.JupyterHubClient` from parsed args."""
     return JupyterHubClient(
         endpoint=args.jupyterhub_endpoint,
         api_key=read_api_key(args.jupyterhub_api_key, "JUPYTERHUB_API_KEY"),

@@ -42,20 +42,7 @@ def _process_single_server(
     i: int,
     total_servers: int,
 ) -> bool:
-    """Add metadata fields to a server document and push or print it.
-
-    Args:
-        server: Server document dict (mutated in-place to add metadata fields)
-        metadata: Optional extra metadata key-value pairs to embed
-        debug: If True, print the document instead of pushing
-        elasticsearch_client: Elasticsearch client (None in debug mode)
-        elasticsearch_index: Target Elasticsearch index
-        i: 1-based index of this server in the current batch
-        total_servers: Total number of servers being processed
-
-    Returns:
-        True on success, False on error
-    """
+    """Add metadata to a server document and push or print it."""
     user_name = server.get("user.name", "unknown")
     server_name = server.get("server.name", "unknown")
     try:
@@ -98,19 +85,7 @@ def push_servers(
     debug: bool = False,
     metadata: dict[str, str] | None = None,
 ) -> tuple[int, int]:
-    """Fetch servers from JupyterHub and push them to Elasticsearch.
-
-    Args:
-        jupyterhub_client: The JupyterHub API client
-        elasticsearch_client: The Elasticsearch API client (None if debug mode)
-        elasticsearch_index: The Elasticsearch index name
-        limit: Maximum number of servers to process (None for unlimited)
-        debug: If True, print documents without pushing to Elasticsearch
-        metadata: Optional metadata key-value pairs to add to documents
-
-    Returns:
-        A tuple of (successful_count, error_count)
-    """
+    """Fetch servers from JupyterHub and push them to Elasticsearch."""
     # Fetch servers from JupyterHub
     try:
         servers = jupyterhub_client.list_servers()
@@ -146,15 +121,7 @@ def push_servers(
 def _parse_metadata(
     raw_items: list[str] | None, parser: argparse.ArgumentParser
 ) -> dict[str, str]:
-    """Parse and validate --metadata KEY=VALUE items, dropping reserved keys.
-
-    Args:
-        raw_items: List of raw 'KEY=VALUE' strings from argparse, or None
-        parser: ArgumentParser instance for error reporting
-
-    Returns:
-        Dictionary of validated metadata key-value pairs
-    """
+    """Parse ``--metadata KEY=VALUE`` items, dropping reserved keys."""
     metadata_dict: dict[str, str] = {}
     for item in raw_items or []:
         if "=" not in item:
@@ -228,7 +195,7 @@ def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
     Raises:
-        app.errors.ExternalServiceError: If client creation or push execution fails.
+        ExternalServiceError: If client creation or push execution fails.
     """
     try:
         jupyterhub_client = make_jupyterhub_client(args)

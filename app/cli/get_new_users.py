@@ -71,7 +71,7 @@ def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
     Raises:
-        app.errors.ExternalServiceError: If user listing fails.
+        ExternalServiceError: If user listing fails.
     """
     duration_td = parse_duration_required(args.duration)
     tz = parse_timezone(args.timezone)

@@ -23,14 +23,7 @@ class ParsedName:
 
 
 def trailing_domain_key(domain: str) -> tuple[int, int]:
-    """Return a sort key that pushes listed domains to the end.
-
-    Args:
-        domain: Domain string extracted from a parsed JupyterHub username
-
-    Returns:
-        A ``(group, index)`` tuple; unlisted domains sort before listed ones
-    """
+    """Return a key that pushes configured trailing domains to the end."""
     try:
         return (1, TRAILING_SORT_DOMAINS.index(domain))
     except ValueError:
@@ -48,12 +41,8 @@ def parse_name(name: str) -> ParsedName:
 
     Unrecognised names are returned with an empty domain (priority 4).
 
-    Args:
-        name: The raw JupyterHub username string.
-
-    Returns:
-        A :class:`ParsedName` with ``priority``, ``domain``, ``uid``, and
-        ``login_method`` fields.
+    Returns a :class:`ParsedName` with ``priority``, ``domain``, ``uid``,
+    and ``login_method``.
     """
     if m := _EMAIL_RE.match(name):
         return ParsedName(priority=2, domain=m.group(2), uid=m.group(1), login_method="email")

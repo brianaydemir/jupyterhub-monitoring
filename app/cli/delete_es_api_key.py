@@ -54,7 +54,7 @@ def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
     Raises:
-        app.errors.ExternalServiceError: If key invalidation fails.
+        ExternalServiceError: If key invalidation fails.
     """
     try:
         with make_es_client(args) as client:

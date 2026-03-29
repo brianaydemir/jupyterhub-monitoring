@@ -20,12 +20,6 @@ class ElasticsearchClient:
     ) -> None:
         """Exactly one of *api_key* or *basic_auth* must be provided.
 
-        Args:
-            endpoint: The Elasticsearch API endpoint URL (e.g., "https://localhost:9200")
-            api_key: The API key for authentication
-            ca_cert: Optional path to the CA certificate file for TLS verification
-            basic_auth: A ``(username, password)`` tuple for basic authentication
-
         Raises:
             ValueError: If both or neither of *api_key* and *basic_auth* are provided.
         """
@@ -56,14 +50,6 @@ class ElasticsearchClient:
     ) -> dict[str, Any]:
         """Upload a single document to an Elasticsearch index.
 
-        Args:
-            index: The name of the index to upload to
-            document: The document to upload (as a dictionary)
-            doc_id: Optional document ID. If not provided, Elasticsearch generates one
-
-        Returns:
-            The response from Elasticsearch containing the upload result
-
         Raises:
             elasticsearch.ApiError: If Elasticsearch rejects the document.
             elasticsearch.TransportError: If a connection-level error occurs.
@@ -79,13 +65,6 @@ class ElasticsearchClient:
         documents: Iterator[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """Upload multiple documents to an Elasticsearch index from an iterator.
-
-        Args:
-            index: The name of the index to upload to
-            documents: An iterator yielding documents (as dictionaries)
-
-        Returns:
-            A list of responses from Elasticsearch for each uploaded document
 
         Raises:
             elasticsearch.ApiError: If Elasticsearch rejects a document upload
@@ -113,17 +92,6 @@ class ElasticsearchClient:
         ``match_all``. Results are streamed via Elasticsearch scroll pagination.
         When *limit* is set, yielded results are capped and page size is also
         capped to avoid over-fetching.
-
-        Args:
-            index: Name of the index to query.
-            query: Optional Query DSL dictionary.
-            query_string: Optional Kibana-style query string.
-            size: Number of documents to request per scroll page.
-            sort: Optional Elasticsearch sort definition list.
-            limit: Optional maximum number of documents to yield.
-
-        Yields:
-            Matching document ``_source`` dictionaries.
 
         Raises:
             elasticsearch.ApiError: If Elasticsearch rejects a search or scroll request.
@@ -213,18 +181,6 @@ class ElasticsearchClient:
     ) -> dict[str, Any]:
         """Create an Elasticsearch API key using the client's current credentials.
 
-        Args:
-            key_name: Name for the API key. Defaults to ``"api-key-{username}"``
-                when *username* is provided, otherwise ``"api-key"``.
-            expiration: Expiration time in Elasticsearch duration format (e.g.,
-                ``"7d"``, ``"30d"``). Omit for a key that never expires.
-            username: Username to record in the key's metadata as ``created_by``.
-                Typically provided when authenticating with basic auth.
-
-        Returns:
-            A dictionary containing the API key information (id, name, api_key,
-            encoded, and optionally expiration).
-
         Raises:
             elasticsearch.ApiError: If Elasticsearch rejects the request
         """
@@ -248,14 +204,6 @@ class ElasticsearchClient:
         Exactly one of *key_id* or *key_name* must be provided. The request is
         scoped to the authenticated user's own keys (``owner=True``).
 
-        Args:
-            key_id: The ID of the API key to invalidate.
-            key_name: The name of the API key(s) to invalidate.
-
-        Returns:
-            A dictionary with ``invalidated_api_keys``,
-            ``previously_invalidated_api_keys``, and ``error_count``.
-
         Raises:
             ValueError: If neither or both of *key_id* / *key_name* are provided.
             elasticsearch.ApiError: If Elasticsearch rejects the request.
@@ -272,19 +220,7 @@ class ElasticsearchClient:
         return cast(dict[str, Any], response)
 
     def list_api_keys(self, *, active_only: bool = True) -> list[dict[str, Any]]:
-        """List API keys owned by the authenticated user.
-
-        Args:
-            active_only: When ``True`` (default), return only non-expired and
-                non-invalidated keys. When ``False``, return all keys.
-
-        Returns:
-            A list of dictionaries describing each API key (id, name, creation,
-            expiration, invalidated, username, realm, etc.).
-
-        Raises:
-            elasticsearch.ApiError: If Elasticsearch rejects the request.
-        """
+        """List API keys owned by the authenticated user."""
         response = self._client.security.get_api_key(
             owner=True,
             active_only=active_only,

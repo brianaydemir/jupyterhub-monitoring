@@ -102,7 +102,7 @@ def send_email(
 
     Raises:
         OSError: If the connection to the SMTP server fails.
-        smtplib.SMTPException: If an SMTP-level error occurs.
+        SMTPException: If an SMTP-level error occurs.
     """
     if use_ssl:
         with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:

@@ -16,13 +16,7 @@ class JupyterHubClient:
         api_key: str,
         ca_cert: str | Path | None = None,
     ) -> None:
-        """Store endpoint and auth settings for later API requests.
-
-        Args:
-            endpoint: The JupyterHub API endpoint URL (e.g., "https://localhost:8000/hub/api")
-            api_key: The API key for authentication (used as a bearer token)
-            ca_cert: Optional path to the CA certificate file for TLS verification
-        """
+        """Store endpoint and auth settings for later API requests."""
         self._endpoint = endpoint.rstrip("/")
         self._api_key = api_key
         self._ca_cert = str(ca_cert) if ca_cert is not None else None
@@ -37,14 +31,6 @@ class JupyterHubClient:
         self, state: str | None = None, limit: int = 100
     ) -> Iterator[dict[str, Any]]:
         """Get the list of users from JupyterHub using offset-based pagination.
-
-        Args:
-            state: Optional state filter for users (e.g., "active", "inactive").
-                   If not provided, returns all users.
-            limit: Number of users to fetch per page (default: 100).
-
-        Yields:
-            User dictionaries containing user information, one per user.
 
         Raises:
             ConnectionError: If the API request fails
@@ -83,10 +69,6 @@ class JupyterHubClient:
         Retrieves all users and extracts their servers, flattening nested
         dictionaries by concatenating keys with ".".
 
-        Returns:
-            A list of dictionaries containing server information.
-            Each dictionary has flattened keys (e.g., "user.name", "server.state").
-
         Raises:
             ConnectionError: If the API request fails
         """
@@ -121,16 +103,7 @@ class JupyterHubClient:
     def _flatten_dict(
         d: dict[str, Any], parent_key: str = "", sep: str = "."
     ) -> dict[str, Any]:
-        """Flatten a nested dictionary by concatenating keys with a separator.
-
-        Args:
-            d: Dictionary to flatten
-            parent_key: Parent key for recursion
-            sep: Separator to use between keys (default: ".")
-
-        Returns:
-            Flattened dictionary with concatenated keys
-        """
+        """Flatten a nested dictionary using dotted-key paths."""
         items: list[tuple[str, Any]] = []
         for k, v in d.items():
             new_key = f"{parent_key}{sep}{k}" if parent_key else k

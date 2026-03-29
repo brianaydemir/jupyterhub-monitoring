@@ -127,7 +127,7 @@ def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
     Raises:
-        app.errors.ExternalServiceError: If Elasticsearch querying fails.
+        ExternalServiceError: If Elasticsearch querying fails.
     """
     duration_td = parse_duration_required(args.duration)
     tz = parse_timezone(args.timezone)

@@ -15,15 +15,7 @@ from app.core.errors import ExternalServiceError
 
 
 def format_output_key(result: dict[str, Any]) -> str:
-    """Format the API key result as key-only output.
-
-    Args:
-        result: The API key creation result from Elasticsearch
-
-    Returns:
-        The encoded API key string (id:api_key format), or ``""`` when the
-        response does not include a string ``encoded`` value.
-    """
+    """Format an API-key response as key-only output."""
     # Get the encoded value, ensuring it's a string
     encoded = result.get("encoded", "")
     if not isinstance(encoded, str):
@@ -127,7 +119,7 @@ def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
     Raises:
-        app.errors.ExternalServiceError: If Elasticsearch API-key creation fails.
+        ExternalServiceError: If Elasticsearch API-key creation fails.
     """
     try:
         with make_es_client(args) as client:
