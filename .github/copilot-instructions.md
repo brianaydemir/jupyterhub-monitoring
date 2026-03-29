@@ -31,9 +31,6 @@ This project provides CLI scripts for monitoring JupyterHub:
   query Elasticsearch;
   produce reports as text, HTML, and CSV
 
-- `send-email` —
-  send emails via SMTP
-
 - `create-es-api-key`,
   `delete-es-api-key`,
   `list-es-api-keys` —
@@ -52,14 +49,20 @@ Two client wrappers are in `app`:
 Utility modules are in `app`:
 
 - `cli_utils` —
-  reusable argument-group builders, validators, and other CLI helpers
-  (e.g., API key reading, duration parsing, credential prompting)
+  reusable argument-group builders,
+  validators,
+  and other CLI helpers (e.g., API key reading, duration parsing, credential prompting)
 
 - `name_utils` —
   JupyterHub username parsing and sort-priority logic
 
-- `output_formatters` —
-  produces plain-text, HTML, and CSV report output
+- `report_model`, `report_builders`, `report_renderers`, `report_delivery` —
+  report framework modules for structured sections,
+  format rendering,
+  and multi-destination delivery (stdout/files/email with attachments)
+
+- `email_utils` —
+  reusable SMTP email composition/sending helpers for report scripts
 
 - `time_utils` —
   timezone parsing and time-range computation
@@ -85,6 +88,23 @@ This repository uses `pre-commit`.
 `typos` is configured by `.typos.toml`.
 
 `[project.scripts]` entries must be in alphabetical order.
+
+### Docstring preferences
+
+- Use Google-style docstring formatting.
+
+- Keep prose as concise as possible.
+  Assume readers have the code in front of them,
+  and only call out interesting or non-obvious details.
+
+- Apply the same principle to `Args` and `Returns`.
+  Omit those sections when behavior is sufficiently obvious.
+
+- In `Raises`,
+  list exceptions callers should reasonably catch and handle.
+  Prefer concise, meaningful exception detail:
+  avoid broad placeholders like `Exception`,
+  but do not enumerate every leaf exception type.
 
 ## Post-Edit Workflow
 
@@ -119,6 +139,11 @@ run the following steps in order:
 - Subject line:
   Short imperative phrase,
   no trailing period.
+
+- Body:
+  Include a concise description of the main feature
+  and/or architectural changes being made.
+  Include the rationale behind those changes when known.
 
 - Authorship:
   Unless told otherwise,
