@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+from collections.abc import Iterable
 from typing import Any
 
 from app.cli.runtime import parse_duration_required, run_command
@@ -36,17 +37,37 @@ def build_query(
     ]
 
     if hub is not None:
-        filters.append({"term": {"meta.hub.keyword": hub}})
+        filters.append(
+            {
+                "bool": {
+                    "should": [
+                        {"term": {"meta.hub.keyword": hub}},
+                        {"term": {"meta.hub": hub}},
+                    ],
+                    "minimum_should_match": 1,
+                }
+            }
+        )
 
     return {
         "bool": {
             "filter": filters,
-            "must_not": [{"term": {"meta.testing": "true"}}],
+            "must_not": [
+                {
+                    "bool": {
+                        "should": [
+                            {"term": {"meta.testing": "true"}},
+                            {"term": {"meta.testing": True}},
+                        ],
+                        "minimum_should_match": 1,
+                    }
+                }
+            ],
         }
     }
 
 
-def compute_activity(documents: list[dict[str, Any]]) -> dict[str, float]:
+def compute_activity(documents: Iterable[dict[str, Any]]) -> dict[str, float]:
     """Sum active server time per user from a list of Elasticsearch documents.
 
     Documents missing meta.interval are silently skipped.
@@ -116,7 +137,7 @@ def _run(args: argparse.Namespace) -> int:
     try:
         with make_es_client(args) as client:
             query = build_query(cutoff=cutoff, end=int(end_time.timestamp()), hub=args.hub)
-            documents = list(client.query(index=args.es_index, query=query))
+            documents = client.query(index=args.es_index, query=query)
     except Exception as e:
         raise ExternalServiceError(f"Querying Elasticsearch failed: {e}") from e
 

@@ -1,10 +1,11 @@
 """Elasticsearch API client wrapper."""
 
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, cast
 
-from elasticsearch import Elasticsearch
+from elasticsearch import ApiError, Elasticsearch, TransportError
 
 
 class ElasticsearchClient:
@@ -185,10 +186,10 @@ class ElasticsearchClient:
             if scroll_id:
                 try:
                     self._client.clear_scroll(scroll_id=scroll_id)
-                except Exception:  # nosec B110  # pylint: disable=broad-exception-caught
-                    # Ignore errors when clearing scroll -
-                    # cleanup failures should not mask results
-                    pass
+                except (ApiError, TransportError) as exc:
+                    print(
+                        f"Warning: failed to clear Elasticsearch scroll: {exc}", file=sys.stderr
+                    )
 
     def close(self) -> None:
         """Prefer using the client as a context manager; call explicitly when

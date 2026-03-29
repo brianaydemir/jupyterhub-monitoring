@@ -20,6 +20,19 @@ from app.clients.jupyterhub_client import JupyterHubClient
 from app.core.errors import ExternalServiceError
 
 
+def _make_doc_id(server: dict[str, Any]) -> str:
+    """Build a deterministic, human-readable Elasticsearch document ID."""
+    snapshot_time = server.get("meta.snapshot-time")
+    parts = [
+        str(server.get("meta.hub") or "unknown-hub"),
+        str(server.get("user.name") or "unknown-user"),
+        str(server.get("server.name") or "default"),
+        str(server.get("server.started") or "unknown-started"),
+        str(snapshot_time if snapshot_time is not None else "unknown-snapshot"),
+    ]
+    return "|".join(parts)
+
+
 def _process_single_server(
     server: dict[str, Any],
     metadata: dict[str, str] | None,
@@ -61,6 +74,7 @@ def _process_single_server(
             result = elasticsearch_client.upload_document(
                 index=elasticsearch_index,
                 document=server,
+                doc_id=_make_doc_id(server),
             )
             result_str = result.get("result", "unknown")
             print(
