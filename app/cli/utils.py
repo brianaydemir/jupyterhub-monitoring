@@ -290,7 +290,15 @@ def add_output_argument_group(
     output_group.add_argument(
         "--csv-file",
         type=Path,
-        help="Write output as CSV to the specified file",
+        help=(
+            "Write output as a single CSV file. For reports with multiple tables, "
+            "all sections/blocks are appended with separator rows."
+        ),
+    )
+    output_group.add_argument(
+        "--xlsx-file",
+        type=Path,
+        help="Write output as an Excel workbook (.xlsx) with one sheet per table block",
     )
     output_group.add_argument(
         "--date-format",

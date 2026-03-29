@@ -102,8 +102,8 @@ Elasticsearch.
 ### `get-new-users`
 
 Lists JupyterHub users whose accounts were created within a given time window.
-Optionally writes plain-text, HTML, and/or CSV output files, and can send a
-report email directly.
+Optionally writes plain-text, HTML, CSV, and/or XLSX output files, and can send
+a report email directly.
 
 ```
 get-new-users \
@@ -112,7 +112,8 @@ get-new-users \
     --duration "7 days" \
     --text-file new-users.txt \
     --html-file new-users.html \
-    --csv-file new-users.csv
+    --csv-file new-users.csv \
+    --xlsx-file new-users.xlsx
 ```
 
 Use `--time HH:MM` to anchor the end of the window to a specific wall-clock
@@ -137,7 +138,7 @@ get-new-users \
 ### `get-new-activity`
 
 Reports active server time per user within a given time window, pulling data
-from Elasticsearch. Optionally writes plain-text, HTML, and/or CSV output
+from Elasticsearch. Optionally writes plain-text, HTML, CSV, and/or XLSX output
 files, and can send a report email directly.
 
 ```
@@ -149,7 +150,8 @@ get-new-activity \
     --hub production \
     --text-file activity.txt \
     --html-file activity.html \
-    --csv-file activity.csv
+    --csv-file activity.csv \
+    --xlsx-file activity.xlsx
 ```
 
 Use `--time HH:MM` to anchor the end of the window to a specific wall-clock
@@ -237,4 +239,8 @@ reports directly by SMTP.
 
 When emailing a report, the message body includes both plain text and HTML
 renderings, and CSV raw-data attachments are included for each tabular report
-section.
+section. If `--xlsx-file` is specified, the generated workbook is also attached.
+
+`--csv-file` always writes a single CSV file. For reports with multiple tables
+or mixed block types, all content is appended in report order with separator
+rows to keep it readable in simple spreadsheet/table viewers.

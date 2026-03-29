@@ -2,8 +2,10 @@
 
 import csv
 import io
+import re
 
 from jinja2 import BaseLoader, Environment
+from openpyxl import Workbook
 from tabulate import tabulate
 
 from app.reports.model import Report, ReportAttachment, TableBlock, TextBlock
@@ -203,3 +205,105 @@ def _table_to_csv_bytes(block: TableBlock) -> bytes:
     for row in block.rows:
         writer.writerow(row)
     return buf.getvalue().encode("utf-8")
+
+
+def render_csv(report: Report) -> str:
+    """Render a report to a single human-readable CSV document."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+
+    writer.writerow([report.title])
+    writer.writerow([])
+
+    for section in report.sections:
+        writer.writerow([section.heading])
+        writer.writerow([section.description])
+        writer.writerow([])
+
+        for block in section.blocks:
+            if isinstance(block, TextBlock):
+                writer.writerow([block.text])
+                writer.writerow([])
+                continue
+
+            writer.writerow(block.headers)
+            writer.writerows(block.rows)
+            writer.writerow([])
+
+        if section.footnotes:
+            writer.writerow(["Notes"])
+            for note in section.footnotes:
+                writer.writerow([note])
+            writer.writerow([])
+
+    if report.footnotes:
+        writer.writerow(["Global notes"])
+        for note in report.footnotes:
+            writer.writerow([note])
+
+    return buf.getvalue()
+
+
+def render_csv_bytes(report: Report) -> bytes:
+    """Render a report to UTF-8 CSV bytes."""
+    return render_csv(report).encode("utf-8")
+
+
+def render_xlsx_bytes(report: Report) -> bytes:
+    """Render report tables to an XLSX workbook (one sheet per table block)."""
+    workbook = Workbook()
+    initial_sheet = workbook.active
+    if initial_sheet is None:
+        raise ValueError("Workbook did not create an initial worksheet")
+    table_index = 0
+    used_sheet_names: set[str] = set()
+
+    for section in report.sections:
+        section_table_index = 0
+        for block in section.blocks:
+            if isinstance(block, TextBlock):
+                continue
+
+            section_table_index += 1
+            table_index += 1
+            title = f"{section.heading} {section_table_index}"
+            sheet_name = _unique_sheet_name(title, used_sheet_names)
+            worksheet = workbook.create_sheet(title=sheet_name)
+            worksheet.append(block.headers)
+            for row in block.rows:
+                worksheet.append(row)
+
+    if table_index == 0:
+        initial_sheet.title = "Report"
+        initial_sheet.append([report.title])
+        initial_sheet.append(["No table data available."])
+    else:
+        workbook.remove(initial_sheet)
+
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def _sanitize_sheet_name(name: str) -> str:
+    cleaned = re.sub(r"[\[\]\:\*\?\/\\\\]", "_", name).strip().strip("'")
+    return cleaned or "Sheet"
+
+
+def _unique_sheet_name(base: str, used_names: set[str]) -> str:
+    base_clean = _sanitize_sheet_name(base)
+    candidate = base_clean[:31]
+
+    if candidate not in used_names:
+        used_names.add(candidate)
+        return candidate
+
+    suffix = 2
+    while True:
+        suffix_text = f" ({suffix})"
+        trimmed = base_clean[: 31 - len(suffix_text)]
+        candidate = f"{trimmed}{suffix_text}"
+        if candidate not in used_names:
+            used_names.add(candidate)
+            return candidate
+        suffix += 1
