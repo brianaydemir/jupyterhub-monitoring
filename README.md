@@ -1,246 +1,89 @@
 # Monitoring and Reporting on JupyterHub Usage
 
-A collection of command-line scripts for monitoring a
-[JupyterHub](https://jupyterhub.readthedocs.io/) instance and reporting on its
-usage. Scripts can push server snapshots to
-[Elasticsearch](https://www.elastic.co/elasticsearch), query and report on the
-data, and deliver reports by email.
+A CLI toolkit for monitoring a
+[JupyterHub](https://jupyterhub.readthedocs.io/) instance
+and reporting on its usage.
 
-## Prerequisites
+The general workflow is:
 
-- Python ≥ 3.14
-- [Poetry](https://python-poetry.org/) (for installing from source)
-- Docker (optional, for running via container)
+1. Run `push-servers` on a schedule
+   to snapshot the live server list into Elasticsearch.
 
-## Installation
+2. Run `get-new-activity` or `get-new-users` to generate reports.
 
-### From Source
+The remaining commands
+(`create-es-api-key`, `delete-es-api-key`, `list-es-api-keys`, `get-es-docs`)
+are operational helpers for managing Elasticsearch access.
 
-```
-git clone https://github.com/brianaydemir/jupyterhub-monitoring.git
-cd jupyterhub-monitoring
-make init       # runs: poetry install
-```
+## External Services
 
-Scripts are then available through Poetry:
+- **JupyterHub** (API endpoint + API admin key) —
+  required for `push-servers` and `get-new-users`
 
-```
-poetry run push-servers --help
-```
+- **Elasticsearch** (API endpoint + API key or credentials) —
+  required for `push-servers`, `get-new-activity`, and all `*-es-*` commands
 
-### Docker Image
+- **SMTP relay** —
+  required only when using `--send-email`
 
-Build the image with:
-
-```
-make build IMAGE=myregistry.example.com/me/jupyterhub-monitoring
-```
-
-`IMAGE` must be set to the desired registry and image name. Run a script inside
-the container by passing it as the command:
-
-```
-docker run --rm myregistry.example.com/me/jupyterhub-monitoring:latest \
-    push-servers --help
-```
-
-## Configuration
-
-### JupyterHub API Token
-
-Scripts that talk to JupyterHub require an API token with the following scopes:
-
-```
-list:users  read:users  read:servers
-```
-
-Pass the token to a script via a file:
-
-```
---jupyterhub-api-key /path/to/jh-api-key.txt
-```
-
-or via the environment variable `JUPYTERHUB_API_KEY`.
-
-### Elasticsearch API Key
-
-Scripts that talk to Elasticsearch require an API key. Pass it via a file:
-
-```
---es-api-key /path/to/es-api-key.txt
-```
-
-or via the environment variable `ELASTICSEARCH_API_KEY`.
-
-Use `create-es-api-key`, `list-es-api-keys`, and `delete-es-api-key` to manage
-Elasticsearch API keys (see below). These scripts authenticate with a username
-and password rather than an API key.
-
-## Scripts
-
-All scripts accept `--help` for a full list of options.
+## Commands
 
 ### `push-servers`
 
-Fetches the list of active servers from JupyterHub and indexes them as
-documents in Elasticsearch. Use `--metadata KEY=VALUE` (repeatable) to attach
-custom fields to every document (e.g., to identify the hub instance).
+Fetches the current server list from JupyterHub
+and pushes each server as a timestamped document to an Elasticsearch index.
+Intended to run on a schedule
+(e.g., every few minutes via cron or a Kubernetes CronJob)
+to build a history of server activity.
 
-```
-push-servers \
-    --jupyterhub-endpoint https://hub.example.com/hub/api \
-    --jupyterhub-api-key ~/secrets/jh-api-key.txt \
-    --es-endpoint https://elastic.example.com:9200 \
-    --es-api-key ~/secrets/es-api-key.txt \
-    --es-index jupyterhub-servers \
-    --metadata hub=production
-```
-
-Use `--debug` to print documents to stdout instead of pushing them to
-Elasticsearch.
-
-### `get-new-users`
-
-Lists JupyterHub users whose accounts were created within a given time window.
-Optionally writes plain-text, HTML, CSV, and/or XLSX output files, and can send
-a report email directly.
-
-```
-get-new-users \
-    --jupyterhub-endpoint https://hub.example.com/hub/api \
-    --jupyterhub-api-key ~/secrets/jh-api-key.txt \
-    --duration "7 days" \
-    --text-file new-users.txt \
-    --html-file new-users.html \
-    --csv-file new-users.csv \
-    --xlsx-file new-users.xlsx
-```
-
-Use `--time HH:MM` to anchor the end of the window to a specific wall-clock
-time (within the past 24 hours) rather than the current moment. Use
-`--timezone TZ` to set the timezone for `--time` and all output timestamps
-(default: `America/Chicago`).
-
-Use `--send-email` to deliver the report by email directly from this script:
-
-```
-get-new-users \
-    --jupyterhub-endpoint https://hub.example.com/hub/api \
-    --jupyterhub-api-key ~/secrets/jh-api-key.txt \
-    --duration "7 days" \
-    --send-email \
-    --sender-email monitoring@example.com \
-    --recipient-email admin@example.com \
-    --smtp-host smtp.example.com \
-    --smtp-port 465
-```
+Each document has the shape
+`{server: <JupyterHub server object>, meta: <metadata + timestamp + interval>}`.
+The `--metadata` flag tags documents with identifying context
+(e.g., `--metadata hub=prod testing=false`);
+`get-new-activity` can later filter on those values.
 
 ### `get-new-activity`
 
-Reports active server time per user within a given time window, pulling data
-from Elasticsearch. Optionally writes plain-text, HTML, CSV, and/or XLSX output
-files, and can send a report email directly.
+Queries Elasticsearch for server-snapshot documents in a time window
+and aggregates per-user server uptime.
+A document contributes to a user's total when
+`server.ready == true` or `server.pending == "spawn"`;
+each document adds `meta.interval` seconds to that user's running total.
 
-```
-get-new-activity \
-    --es-endpoint https://elastic.example.com:9200 \
-    --es-api-key ~/secrets/es-api-key.txt \
-    --es-index jupyterhub-servers \
-    --duration "24 hours" \
-    --hub production \
-    --text-file activity.txt \
-    --html-file activity.html \
-    --csv-file activity.csv \
-    --xlsx-file activity.xlsx
-```
+### `get-new-users`
 
-Use `--time HH:MM` to anchor the end of the window to a specific wall-clock
-time (within the past 24 hours) rather than the current moment. Use
-`--timezone TZ` to set the timezone for `--time` and all output timestamps
-(default: `America/Chicago`).
+Fetches the user list from JupyterHub
+and reports on accounts created within a specified time window.
 
-Use `--send-email` to deliver the report by email directly from this script:
+### `create-es-api-key`, `delete-es-api-key`, `list-es-api-keys`
 
-```
-get-new-activity \
-    --es-endpoint https://elastic.example.com:9200 \
-    --es-api-key ~/secrets/es-api-key.txt \
-    --es-index jupyterhub-servers \
-    --duration "24 hours" \
-    --hub production \
-    --send-email \
-    --sender-email monitoring@example.com \
-    --recipient-email admin@example.com \
-    --smtp-host smtp.example.com \
-    --smtp-port 465
-```
+Create, invalidate, and list Elasticsearch API keys
+owned by the authenticated user.
 
 ### `get-es-docs`
 
-Queries an Elasticsearch index using a Kibana-style query string and prints
-matching documents as JSON.
+Queries an Elasticsearch index with a Kibana-style query string
+and prints raw JSON documents.
+Useful for ad-hoc inspection or debugging of the index.
 
-```
-get-es-docs \
-    --es-endpoint https://elastic.example.com:9200 \
-    --es-api-key ~/secrets/es-api-key.txt \
-    --es-index jupyterhub-servers \
-    --query "meta.hub:production AND user.admin:true"
-```
+## Output Formats
 
-### `create-es-api-key`
+`get-new-activity` and `get-new-users`
+can write output to any combination of
+plain text, styled HTML, CSV, and Excel files,
+and/or deliver the report by email.
+Each report table is automatically attached as a CSV file when sending email.
+Run either command with `--help` for the full list of flags.
 
-Creates an Elasticsearch API key using username and password authentication.
-Prints the new key in the requested format.
+## Username Parsing
 
-```
-create-es-api-key \
-    --es-endpoint https://elastic.example.com:9200 \
-    --es-username elastic \
-    --name push-servers-key \
-    --expiration 30d \
-    --format key
-```
+JupyterHub usernames encode the authentication source.
+The report commands parse them to populate
+**Institution**, **ID**, and **Login Method** columns.
 
-### `list-es-api-keys`
-
-Lists the active Elasticsearch API keys owned by the authenticated user.
-
-```
-list-es-api-keys \
-    --es-endpoint https://elastic.example.com:9200 \
-    --es-username elastic
-```
-
-Use `--all` to include expired and invalidated keys.
-
-### `delete-es-api-key`
-
-Invalidates an Elasticsearch API key by ID or by name.
-
-```
-# By ID:
-delete-es-api-key \
-    --es-endpoint https://elastic.example.com:9200 \
-    --es-username elastic \
-    --id AbCdEfGhIjKlMnOp
-
-# By name:
-delete-es-api-key \
-    --es-endpoint https://elastic.example.com:9200 \
-    --es-username elastic \
-    --name push-servers-key
-```
-
-### Email delivery
-
-Use `--send-email` with `get-new-users` or `get-new-activity` to deliver
-reports directly by SMTP.
-
-When emailing a report, the message body includes both plain text and HTML
-renderings, and CSV raw-data attachments are included for each tabular report
-section. If `--xlsx-file` is specified, the generated workbook is also attached.
-
-`--csv-file` always writes a single CSV file. For reports with multiple tables
-or mixed block types, all content is appended in report order with separator
-rows to keep it readable in simple spreadsheet/table viewers.
+| Username format             | Login Method |
+| :-------------------------- | :----------- |
+| `user@example.edu`          | ePPN         |
+| `eppn:user@example.edu`     | ePPN         |
+| `email:user@example.edu`    | Email        |
+| `orcid:0009-0008-3064-0494` | ORCID        |

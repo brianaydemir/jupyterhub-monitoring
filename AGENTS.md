@@ -21,7 +21,7 @@ Linters run with the `-` prefix (non-fatal) in `Makefile`.
 ## Architecture
 
 This project is a CLI toolkit
-for JupyterHub monitoring with three stable layers:
+for JupyterHub monitoring with the following layers:
 
 - `app/cli/*` —
   command entry points and shared argument/validation runtime
@@ -30,30 +30,18 @@ for JupyterHub monitoring with three stable layers:
   thin wrappers around JupyterHub and Elasticsearch APIs
 
 - `app/reports/*` —
-  report model, builders, renderers, and delivery (files/email)
+  report model, builders, renderers, and delivery
 
 - `app/core/*` contains shared domain utilities
-  (errors, time handling, username parsing/sorting).
+  (errors, time handling, username parsing/sorting)
 
 The authoritative command surface is `[project.scripts]` in `pyproject.toml`.
 
 ## Conventions
 
-Python version:
-Requires Python ≥ 3.14.
+Authoritative tool configuration is in `pyproject.toml`.
 
-Formatting:
-`black` with line-length 96,
-`isort` with `profile = "black"`.
-
-Pre-commit:
 This repository uses `pre-commit`.
-
-`pyright` runs in strict type-checking mode.
-
-`mdformat` is configured by `.mdformat.toml`.
-
-`typos` is configured by `.typos.toml`.
 
 `[project.scripts]` entries must be in alphabetical order.
 
@@ -62,7 +50,7 @@ This repository uses `pre-commit`.
 - Use Google-style docstring formatting.
 
 - Keep prose as concise as possible.
-  Assume readers have the code in front of them,
+  Assume that readers have the code in front of them,
   and
   only call out interesting or non-obvious details.
 
@@ -111,25 +99,29 @@ run the following steps in order:
   no trailing period.
 
 - Body:
-  Include a concise description of the main feature
-  and/or
-  architectural changes being made.
+  Include a concise description of the main features
+  and architectural changes being made.
   Include the rationale behind those changes when known.
-  Keep body lines under 76 characters.
+
+  Keep body lines under 76 characters where reasonable.
 
 - Authorship:
-  Unless told otherwise,
-  the agent should be the commit's author.
+  The agent should be the commit's author
+  unless told otherwise.
 
   Use `--author` to set the author to the agent's identity.
   The following table provides common identities for attribution:
 
-  | Agent          | Name                     | Email |
-  |:---------------|:-------------------------|:----- |
-  | Gemini         | `gemini-code-assist[bot]`| `176961590+gemini-code-assist[bot]@users.noreply.github.com`|
-  | GitHub Copilot | `Copilot`                | `223556219+Copilot@users.noreply.github.com` |
-  | OpenAI Codex   | `chatgpt-codex-connector`| `199175422+chatgpt-codex-connector[bot]@users.noreply.github.com`|
+  | Agent          | Name                      | Email                                                             |
+  | :------------- | :------------------------ | :---------------------------------------------------------------- |
+  | Gemini         | `gemini-code-assist[bot]` | `176961590+gemini-code-assist[bot]@users.noreply.github.com`      |
+  | GitHub Copilot | `Copilot`                 | `223556219+Copilot@users.noreply.github.com`                      |
+  | OpenAI Codex   | `chatgpt-codex-connector` | `199175422+chatgpt-codex-connector[bot]@users.noreply.github.com` |
 
   Include the trailer `Co-authored-by:` with the same author identity.
 
   The user should be left as the committer.
+
+- Signing:
+  If `git commit` fails due to a signing error,
+  retry with `--no-gpg-sign`.
