@@ -3,14 +3,15 @@
 IMAGE ?= hub.osg-htc.org/brian.aydemir/jupyterhub-monitoring
 PY_PACKAGE_SRC := app
 
-.PHONY: all build clean distclean docs init lint tidy update
+.PHONY: all build clean distclean init lint tidy update
 
-all: tidy lint build docs
+all: tidy lint build
 
 #---------------------------------------------------------------------------
 
 init:
 	poetry install
+	poetry run pre-commit install
 
 update:
 	poetry update
@@ -30,7 +31,7 @@ lint:
 
 #---------------------------------------------------------------------------
 
-build: clean
+build:
 	poetry build
 
 	VERSION=$$(toml get project.version --toml-path pyproject.toml); \
@@ -39,13 +40,8 @@ build: clean
 	    --pull \
 	    -t $(IMAGE):$${VERSION}
 
-docs:
-	poetry run sphinx-apidoc --separate --no-toc -o docs/api $(PY_PACKAGE_SRC)
-	rm -f docs/api/app.rst
-	poetry run sphinx-build -b html docs docs/_build/html
-
 clean:
-	rm -rf dist docs/_build docs/api
+	rm -rf dist
 
-distclean: clean
+distclean:
 	git clean -x -d --force --exclude=.python-version

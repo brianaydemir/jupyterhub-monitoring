@@ -3,125 +3,179 @@
 ## Commands
 
 ```bash
-make init       # Install dependencies
-make update     # Update dependencies; show outdated packages
-make tidy       # Tidy up files with mdformat, isort, black, and typos
-make lint       # Run bandit, mypy, pyright, and pylint
-make build      # Remove artifacts, build Python distribution, build Docker image
-make docs       # Build Sphinx HTML documentation
-make clean      # Remove artifacts
-make distclean  # Remove all untracked/ignored files except .python-version
-make all        # tidy + lint + build + docs
+make all        # Run tidy, lint, and build (default target)
+make init       # Install dependencies and pre-commit hooks
+make update     # Upgrade dependencies and report outdated packages
+make tidy       # Normalize formatting and spelling
+make lint       # Surface static analysis and quality issues
+make build      # Build the Python package and Docker image
+make clean      # Remove Python package build artifacts
+make distclean  # Remove untracked and ignored files, except .python-version
 ```
 
-There are no automated tests.
+## Working with the User
 
-Linters run with the `-` prefix (non-fatal) in `Makefile`.
+**The user is always available to answer questions.**
+Never resolve questions on their behalf.
+
+Ask for clarification before proceeding whenever:
+
+- the prompt has more than one plausible interpretation,
+
+- the work requires information not present in the prompt, or
+
+- multiple valid approaches exist with meaningfully different trade-offs.
+
+Do not guess or pick an answer in these situations.
 
 ## Architecture
 
-This project is a CLI toolkit
-for JupyterHub monitoring with the following layers:
+This project is a CLI toolkit for monitoring JupyterHub usage
+and generating reports from that data.
 
-- `app/cli/*` —
-  command entry points and shared argument/validation runtime
+It is organized into the following sub-packages:
 
-- `app/clients/*` —
-  thin wrappers around JupyterHub and Elasticsearch APIs
+- `app/cli` —
+  command entry points, shared runtime, and utilities
 
-- `app/reports/*` —
-  report model, builders, renderers, and delivery
+- `app/clients` —
+  thin wrappers around the JupyterHub and Elasticsearch APIs
 
-- `app/core/*` contains shared domain utilities
-  (errors, time handling, username parsing/sorting)
+- `app/core` —
+  shared domain utilities
 
-The authoritative command surface is `[project.scripts]` in `pyproject.toml`.
+- `app/reports` —
+  report models, builders, renderers, and delivery helpers
+
+The full set of available commands is defined in `pyproject.toml`,
+in the `[project.scripts]` section.
 
 ## Conventions
 
-Authoritative tool configuration is in `pyproject.toml`.
+Follow the guidelines in this section when making changes.
 
-This repository uses `pre-commit`.
+Make changes only when there is a clear, objective reason.
 
-`[project.scripts]` entries must be in alphabetical order.
+### `pyproject.toml`
+
+Keep entries in the following sections in alphabetical order:
+
+- `[project.scripts]`
+- `[tool.poetry.dependencies]`
+- `[tool.poetry.group.dev.dependencies]`
+
+**Note:**
+In `[tool.poetry.dependencies]` only,
+`python` is an exception and should always come first.
+
+### Line length
+
+- For code, follow the line-length configuration in `pyproject.toml`.
+
+- For comments and text files,
+  keep lines under 80 characters, except for tables and embedded code.
+
+### Line breaks
+
+Use [Semantic Line Breaks](https://sembr.org/) in comments and text files.
+
+- Avoid breaking within tight semantic units.
+
+- Break at natural semantic boundaries, not at an arbitrary column.
+
+### Prose style
+
+- Use American English spellings.
+
+- Use the Oxford comma in lists of three or more items.
+
+- Use a consistent grammatical form
+  for each item in lists and parallel constructions.
 
 ### Docstring preferences
 
 - Use Google-style docstring formatting.
 
-- Keep prose as concise as possible.
-  Assume that readers have the code in front of them,
-  and
-  only call out interesting or non-obvious details.
+- Keep prose concise.
+  Assume that the reader is reading the code at the same time,
+  and highlight only interesting behavior.
 
-- Apply the same principle to `Args` and `Returns`.
-  Omit those sections when behavior is sufficiently obvious.
+- Apply the same conciseness principle to `Args` and `Returns`.
+  Omit these sections when the function name and type annotations suffice.
 
-- In `Raises`,
-  list exceptions callers should reasonably catch and handle.
-  Prefer concise, meaningful exception detail:
-  avoid broad placeholders like `Exception`,
-  but do not enumerate every leaf exception type.
+- In `Raises`, list exceptions that callers should handle.
+  Prefer precise exception types,
+  but also avoid a long exhaustive list.
 
 ## Post-Edit Workflow
 
-After modifying files,
-run the following steps in order:
+After making changes, run the following steps.
+After each step, address all warnings and errors before proceeding.
 
 1. `make tidy` —
-   tidy up code and other files
+   normalize formatting and spelling
 
 2. `make lint` —
-   run linter;
-   address all warnings and errors before proceeding
+   surface static analysis and quality issues
 
-3. `make docs` —
-   build documentation;
-   address all warnings and errors before proceeding.
+   **Note:**
+   `make lint` always runs all linters, even if one exits non-zero,
+   because each command in the `lint` target is prefixed with `-`.
 
-   Note that `docs/api/` is auto-generated and should not be manually edited.
+3. `poetry run pre-commit run --files <changed files>` —
+   run pre-commit checks on the edited files
 
-4. `poetry run pre-commit run --files <edited files>` —
-   run pre-commit hooks on the files that were edited.
-   If the hooks automatically fix any files,
-   re-run the affected steps above before proceeding.
+   **Note:**
+   Some hooks edit files automatically.
+   If any files are modified,
+   rerun this step until it passes cleanly.
+
+## Tests
+
+There are no automated tests in this repository.
 
 ## Commit Preferences
 
-- Staging and committing:
-  Only stage or commit changes
-  when the user's current message explicitly asks you to.
-  Never stage or commit
-  speculatively, automatically, or as part of an implementation workflow.
+Never stage or commit
+unless the user's most recent message explicitly asks you to.
 
-- Subject line:
-  Short imperative phrase,
-  no trailing period.
+When committing, follow these conventions:
 
-- Body:
-  Include a concise description of the main features
-  and architectural changes being made.
-  Include the rationale behind those changes when known.
+- **Authorship:**
+  Use `--author "Name <Email>"` to set the author to the agent's identity,
+  unless the user specifies otherwise.
 
-  Keep body lines under 76 characters where reasonable.
-
-- Authorship:
-  The agent should be the commit's author
-  unless told otherwise.
-
-  Use `--author` to set the author to the agent's identity.
   The following table provides common identities for attribution:
 
-  | Agent          | Name                      | Email                                                             |
-  | :------------- | :------------------------ | :---------------------------------------------------------------- |
-  | Gemini         | `gemini-code-assist[bot]` | `176961590+gemini-code-assist[bot]@users.noreply.github.com`      |
-  | GitHub Copilot | `Copilot`                 | `223556219+Copilot@users.noreply.github.com`                      |
-  | OpenAI Codex   | `chatgpt-codex-connector` | `199175422+chatgpt-codex-connector[bot]@users.noreply.github.com` |
+  | Agent              | Name          | Email                                            |
+  | :----------------- | :------------ | :----------------------------------------------- |
+  | Claude             | `claude[bot]` | `209825114+claude[bot]@users.noreply.github.com` |
+  | GitHub Copilot CLI | `Copilot`     | `223556219+Copilot@users.noreply.github.com`     |
 
-  Include the trailer `Co-authored-by:` with the same author identity.
+  Leave the user as the committer.
 
-  The user should be left as the committer.
+- **Subject line:**
+  Use a short imperative phrase with no trailing period.
 
-- Signing:
-  If `git commit` fails due to a signing error,
-  retry with `--no-gpg-sign`.
+- **Body:**
+  Include a concise description of the changes.
+  Include the rationale behind those changes when it is not self-evident.
+  Follow the line length convention for text and comments.
+
+- **Trailer:**
+  Append the following to every commit message:
+
+  ```
+  Co-authored-by: Name <Email>
+  ```
+
+  Use the same `Name` and `Email` as the commit's author,
+  as specified above.
+
+- **Signature:**
+  Retry with `--no-gpg-sign` if `git commit` fails due to a signing error.
+
+**Note:**
+`pre-commit` hooks also run automatically at commit time.
+If a hook edits files, stage those changes and retry the commit.
+If a hook fails, address the issue and retry the commit.
