@@ -5,10 +5,15 @@ import sys
 from collections.abc import Iterable
 from typing import Any
 
-from app.cli.runtime import parse_duration_required, run_command
-from app.cli.utils import configure_report_parser, make_es_client, validate_report_arguments
+from app.cli.runtime import run_command
+from app.cli.utils import (
+    compute_report_time_range,
+    configure_report_parser,
+    make_es_client,
+    validate_report_arguments,
+)
 from app.core.errors import AppError, ExternalServiceError
-from app.core.time_utils import compute_time_range, parse_duration, parse_timezone
+from app.core.time_utils import parse_duration
 from app.reports.builders import build_activity_report
 from app.reports.delivery import deliver_report
 
@@ -110,6 +115,9 @@ Examples:
   %(prog)s --es-endpoint https://es.example.com:9200 \\
     --es-api-key /path/to/key --es-index servers \\
     --duration "24h" --hub myhub
+  %(prog)s --es-endpoint https://es.example.com:9200 \\
+    --es-api-key /path/to/key --es-index servers \\
+    --report-start "July 1 2026" --report-end "July 8 2026"
 
 Environment variables:
   ELASTICSEARCH_API_KEY  API key (when --es-api-key is
@@ -145,9 +153,7 @@ def _run(args: argparse.Namespace) -> int:
         ExternalServiceError: If Elasticsearch querying
             fails.
     """
-    duration_td = parse_duration_required(args.duration)
-    tz = parse_timezone(args.timezone)
-    start_time, end_time = compute_time_range(duration_td, args.time, tz)
+    start_time, end_time = compute_report_time_range(args)
     cutoff = int(start_time.timestamp())
 
     try:

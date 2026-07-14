@@ -6,15 +6,15 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 
-from app.cli.runtime import parse_duration_required, run_command
+from app.cli.runtime import run_command
 from app.cli.utils import (
+    compute_report_time_range,
     configure_report_parser,
     get_strftime_fmt,
     make_jupyterhub_client,
     validate_report_arguments,
 )
 from app.core.errors import ExternalServiceError
-from app.core.time_utils import compute_time_range, parse_timezone
 from app.reports.builders import build_new_users_report
 from app.reports.delivery import deliver_report
 
@@ -40,7 +40,7 @@ def filter_new_users(
                         "created": created_str,
                     }
                 )
-        except (ValueError, TypeError, AttributeError):
+        except ValueError, TypeError, AttributeError:
             continue
 
     return new_users
@@ -60,6 +60,10 @@ Examples:
     --jupyterhub-endpoint https://hub.example.com/hub/api \\
     --jupyterhub-api-key /path/to/key --duration "12h" \\
     --text-file output.txt
+  %(prog)s \\
+    --jupyterhub-endpoint https://hub.example.com/hub/api \\
+    --jupyterhub-api-key /path/to/key \\
+    --report-start "2 weeks ago" --report-end "yesterday"
 
 Environment variables:
   JUPYTERHUB_API_KEY  API key (when --jupyterhub-api-key
@@ -88,9 +92,7 @@ def _run(args: argparse.Namespace) -> int:
     Raises:
         ExternalServiceError: If user listing fails.
     """
-    duration_td = parse_duration_required(args.duration)
-    tz = parse_timezone(args.timezone)
-    start_time, end_time = compute_time_range(duration_td, args.time, tz)
+    start_time, end_time = compute_report_time_range(args)
 
     try:
         users = list(make_jupyterhub_client(args).list_users())

@@ -71,6 +71,7 @@ packages = [{ include = "app" }]
 
 [tool.poetry.dependencies]
 python = "^3.14"
+dateparser = "~1.2"
 elasticsearch = "~9.3"
 jinja2 = "~3.1"
 openpyxl = "~3.1"
@@ -91,6 +92,7 @@ pre-commit = "~4.6"
 pylint = "~4.0"
 pyright = "~1.1"
 toml-cli = "~0.8"
+types-dateparser = "~1.2"
 typos = "~1.46"
 
 

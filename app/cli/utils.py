@@ -5,12 +5,19 @@ import getpass
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
+from app.cli.runtime import parse_duration_required
 from app.clients.elasticsearch_client import ElasticsearchClient
 from app.clients.jupyterhub_client import JupyterHubClient
-from app.core.errors import AuthCancelledError
-from app.core.time_utils import parse_duration, parse_timezone
+from app.core.errors import AuthCancelledError, DataShapeError
+from app.core.time_utils import (
+    compute_time_range,
+    parse_datetime,
+    parse_duration,
+    parse_timezone,
+)
 
 
 def prompt_credentials(
@@ -26,13 +33,13 @@ def prompt_credentials(
     else:
         try:
             username = input("Username: ")
-        except (EOFError, KeyboardInterrupt):
+        except EOFError, KeyboardInterrupt:
             print("\nOperation cancelled.", file=sys.stderr)
             return None
 
     try:
         password = getpass.getpass("Password: ")
-    except (EOFError, KeyboardInterrupt):
+    except EOFError, KeyboardInterrupt:
         print("\nOperation cancelled.", file=sys.stderr)
         return None
 
@@ -173,10 +180,29 @@ def add_query_argument_group(
     query_group = parser.add_argument_group("Query")
     query_group.add_argument(
         "--duration",
-        required=True,
         help=(
             'Time window to look back from now (e.g., "30 seconds", "15 min", '
-            '"12h", "7 days", "3d 6h 12m")'
+            '"12h", "7 days", "3d 6h 12m"). '
+            "Mutually exclusive with --report-start / --report-end"
+        ),
+    )
+    query_group.add_argument(
+        "--report-start",
+        metavar="WHEN",
+        help=(
+            "Start of an explicit reporting window, as a human-readable "
+            'datetime (e.g., "2 weeks ago", "July 1 2026", '
+            '"2026-07-01 15:00"). Must be used together with --report-end '
+            "and is mutually exclusive with --duration"
+        ),
+    )
+    query_group.add_argument(
+        "--report-end",
+        metavar="WHEN",
+        help=(
+            "End of an explicit reporting window, as a human-readable "
+            'datetime (e.g., "yesterday", "now"). Must be used together '
+            "with --report-start and is mutually exclusive with --duration"
         ),
     )
     query_group.add_argument(
@@ -192,8 +218,10 @@ def add_query_argument_group(
         default="America/Chicago",
         metavar="TZ",
         help=(
-            "Timezone for --time and all output timestamps "
-            '(e.g., "America/Chicago", "MST", "+04:00"); default: America/Chicago'
+            "Timezone for --time, for interpreting --report-start / "
+            "--report-end values without an explicit offset, and for all "
+            'output timestamps (e.g., "America/Chicago", "MST", "+04:00"); '
+            "default: America/Chicago"
         ),
     )
     return query_group
@@ -203,22 +231,88 @@ def validate_query_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
-    """Validate ``--duration``, ``--time``, and ``--timezone``."""
-    if parse_duration(args.duration) is None:
-        parser.error(f"Invalid duration format: {args.duration!r}")
+    """Validate the reporting window and ``--timezone``.
 
-    if args.time is not None:
-        m = re.fullmatch(r"(\d{1,2}):(\d{2})", args.time)
-        if not m:
-            parser.error("--time must be in HH:MM format")
-        hh, mm = int(m.group(1)), int(m.group(2))
-        if hh > 23 or mm > 59:
-            parser.error("--time must be a valid time (HH: 0-23, MM: 0-59)")
-
+    Exactly one window mode must be selected: ``--duration`` (optionally
+    anchored with ``--time``), or the ``--report-start`` / ``--report-end``
+    pair.
+    """
     try:
         parse_timezone(args.timezone)
     except ValueError as e:
         parser.error(str(e))
+
+    has_range = args.report_start is not None or args.report_end is not None
+    has_duration = args.duration is not None
+
+    if has_range and has_duration:
+        parser.error("--duration is mutually exclusive with --report-start / --report-end")
+    if not has_range and not has_duration:
+        parser.error("one of --duration or --report-start / --report-end is required")
+
+    if has_range:
+        _validate_report_range(args, parser)
+        return
+
+    if parse_duration(args.duration) is None:
+        parser.error(f"Invalid duration format: {args.duration!r}")
+    _validate_time(args, parser)
+
+
+def _validate_report_range(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Validate the ``--report-start`` / ``--report-end`` window."""
+    if args.report_start is None or args.report_end is None:
+        parser.error("--report-start and --report-end must be used together")
+    if args.time is not None:
+        parser.error("--time cannot be combined with --report-start / --report-end")
+    start = parse_datetime(args.report_start, args.timezone)
+    if start is None:
+        parser.error(f"Invalid --report-start datetime: {args.report_start!r}")
+    end = parse_datetime(args.report_end, args.timezone)
+    if end is None:
+        parser.error(f"Invalid --report-end datetime: {args.report_end!r}")
+    if start >= end:
+        parser.error("--report-start must be before --report-end")
+
+
+def _validate_time(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Validate the optional ``--time`` anchor for duration mode."""
+    if args.time is None:
+        return
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", args.time)
+    if not m:
+        parser.error("--time must be in HH:MM format")
+    hh, mm = int(m.group(1)), int(m.group(2))
+    if hh > 23 or mm > 59:
+        parser.error("--time must be a valid time (HH: 0-23, MM: 0-59)")
+
+
+def compute_report_time_range(
+    args: argparse.Namespace,
+) -> tuple[datetime, datetime]:
+    """Return the ``(start, end)`` datetime pair for the reporting window.
+
+    Handles both window modes. Assumes the arguments have already passed
+    :func:`validate_query_arguments`.
+
+    Raises:
+        DataShapeError: If a duration-mode ``--duration`` cannot be parsed.
+    """
+    if args.report_start is not None:
+        start = parse_datetime(args.report_start, args.timezone)
+        end = parse_datetime(args.report_end, args.timezone)
+        if start is None or end is None:
+            raise DataShapeError("Invalid --report-start / --report-end datetime")
+        return start, end
+
+    duration_td = parse_duration_required(args.duration)
+    return compute_time_range(duration_td, args.time, parse_timezone(args.timezone))
 
 
 def add_output_argument_group(

@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timedelta, timezone, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import dateparser
 import pytimeparse2
 
 _OFFSET_RE = re.compile(r"^([+-])(\d{1,2}):(\d{2})$")
@@ -22,7 +23,7 @@ def parse_timezone(tz_str: str) -> tzinfo:
     # Try IANA name / abbreviation first.
     try:
         return ZoneInfo(tz_str)
-    except (ZoneInfoNotFoundError, KeyError):
+    except ZoneInfoNotFoundError, KeyError:
         pass
 
     # Try fixed UTC offset: ±HH:MM
@@ -56,6 +57,29 @@ def compute_time_range(
 
     start = end - duration_td
     return start, end
+
+
+def parse_datetime(text: str, tz_str: str) -> datetime | None:
+    """Parse a human-readable datetime, normalized to *tz_str*.
+
+    Accepts relative phrases (``"2 weeks ago"``, ``"yesterday 9am"``) and
+    absolute datetimes (``"July 1 2026"``, ``"2026-07-01 15:00"``), via
+    :func:`dateparser.parse`.
+    A datetime with no explicit zone is interpreted in *tz_str*; one that
+    carries its own offset is converted to *tz_str*.
+    *tz_str* accepts the same forms as :func:`parse_timezone` (IANA name,
+    abbreviation, or ``±HH:MM``).
+    Returns *None* if *text* cannot be parsed.
+    """
+    return dateparser.parse(
+        text,
+        settings={
+            "PREFER_DATES_FROM": "past",
+            "RETURN_AS_TIMEZONE_AWARE": True,
+            "TIMEZONE": tz_str,
+            "TO_TIMEZONE": tz_str,
+        },
+    )
 
 
 def get_now_ms() -> int:
