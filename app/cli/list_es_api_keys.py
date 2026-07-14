@@ -1,18 +1,14 @@
 """Command-line tool for listing Elasticsearch API keys."""
 
 import argparse
-import datetime
 import json
 import sys
+from datetime import datetime, timezone
 from typing import Any
 
 from app.cli.runtime import run_command
-from app.cli.utils import (
-    configure_es_admin_parser,
-    make_es_client,
-    validate_es_admin_arguments,
-)
-from app.core.errors import ExternalServiceError
+from app.cli.utils import configure_es_admin_parser, make_es_client, validate_es_admin_arguments
+from app.core.errors import AppError, ExternalServiceError
 from app.core.time_utils import get_now_ms
 
 
@@ -20,13 +16,15 @@ def _ms_to_datetime(ms: int | None) -> str:
     """Convert a millisecond epoch timestamp to a UTC string."""
     if ms is None:
         return "Never"
-    return datetime.datetime.fromtimestamp(ms / 1000, tz=datetime.timezone.utc).strftime(
-        "%Y-%m-%d %H:%M:%S UTC"
-    )
+    dt = datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+    return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
-def _key_status_tags(key: dict[str, Any], now_ms: int | None = None) -> list[str]:
-    """Return status tags for a key that is not fully active."""
+def _key_status_tags(
+    key: dict[str, Any],
+    now_ms: int | None = None,
+) -> list[str]:
+    """Return status tags (e.g., invalidated, expired) for an API key."""
     tags: list[str] = []
     if key.get("invalidated"):
         tags.append("invalidated")
@@ -39,14 +37,21 @@ def _key_status_tags(key: dict[str, Any], now_ms: int | None = None) -> list[str
     return tags
 
 
-def format_output_key(keys: list[dict[str, Any]], *, active_only: bool = True) -> str:
+def format_output_key(
+    keys: list[dict[str, Any]],
+    *,
+    active_only: bool = True,
+) -> str:
     """Format API keys as a simple id/name listing."""
     if not keys:
-        return "(no active API keys)" if active_only else "(no API keys)"
+        if active_only:
+            return "(no active API keys)"
+        return "(no API keys)"
+    now_ms = get_now_ms()
     lines: list[str] = []
     for key in keys:
         line = f"{key.get('id', '')}  {key.get('name', '')}"
-        tags = _key_status_tags(key)
+        tags = _key_status_tags(key, now_ms)
         if tags:
             line += f"  [{', '.join(tags)}]"
         lines.append(line)
@@ -58,8 +63,12 @@ def format_output_json(keys: list[dict[str, Any]]) -> str:
     return json.dumps(keys, indent=2)
 
 
-def format_output_full(keys: list[dict[str, Any]], *, active_only: bool = True) -> str:
-    """Format API keys as a human-readable table."""
+def format_output_full(
+    keys: list[dict[str, Any]],
+    *,
+    active_only: bool = True,
+) -> str:
+    """Format API keys as a human-readable listing."""
     label = "Active API Keys" if active_only else "API Keys"
     if not keys:
         return f"No {label.lower()} found."
@@ -82,23 +91,22 @@ def format_output_full(keys: list[dict[str, Any]], *, active_only: bool = True) 
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build and return the argument parser for this command."""
+    """Build the argument parser for this command."""
     parser = argparse.ArgumentParser(
-        description=("List Elasticsearch API keys owned by the authenticated user"),
+        description="List Elasticsearch API keys owned by the authenticated user",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   %(prog)s --es-endpoint https://elastic.example.com:9200
-  %(prog)s --es-endpoint https://elastic.example.com:9200 --all
-  %(prog)s --es-endpoint https://elastic.example.com:9200 --format json
-  %(prog)s --es-endpoint https://elastic.example.com:9200 --format full
-  %(prog)s --es-endpoint https://elastic.example.com:9200 --es-ca-cert /path/to/ca.crt
+  %(prog)s --es-endpoint https://elastic.example.com:9200 \\
+    --all
+  %(prog)s --es-endpoint https://elastic.example.com:9200 \\
+    --format json
         """,
     )
 
     configure_es_admin_parser(parser, include_index=False)
 
-    # Filter options
     parser.add_argument(
         "--all",
         dest="all_keys",
@@ -106,22 +114,24 @@ Examples:
         help="Include expired and invalidated keys (default: active keys only)",
     )
 
-    # Output format
     parser.add_argument(
         "--format",
         choices=["key", "json", "full"],
         default="key",
         help=(
-            "Output format: 'key' (default, prints id and name per line), "
-            "'json' (JSON array), 'full' (detailed human-readable output)"
+            "Output format: 'key' (default, id and name "
+            "per line), 'json', or 'full' (human-readable)"
         ),
     )
 
     return parser
 
 
-def _validate_arguments(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    """Run all post-parse argument validation for this command."""
+def _validate_arguments(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Run post-parse argument validation."""
     validate_es_admin_arguments(args, parser)
 
 
@@ -134,19 +144,21 @@ def _run(args: argparse.Namespace) -> int:
     try:
         with make_es_client(args) as client:
             keys = client.list_api_keys(active_only=not args.all_keys)
-
-        active_only = not args.all_keys
-        if args.format == "key":
-            output = format_output_key(keys, active_only=active_only)
-        elif args.format == "json":
-            output = format_output_json(keys)
-        else:  # full
-            output = format_output_full(keys, active_only=active_only)
-
-        print(output)
-        return 0
+    except AppError:
+        raise
     except Exception as e:
         raise ExternalServiceError(f"Listing API keys failed: {e}") from e
+
+    active_only = not args.all_keys
+    if args.format == "key":
+        output = format_output_key(keys, active_only=active_only)
+    elif args.format == "json":
+        output = format_output_json(keys)
+    else:  # full
+        output = format_output_full(keys, active_only=active_only)
+
+    print(output)
+    return 0
 
 
 def main() -> int:

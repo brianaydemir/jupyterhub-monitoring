@@ -20,7 +20,9 @@ from app.reports.delivery import deliver_report
 
 
 def filter_new_users(
-    users: Iterable[dict[str, Any]], cutoff_time: datetime, end_time: datetime
+    users: Iterable[dict[str, Any]],
+    cutoff_time: datetime,
+    end_time: datetime,
 ) -> list[dict[str, Any]]:
     """Filter users created within [*cutoff_time*, *end_time*]."""
     new_users: list[dict[str, Any]] = []
@@ -30,28 +32,38 @@ def filter_new_users(
             continue
 
         try:
-            created_dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+            created_dt = datetime.fromisoformat(created_str)
             if cutoff_time <= created_dt <= end_time:
-                new_users.append({"name": user.get("name", ""), "created": created_str})
-        except (ValueError, AttributeError):
+                new_users.append(
+                    {
+                        "name": user.get("name", ""),
+                        "created": created_str,
+                    }
+                )
+        except (ValueError, TypeError, AttributeError):
             continue
 
     return new_users
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build and return the argument parser for this command."""
+    """Build the argument parser for this command."""
     parser = argparse.ArgumentParser(
         description="List JupyterHub users created within a specified time period",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --jupyterhub-endpoint https://hub.example.com/hub/api --jupyterhub-api-key /path/to/api-key --duration "7 days"
-  %(prog)s --jupyterhub-endpoint https://hub.example.com/hub/api --jupyterhub-api-key /path/to/api-key --duration "12h" --text-file output.txt
-  %(prog)s --jupyterhub-endpoint https://hub.example.com/hub/api --jupyterhub-api-key /path/to/api-key --duration "3d 6h" --html-file output.html
+  %(prog)s \\
+    --jupyterhub-endpoint https://hub.example.com/hub/api \\
+    --jupyterhub-api-key /path/to/key --duration "7 days"
+  %(prog)s \\
+    --jupyterhub-endpoint https://hub.example.com/hub/api \\
+    --jupyterhub-api-key /path/to/key --duration "12h" \\
+    --text-file output.txt
 
 Environment variables:
-  JUPYTERHUB_API_KEY  JupyterHub API key (used when --jupyterhub-api-key is not provided)
+  JUPYTERHUB_API_KEY  API key (when --jupyterhub-api-key
+                      is not provided)
         """,
     )
     configure_report_parser(
@@ -62,8 +74,11 @@ Environment variables:
     return parser
 
 
-def _validate_arguments(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    """Run all post-parse argument validation for this command."""
+def _validate_arguments(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Run post-parse argument validation."""
     validate_report_arguments(args, parser, source="jupyterhub")
 
 
@@ -78,8 +93,8 @@ def _run(args: argparse.Namespace) -> int:
     start_time, end_time = compute_time_range(duration_td, args.time, tz)
 
     try:
-        users = make_jupyterhub_client(args).list_users()
-    except ConnectionError as e:
+        users = list(make_jupyterhub_client(args).list_users())
+    except Exception as e:
         raise ExternalServiceError(f"Listing users failed: {e}") from e
 
     new_users = filter_new_users(users, start_time, end_time)
@@ -98,7 +113,7 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    """Main entry point for the get new users script."""
+    """Main entry point for the get-new-users script."""
     return run_command(_build_parser, _run, validators=[_validate_arguments])
 
 

@@ -36,11 +36,17 @@ Intended to run on a schedule
 (e.g., every few minutes via cron or a Kubernetes CronJob)
 to build a history of server activity.
 
-Each document has the shape
-`{server: <JupyterHub server object>, meta: <metadata + timestamp + interval>}`.
-The `--metadata` flag tags documents with identifying context
+Each document uses flattened dotted-key paths
+(e.g., `server.ready`, `meta.hub`)
+combining the JupyterHub server object
+with metadata and a timestamp.
+The required `--interval` flag records the push cadence
+(e.g., `--interval 5m`)
+so that `get-new-activity` can compute per-user uptime.
+The `--metadata` flag tags documents
+with additional identifying context
 (e.g., `--metadata hub=prod testing=false`);
-`get-new-activity` can later filter on those values.
+`get-new-activity` can filter on `meta.hub` via `--hub`.
 
 ### `get-new-activity`
 
@@ -48,7 +54,15 @@ Queries Elasticsearch for server-snapshot documents in a time window
 and aggregates per-user server uptime.
 A document contributes to a user's total when
 `server.ready == true` or `server.pending == "spawn"`;
-each document adds `meta.interval` seconds to that user's running total.
+each such document adds its `meta.interval` value
+to that user's running total.
+Documents missing `meta.interval`
+(e.g., those pushed before `--interval` was introduced)
+are silently skipped.
+Documents where `meta.testing` is `"true"` or `true`
+are automatically excluded.
+Users with multiple active servers
+accumulate time from each server independently.
 
 ### `get-new-users`
 
@@ -79,11 +93,11 @@ Run either command with `--help` for the full list of flags.
 
 JupyterHub usernames encode the authentication source.
 The report commands parse them to populate
-**Institution**, **ID**, and **Login Method** columns.
+**Institution**, **ID**, and **Login method** columns.
 
-| Username format             | Login Method |
+| Username format             | Login method |
 | :-------------------------- | :----------- |
-| `user@example.edu`          | ePPN         |
-| `eppn:user@example.edu`     | ePPN         |
-| `email:user@example.edu`    | Email        |
+| `user@example.edu`          | local NetID  |
+| `eppn:user@example.edu`     | legacy eppn  |
+| `email:user@example.edu`    | email        |
 | `orcid:0009-0008-3064-0494` | ORCID        |

@@ -12,7 +12,8 @@ from app.reports.model import Report, ReportAttachment, TableBlock, TextBlock
 
 _ENV = Environment(loader=BaseLoader(), autoescape=True, trim_blocks=True, lstrip_blocks=True)
 
-_HTML_TEMPLATE = _ENV.from_string("""
+_HTML_TEMPLATE = _ENV.from_string(
+    """
 <style>
   @media (prefers-color-scheme: dark) {
     .th { background: #1d4060 !important; color: #d0e8f8 !important; border-color: #3a607a !important; }
@@ -64,7 +65,8 @@ _HTML_TEMPLATE = _ENV.from_string("""
   {% endfor %}
   </ul>
 {% endif %}
-""")
+"""
+)
 
 
 def _render_text_table(block: TableBlock) -> list[str]:
@@ -259,14 +261,13 @@ def render_xlsx_bytes(report: Report) -> bytes:
     used_sheet_names: set[str] = set()
 
     for section in report.sections:
-        section_table_index = 0
-        for block in section.blocks:
-            if isinstance(block, TextBlock):
-                continue
-
-            section_table_index += 1
+        table_blocks = [b for b in section.blocks if isinstance(b, TableBlock)]
+        for idx, block in enumerate(table_blocks, 1):
             table_index += 1
-            title = f"{section.heading} {section_table_index}"
+            if len(table_blocks) > 1:
+                title = f"{section.heading} {idx}"
+            else:
+                title = section.heading
             sheet_name = _unique_sheet_name(title, used_sheet_names)
             worksheet = workbook.create_sheet(title=sheet_name)
             worksheet.append(block.headers)
@@ -286,7 +287,7 @@ def render_xlsx_bytes(report: Report) -> bytes:
 
 
 def _sanitize_sheet_name(name: str) -> str:
-    cleaned = re.sub(r"[\[\]\:\*\?\/\\\\]", "_", name).strip().strip("'")
+    cleaned = re.sub(r"[\[\]:*?/\\]", "_", name).strip().strip("'")
     return cleaned or "Sheet"
 
 

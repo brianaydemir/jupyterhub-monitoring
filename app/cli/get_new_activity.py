@@ -6,12 +6,8 @@ from collections.abc import Iterable
 from typing import Any
 
 from app.cli.runtime import parse_duration_required, run_command
-from app.cli.utils import (
-    configure_report_parser,
-    make_es_client,
-    validate_report_arguments,
-)
-from app.core.errors import ExternalServiceError
+from app.cli.utils import configure_report_parser, make_es_client, validate_report_arguments
+from app.core.errors import AppError, ExternalServiceError
 from app.core.time_utils import compute_time_range, parse_duration, parse_timezone
 from app.reports.builders import build_activity_report
 from app.reports.delivery import deliver_report
@@ -22,9 +18,16 @@ def build_query(
     end: int,
     hub: str | None = None,
 ) -> dict[str, Any]:
-    """Build the Elasticsearch Query DSL for active server documents."""
+    """Build Elasticsearch Query DSL for active server documents."""
     filters: list[dict[str, Any]] = [
-        {"range": {"meta.snapshot-time": {"gte": cutoff, "lte": end}}},
+        {
+            "range": {
+                "meta.snapshot-time": {
+                    "gte": cutoff,
+                    "lte": end,
+                }
+            }
+        },
         {
             "bool": {
                 "should": [
@@ -67,10 +70,12 @@ def build_query(
     }
 
 
-def compute_activity(documents: Iterable[dict[str, Any]]) -> dict[str, float]:
-    """Sum active server time per user from a list of Elasticsearch documents.
+def compute_activity(
+    documents: Iterable[dict[str, Any]],
+) -> dict[str, float]:
+    """Sum active server time per user from Elasticsearch documents.
 
-    Documents missing meta.interval are silently skipped.
+    Documents missing ``meta.interval`` are silently skipped.
     """
     totals: dict[str, float] = {}
 
@@ -78,7 +83,9 @@ def compute_activity(documents: Iterable[dict[str, Any]]) -> dict[str, float]:
         user = doc.get("user.name")
         interval_str = doc.get("meta.interval")
 
-        if not user or not interval_str:
+        if not isinstance(user, str) or not user:
+            continue
+        if not isinstance(interval_str, str) or not interval_str:
             continue
 
         interval_td = parse_duration(interval_str)
@@ -91,18 +98,22 @@ def compute_activity(documents: Iterable[dict[str, Any]]) -> dict[str, float]:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build and return the argument parser for this command."""
+    """Build the argument parser for this command."""
     parser = argparse.ArgumentParser(
         description="Report active server time per JupyterHub user from Elasticsearch",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --es-endpoint https://es.example.com:9200 --es-api-key /path/to/api-key --es-index servers --duration "7 days"
-  %(prog)s --es-endpoint https://es.example.com:9200 --es-api-key /path/to/api-key --es-index servers --duration "24h" --hub myhub
-  %(prog)s --es-endpoint https://es.example.com:9200 --es-api-key /path/to/api-key --es-index servers --duration "7 days" --html-file report.html
+  %(prog)s --es-endpoint https://es.example.com:9200 \\
+    --es-api-key /path/to/key --es-index servers \\
+    --duration "7 days"
+  %(prog)s --es-endpoint https://es.example.com:9200 \\
+    --es-api-key /path/to/key --es-index servers \\
+    --duration "24h" --hub myhub
 
 Environment variables:
-  ELASTICSEARCH_API_KEY  Elasticsearch API key (used when --es-api-key is not provided)
+  ELASTICSEARCH_API_KEY  API key (when --es-api-key is
+                         not provided)
         """,
     )
 
@@ -110,6 +121,7 @@ Environment variables:
         parser,
         source="es",
         default_subject="JupyterHub Activity Report",
+        include_date_format=False,
     )
     query_group.add_argument(
         "--hub",
@@ -118,8 +130,11 @@ Environment variables:
     return parser
 
 
-def _validate_arguments(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    """Run all post-parse argument validation for this command."""
+def _validate_arguments(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Run post-parse argument validation."""
     validate_report_arguments(args, parser, source="es")
 
 
@@ -127,7 +142,8 @@ def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
     Raises:
-        ExternalServiceError: If Elasticsearch querying fails.
+        ExternalServiceError: If Elasticsearch querying
+            fails.
     """
     duration_td = parse_duration_required(args.duration)
     tz = parse_timezone(args.timezone)
@@ -136,12 +152,16 @@ def _run(args: argparse.Namespace) -> int:
 
     try:
         with make_es_client(args) as client:
-            query = build_query(cutoff=cutoff, end=int(end_time.timestamp()), hub=args.hub)
-            documents = client.query(index=args.es_index, query=query)
+            query = build_query(
+                cutoff=cutoff,
+                end=int(end_time.timestamp()),
+                hub=args.hub,
+            )
+            totals = compute_activity(client.query(index=args.es_index, query=query))
+    except AppError:
+        raise
     except Exception as e:
         raise ExternalServiceError(f"Querying Elasticsearch failed: {e}") from e
-
-    totals = compute_activity(documents)
 
     report = build_activity_report(
         totals=totals,

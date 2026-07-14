@@ -5,29 +5,27 @@ import json
 import sys
 
 from app.cli.runtime import positive_int_or_error, run_command
-from app.cli.utils import (
-    configure_es_admin_parser,
-    make_es_client,
-    validate_es_admin_arguments,
-)
-from app.core.errors import ExternalServiceError
+from app.cli.utils import configure_es_admin_parser, make_es_client, validate_es_admin_arguments
+from app.core.errors import AppError, ExternalServiceError
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build and return the argument parser for this command."""
+    """Build the argument parser for this command."""
     parser = argparse.ArgumentParser(
-        description=(
-            "Query Elasticsearch and retrieve documents using " "a Kibana-style query string"
-        ),
+        description="Query Elasticsearch and retrieve documents using a Kibana-style query string",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s --es-endpoint https://es.example.com:9200 --es-api-key /path/to/api-key --es-index logs --query "status:200"
-  %(prog)s --es-endpoint https://es.example.com:9200 --es-api-key /path/to/api-key --es-index logs --query "level:error AND timestamp:[now-1d TO now]"
-  %(prog)s --es-endpoint https://es.example.com:9200 --es-api-key /path/to/api-key --es-index logs --query "*" --es-ca-cert /path/to/ca.crt
+  %(prog)s --es-endpoint https://es.example.com:9200 \\
+    --es-api-key /path/to/key --es-index logs \\
+    --query "status:200"
+  %(prog)s --es-endpoint https://es.example.com:9200 \\
+    --es-api-key /path/to/key --es-index logs \\
+    --query "level:error AND timestamp:[now-1d TO now]"
 
 Environment variables:
-  ELASTICSEARCH_API_KEY  Elasticsearch API key (used when --es-api-key is not provided)
+  ELASTICSEARCH_API_KEY  API key (when --es-api-key is
+                         not provided)
         """,
     )
 
@@ -43,15 +41,19 @@ Environment variables:
         type=int,
         metavar="N",
         help=(
-            "Maximum number of documents to retrieve and display. "
-            "Results are sorted in descending order by meta.snapshot-time."
+            "Maximum number of documents to retrieve. "
+            "Results are sorted descending by "
+            "meta.snapshot-time."
         ),
     )
     return parser
 
 
-def _validate_arguments(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    """Run all post-parse argument validation for this command."""
+def _validate_arguments(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Run post-parse argument validation."""
     validate_es_admin_arguments(args, parser)
     positive_int_or_error(args.limit, parser=parser, flag="--limit")
 
@@ -60,7 +62,7 @@ def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
     Raises:
-        ExternalServiceError: If Elasticsearch query execution fails.
+        ExternalServiceError: If query execution fails.
     """
     try:
         with make_es_client(args) as client:
@@ -74,9 +76,12 @@ def _run(args: argparse.Namespace) -> int:
                 limit=args.limit,
             ):
                 print(json.dumps(document, indent=2))
-        return 0
+    except AppError:
+        raise
     except Exception as e:
         raise ExternalServiceError(f"Querying Elasticsearch failed: {e}") from e
+
+    return 0
 
 
 def main() -> int:

@@ -1,5 +1,7 @@
 # Agent Instructions
 
+This file captures project-specific guidance for working in this repository.
+
 ## Commands
 
 ```bash
@@ -12,6 +14,9 @@ make build      # Build the Python package and Docker image
 make clean      # Remove Python package build artifacts
 make distclean  # Remove untracked and ignored files, except .python-version
 ```
+
+`make build` runs `docker build`,
+so `make build` and `make all` both require Docker.
 
 ## Working with the User
 
@@ -52,9 +57,8 @@ in the `[project.scripts]` section.
 
 ## Conventions
 
-Follow the guidelines in this section when making changes.
-
-Make changes only when there is a clear, objective reason.
+Follow the guidelines in this section when making changes,
+and make changes only when there is a clear, objective reason.
 
 ### `pyproject.toml`
 
@@ -67,6 +71,12 @@ Keep entries in the following sections in alphabetical order:
 **Note:**
 In `[tool.poetry.dependencies]` only,
 `python` is an exception and should always come first.
+
+### Spacing
+
+In comments and text files,
+use a single space after a sentence-ending period
+when more text follows on the same line.
 
 ### Line length
 
@@ -107,10 +117,18 @@ Use [Semantic Line Breaks](https://sembr.org/) in comments and text files.
   Prefer precise exception types,
   but also avoid a long exhaustive list.
 
-## Post-Edit Workflow
+## Validation Workflow
 
-After making changes, run the following steps.
+After making changes, run the following steps
+unless a step is clearly irrelevant.
 After each step, address all warnings and errors before proceeding.
+
+Documentation changes often still need step 1,
+because `make tidy` formats Markdown
+and runs spelling checks across the repository.
+
+There is currently no automated test suite in this repository,
+so this workflow ends with file-level pre-commit checks.
 
 1. `make tidy` —
    normalize formatting and spelling
@@ -123,16 +141,12 @@ After each step, address all warnings and errors before proceeding.
    because each command in the `lint` target is prefixed with `-`.
 
 3. `poetry run pre-commit run --files <changed files>` —
-   run pre-commit checks on the edited files
+   run pre-commit checks on the changed files
 
    **Note:**
    Some hooks edit files automatically.
    If any files are modified,
    rerun this step until it passes cleanly.
-
-## Tests
-
-There are no automated tests in this repository.
 
 ## Commit Preferences
 

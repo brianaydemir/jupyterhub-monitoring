@@ -11,10 +11,12 @@ _DATETIME_FMT = "%Y-%m-%d %H:%M"
 
 
 def _string_list() -> list[str]:
+    """Return an empty typed string list for dataclass defaults."""
     return []
 
 
 def _int_set() -> set[int]:
+    """Return an empty typed integer set for dataclass defaults."""
     return set()
 
 
@@ -75,14 +77,20 @@ def _summary_description(
 
 
 def _format_created(created_str: str, strftime_fmt: str, tz: tzinfo) -> str:
+    """Format an ISO 8601 creation timestamp for display."""
     try:
-        dt = datetime.fromisoformat(created_str.replace("Z", "+00:00")).astimezone(tz)
+        dt = datetime.fromisoformat(created_str).astimezone(tz)
         return dt.strftime(strftime_fmt)
-    except (ValueError, AttributeError):
+    except (ValueError, TypeError, AttributeError):
         return created_str
 
 
 def _show_method(domain_id_pairs: list[tuple[str, str]], detailed_usernames: bool) -> bool:
+    """Return whether the Login method column should be shown.
+
+    Shown when explicitly requested or when (domain, uid) pairs
+    alone would be ambiguous.
+    """
     return detailed_usernames or len(domain_id_pairs) != len(set(domain_id_pairs))
 
 
@@ -140,8 +148,10 @@ def build_new_users_report(
     """Build a report object for recently created JupyterHub users."""
     n = len(users)
     tz = start_time.tzinfo
-    if tz is None:
+    if tz is None or start_time.utcoffset() is None:
         raise ValueError("start_time must be timezone-aware")
+    if end_time.tzinfo is None or end_time.utcoffset() is None:
+        raise ValueError("end_time must be timezone-aware")
 
     headers, rows = _user_table(users, tz, strftime_fmt, detailed_usernames)
     description = _summary_description(
@@ -166,6 +176,7 @@ def build_new_users_report(
 
 
 def _activity_name_key(pn: ParsedName, show_method: bool) -> tuple[Any, ...]:
+    """Return a sort key for a user in the activity table."""
     if show_method:
         return (pn.priority, pn.domain, pn.uid)
     return (trailing_domain_key(pn.domain), pn.domain, pn.uid)
@@ -205,7 +216,17 @@ def build_activity_report(
     tz_name: str,
     detailed_usernames: bool = False,
 ) -> Report:
-    """Build a report object for per-user JupyterHub server activity."""
+    """Build a report object for per-user JupyterHub server activity.
+
+    Raises:
+        ValueError: If *start_time* or *end_time* is not
+            timezone-aware.
+    """
+    if start_time.tzinfo is None or start_time.utcoffset() is None:
+        raise ValueError("start_time must be timezone-aware")
+    if end_time.tzinfo is None or end_time.utcoffset() is None:
+        raise ValueError("end_time must be timezone-aware")
+
     n = len(totals)
     headers, rows = _activity_table(totals, detailed_usernames)
     description = _summary_description(

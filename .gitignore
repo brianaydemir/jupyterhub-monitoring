@@ -1,14 +1,33 @@
+#───────────────────────────────────────────────────────────────────────────
+# Generic
+
+# Temporary and swap files
+*.tmp
+*.sw[po]
+*~
+
+# IDE and editor artifacts
+.DS_Store
+.idea/
+.vscode/
+
+#───────────────────────────────────────────────────────────────────────────
+# Python
+
+# Virtual environments and version managers
+.pixi/
+.poetry/
+.uv/
+.python-version
+
+# Runtime caches and bytecode
+*.py[cod]
+.mypy_cache/
+.pyright/
+__pycache__/
+
+#───────────────────────────────────────────────────────────────────────────
+# Project-specific
+
 # Build artifacts
 /dist/
-/docs/_build/
-/docs/api/
-
-# Python caches and configuration
-.mypy_cache/
-__pycache__/
-/.poetry/
-/.python-version
-
-# Scratch files and directories
-*.swp
-/_tbd/

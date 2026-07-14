@@ -64,12 +64,10 @@ def get_now_ms() -> int:
 
 
 def parse_duration(duration_str: str) -> timedelta | None:
-    """Parse a human-readable duration string into a :class:`datetime.timedelta`.
+    """Parse a duration string into a timedelta.
 
-    Uses :func:`pytimeparse2.parse` internally. Returns *None* if the string
-    cannot be parsed.
-
-    Returns *None* if *duration_str* is invalid.
+    Uses :func:`pytimeparse2.parse` internally.
+    Returns *None* if *duration_str* cannot be parsed.
     """
     seconds = pytimeparse2.parse(duration_str)
     if seconds is None:

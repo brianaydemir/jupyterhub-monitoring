@@ -21,7 +21,6 @@ class JupyterHubClient:
         self._api_key = api_key
         self._ca_cert = str(ca_cert) if ca_cert is not None else None
 
-        # Build headers with bearer token
         self._headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -33,7 +32,7 @@ class JupyterHubClient:
         """Get the list of users from JupyterHub using offset-based pagination.
 
         Raises:
-            ConnectionError: If the API request fails
+            ConnectionError: If the API request fails.
         """
         url = f"{self._endpoint}/users"
         offset = 0
@@ -53,7 +52,7 @@ class JupyterHubClient:
                 )
                 response.raise_for_status()
             except requests.exceptions.RequestException as e:
-                raise ConnectionError(f"Failed to list users: {str(e)}") from e
+                raise ConnectionError(f"Failed to list users: {e}") from e
 
             page = cast(list[dict[str, Any]], response.json())
             yield from page
@@ -66,33 +65,26 @@ class JupyterHubClient:
     def list_servers(self) -> list[dict[str, Any]]:
         """Get the list of servers from JupyterHub.
 
-        Retrieves all users and extracts their servers, flattening nested
-        dictionaries by concatenating keys with ".".
+        Retrieves all users and extracts their servers,
+        flattening nested dictionaries into dotted-key paths.
 
         Raises:
-            ConnectionError: If the API request fails
+            ConnectionError: If the API request fails.
         """
         users = self.list_users()
         result: list[dict[str, Any]] = []
 
         for user in users:
-            # Check if this user has any servers
             servers = user.get("servers", {})
             if not servers:
                 continue
 
-            # Process each server for this user
             for server_name, server_info in servers.items():
                 if server_info:
                     server_data = JupyterHubClient._flatten_dict(
                         {
-                            "user": {
-                                "name": user.get("name"),
-                            },
-                            "server": {
-                                "name": server_name,
-                                **server_info,
-                            },
+                            "user": {"name": user.get("name")},
+                            "server": {"name": server_name, **server_info},
                         }
                     )
                     result.append(server_data)

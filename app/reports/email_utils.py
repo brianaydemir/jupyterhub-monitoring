@@ -1,5 +1,6 @@
 """Library helpers for composing and sending emails via SMTP."""
 
+import argparse
 import mimetypes
 import smtplib
 import sys
@@ -8,7 +9,6 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Protocol, cast
 
@@ -29,9 +29,18 @@ class _ReportEmailArgs(Protocol):
     smtp_no_ssl: bool
 
 
-def _make_attachment_part(mime_hint: str, payload: bytes, filename: str) -> MIMEBase:
-    """Create a base64-encoded MIME attachment part."""
-    mime_type, _ = mimetypes.guess_type(mime_hint)
+def _make_attachment_part(
+    filename: str,
+    payload: bytes,
+    mime_type: str | None = None,
+) -> MIMEBase:
+    """Create a base64-encoded MIME attachment part.
+
+    When *mime_type* is ``None``, the type is guessed from
+    *filename*, falling back to ``application/octet-stream``.
+    """
+    if mime_type is None:
+        mime_type, _ = mimetypes.guess_type(filename)
     if mime_type is None:
         mime_type = "application/octet-stream"
     maintype, subtype = mime_type.split("/", 1)
@@ -50,31 +59,31 @@ def create_message(
     subject: str,
     text_content: str | None,
     html_content: str | None,
-    attachments: list[Path] | None = None,
-    attachment_data: list[tuple[str, bytes]] | None = None,
+    report_attachments: list[ReportAttachment] | None = None,
 ) -> MIMEMultipart:
-    """Build an email message from text/HTML bodies and optional attachments."""
+    """Build an email message with text/HTML bodies and attachments."""
     body = MIMEMultipart("alternative")
 
-    # Read and attach plain text content
     if text_content:
         body.attach(MIMEText(text_content, "plain"))
 
-    # Read and attach HTML content
     if html_content:
         body.attach(MIMEText(html_content, "html"))
 
-    if attachments or attachment_data:
+    if report_attachments:
         msg = MIMEMultipart("mixed")
         msg.attach(body)
-        for path in attachments or []:
-            msg.attach(_make_attachment_part(str(path), path.read_bytes(), path.name))
-        for filename, data in attachment_data or []:
-            msg.attach(_make_attachment_part(filename, data, filename))
+        for att in report_attachments:
+            msg.attach(
+                _make_attachment_part(
+                    att.filename,
+                    att.payload,
+                    att.mime_hint,
+                )
+            )
     else:
         msg = body
 
-    # Format the From and To fields with names if provided
     if sender_name:
         msg["From"] = formataddr((sender_name, sender_email))
     else:
@@ -101,8 +110,9 @@ def send_email(
     """Send an email message via SMTP.
 
     Raises:
-        OSError: If the connection to the SMTP server fails.
-        SMTPException: If an SMTP-level error occurs.
+        OSError: If the SMTP connection fails.
+        smtplib.SMTPException: If an SMTP-level error
+            occurs.
     """
     if use_ssl:
         with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
@@ -128,9 +138,7 @@ def send_report_email(
             subject=args.subject,
             text_content=text_content,
             html_content=html_content,
-            attachment_data=[
-                (attachment.filename, attachment.payload) for attachment in attachments
-            ],
+            report_attachments=attachments,
         )
         send_email(
             smtp_host=args.smtp_host,
@@ -147,18 +155,18 @@ def send_report_email(
         return 1
 
 
-def make_report_email_args(args: object) -> _ReportEmailArgs:
-    """Extract only report-email attributes from an arbitrary args object."""
+def make_report_email_args(args: argparse.Namespace) -> _ReportEmailArgs:
+    """Extract report-email attributes from a parsed args namespace."""
     return cast(
         _ReportEmailArgs,
         SimpleNamespace(
-            sender_name=getattr(args, "sender_name"),
-            sender_email=getattr(args, "sender_email"),
-            recipient_name=getattr(args, "recipient_name"),
-            recipient_email=getattr(args, "recipient_email"),
-            subject=getattr(args, "subject"),
-            smtp_host=getattr(args, "smtp_host"),
-            smtp_port=getattr(args, "smtp_port"),
-            smtp_no_ssl=getattr(args, "smtp_no_ssl"),
+            sender_name=args.sender_name,
+            sender_email=args.sender_email,
+            recipient_name=args.recipient_name,
+            recipient_email=args.recipient_email,
+            subject=args.subject,
+            smtp_host=args.smtp_host,
+            smtp_port=args.smtp_port,
+            smtp_no_ssl=args.smtp_no_ssl,
         ),
     )

@@ -7,6 +7,8 @@ from typing import Any, cast
 
 from elasticsearch import ApiError, Elasticsearch, TransportError
 
+_SCROLL_TIMEOUT = "2m"
+
 
 class ElasticsearchClient:
     """A wrapper around the official Python client for Elasticsearch."""
@@ -21,12 +23,11 @@ class ElasticsearchClient:
         """Exactly one of *api_key* or *basic_auth* must be provided.
 
         Raises:
-            ValueError: If both or neither of *api_key* and *basic_auth* are provided.
+            ValueError: If both or neither are provided.
         """
         if (api_key is None) == (basic_auth is None):
             raise ValueError("Exactly one of api_key or basic_auth must be provided")
 
-        # Build connection parameters
         connection_params: dict[str, Any] = {"hosts": [endpoint]}
 
         if api_key is not None:
@@ -34,12 +35,10 @@ class ElasticsearchClient:
         else:
             connection_params["basic_auth"] = basic_auth
 
-        # Add CA certificate if provided
         if ca_cert is not None:
             connection_params["ca_certs"] = str(ca_cert)
             connection_params["verify_certs"] = True
 
-        # Initialize the Elasticsearch client
         self._client = Elasticsearch(**connection_params)
 
     def upload_document(
@@ -64,11 +63,13 @@ class ElasticsearchClient:
         index: str,
         documents: Iterator[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Upload multiple documents to an Elasticsearch index from an iterator.
+        """Upload documents to an Elasticsearch index.
 
         Raises:
-            elasticsearch.ApiError: If Elasticsearch rejects a document upload
-            elasticsearch.TransportError: If a connection-level error occurs
+            elasticsearch.ApiError: If Elasticsearch
+                rejects a document upload.
+            elasticsearch.TransportError: If a
+                connection-level error occurs.
         """
         results: list[dict[str, Any]] = []
         for document in documents:
@@ -85,51 +86,42 @@ class ElasticsearchClient:
         sort: list[dict[str, Any]] | None = None,
         limit: int | None = None,
     ) -> Iterator[dict[str, Any]]:
-        """Query an index and yield matching ``_source`` documents.
+        """Query an index and yield ``_source`` documents.
 
-        Accepts either Query DSL (*query*) or query-string syntax
-        (*query_string*). When both are ``None``, the query defaults to
-        ``match_all``. Results are streamed via Elasticsearch scroll pagination.
-        When *limit* is set, yielded results are capped and page size is also
-        capped to avoid over-fetching.
+        Accepts either Query DSL (*query*) or query-string
+        syntax (*query_string*).  When both are ``None``,
+        the query defaults to ``match_all``.  Results are
+        streamed via scroll pagination.  When *limit* is
+        set, yielded results are capped and page size is
+        also capped to avoid over-fetching.
 
         Raises:
-            elasticsearch.ApiError: If Elasticsearch rejects a search or scroll request.
-            elasticsearch.TransportError: If a transport-level failure occurs.
+            elasticsearch.ApiError: If Elasticsearch
+                rejects a search or scroll request.
+            elasticsearch.TransportError: If a
+                transport-level failure occurs.
         """
-        # Build the query body
-        query_body: dict[str, Any] = {}
-
         if query is not None:
-            # Use the provided Query DSL query
-            query_body["query"] = query
+            es_query: dict[str, Any] = query
         elif query_string is not None:
-            # Convert query string to Query DSL
-            query_body["query"] = {
+            es_query = {
                 "query_string": {
                     "query": query_string,
                 }
             }
         else:
-            # If no query provided, match all documents
-            query_body["query"] = {"match_all": {}}
+            es_query = {"match_all": {}}
 
-        if sort is not None:
-            query_body["sort"] = sort
-
-        # Cap the page size at the limit to avoid fetching more than needed
         page_size = min(size, limit) if limit is not None else size
 
-        # Initialize scroll
-        scroll_timeout = "2m"
         response = self._client.search(
             index=index,
-            body=query_body,
-            scroll=scroll_timeout,
+            query=es_query,
+            sort=sort,
+            scroll=_SCROLL_TIMEOUT,
             size=page_size,
         )
 
-        # Get the scroll ID
         scroll_id = response.get("_scroll_id")
 
         try:
@@ -144,24 +136,25 @@ class ElasticsearchClient:
                         return
                 response = self._client.scroll(
                     scroll_id=scroll_id,
-                    scroll=scroll_timeout,
+                    scroll=_SCROLL_TIMEOUT,
                 )
                 scroll_id = response.get("_scroll_id")
                 hits = response["hits"]["hits"]
 
         finally:
-            # Clean up the scroll context
             if scroll_id:
                 try:
                     self._client.clear_scroll(scroll_id=scroll_id)
                 except (ApiError, TransportError) as exc:
                     print(
-                        f"Warning: failed to clear Elasticsearch scroll: {exc}", file=sys.stderr
+                        f"Warning: failed to clear Elasticsearch scroll: {exc}",
+                        file=sys.stderr,
                     )
 
     def close(self) -> None:
-        """Prefer using the client as a context manager; call explicitly when
-        that is not possible.
+        """Close the underlying transport.
+
+        Prefer using the client as a context manager.
         """
         self._client.close()
 
@@ -179,10 +172,11 @@ class ElasticsearchClient:
         expiration: str | None = None,
         username: str | None = None,
     ) -> dict[str, Any]:
-        """Create an Elasticsearch API key using the client's current credentials.
+        """Create an Elasticsearch API key.
 
         Raises:
-            elasticsearch.ApiError: If Elasticsearch rejects the request
+            elasticsearch.ApiError: If Elasticsearch
+                rejects the request.
         """
         name = key_name or (f"api-key-{username}" if username else "api-key")
         metadata: dict[str, Any] | None = {"created_by": username} if username else None
@@ -199,18 +193,21 @@ class ElasticsearchClient:
         key_id: str | None = None,
         key_name: str | None = None,
     ) -> dict[str, Any]:
-        """Invalidate an Elasticsearch API key owned by the authenticated user.
+        """Invalidate an Elasticsearch API key.
 
-        Exactly one of *key_id* or *key_name* must be provided. The request is
-        scoped to the authenticated user's own keys (``owner=True``).
+        Exactly one of *key_id* or *key_name* must be
+        provided.  The request is scoped to the
+        authenticated user's own keys (``owner=True``).
 
         Raises:
-            ValueError: If neither or both of *key_id* / *key_name* are provided.
-            elasticsearch.ApiError: If Elasticsearch rejects the request.
+            ValueError: If neither or both of
+                *key_id* / *key_name* are provided.
+            elasticsearch.ApiError: If Elasticsearch
+                rejects the request.
         """
-        if not key_id and not key_name:
+        if key_id is None and key_name is None:
             raise ValueError("Either key_id or key_name must be provided")
-        if key_id and key_name:
+        if key_id is not None and key_name is not None:
             raise ValueError("Only one of key_id or key_name may be provided")
         response = self._client.security.invalidate_api_key(
             id=key_id,
@@ -220,7 +217,12 @@ class ElasticsearchClient:
         return cast(dict[str, Any], response)
 
     def list_api_keys(self, *, active_only: bool = True) -> list[dict[str, Any]]:
-        """List API keys owned by the authenticated user."""
+        """List API keys owned by the authenticated user.
+
+        Raises:
+            elasticsearch.ApiError: If Elasticsearch
+                rejects the request.
+        """
         response = self._client.security.get_api_key(
             owner=True,
             active_only=active_only,

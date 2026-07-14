@@ -34,6 +34,7 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 
 [tool.black]
 line-length = 96
+target-version = ["py314"]
 
 
 [tool.isort]
@@ -71,11 +72,11 @@ packages = [{ include = "app" }]
 [tool.poetry.dependencies]
 python = "^3.14"
 elasticsearch = "~9.3"
+jinja2 = "~3.1"
+openpyxl = "~3.1"
 pytimeparse2 = "~1.7"
 requests = "~2.32"
-jinja2 = "~3.1"
 tabulate = "~0.9"
-openpyxl = "~3.1"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -83,17 +84,18 @@ bandit = "~1.9"
 black = "~26.3"
 isort = "~8.0"
 mdformat = "~1.0"
-mypy = "~1.19"
-pre-commit = "~4.5"
-pylint = "~4.0"
-pyright = "~1.1"
-sphinx = "~9.1"
-shibuya = "~2026.1"
-toml-cli = "~0.8"
-typos = "~1.44"
-mdit-py-plugins = "~0.5"
 mdformat-gfm = "~1.0"
 mdformat-gfm-alerts = "~2.0"
+mypy = "~2.0"
+pre-commit = "~4.6"
+pylint = "~4.0"
+pyright = "~1.1"
+toml-cli = "~0.8"
+typos = "~1.46"
+
+
+[tool.poetry.requires-plugins]
+poetry-plugin-export = ">=1.0.0"
 
 
 [tool.pyright]

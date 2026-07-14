@@ -157,12 +157,10 @@ def validate_es_arguments(
 
     if has_api_key and has_username:
         parser.error(
-            "--es-api-key / ELASTICSEARCH_API_KEY and " + "--es-username are mutually exclusive"
+            "--es-api-key / ELASTICSEARCH_API_KEY and --es-username are mutually exclusive"
         )
     if not has_api_key and not has_username:
-        parser.error(
-            "one of --es-api-key, ELASTICSEARCH_API_KEY, or " + "--es-username is required"
-        )
+        parser.error("one of --es-api-key, ELASTICSEARCH_API_KEY, or --es-username is required")
     if has_api_key and args.es_api_key is not None:
         if not args.es_api_key.exists():
             parser.error(f"API key file not found: {args.es_api_key}")
@@ -210,8 +208,12 @@ def validate_query_arguments(
         parser.error(f"Invalid duration format: {args.duration!r}")
 
     if args.time is not None:
-        if not re.fullmatch(r"\d{1,2}:\d{2}", args.time):
+        m = re.fullmatch(r"(\d{1,2}):(\d{2})", args.time)
+        if not m:
             parser.error("--time must be in HH:MM format")
+        hh, mm = int(m.group(1)), int(m.group(2))
+        if hh > 23 or mm > 59:
+            parser.error("--time must be a valid time (HH: 0-23, MM: 0-59)")
 
     try:
         parse_timezone(args.timezone)
@@ -221,6 +223,8 @@ def validate_query_arguments(
 
 def add_output_argument_group(
     parser: argparse.ArgumentParser,
+    *,
+    include_date_format: bool = True,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Add report output-format arguments and return the group."""
     output_group = parser.add_argument_group("Output")
@@ -247,15 +251,16 @@ def add_output_argument_group(
         type=Path,
         help="Write output as an Excel workbook (.xlsx) with one sheet per table block",
     )
-    output_group.add_argument(
-        "--date-format",
-        choices=["date", "datetime"],
-        default="date",
-        help=(
-            "Format for creation timestamps: 'date' (default, YYYY-MM-DD) or "
-            "'datetime' (YYYY-MM-DD HH:MM)"
-        ),
-    )
+    if include_date_format:
+        output_group.add_argument(
+            "--date-format",
+            choices=["date", "datetime"],
+            default="date",
+            help=(
+                "Format for creation timestamps: 'date' (default, YYYY-MM-DD) or "
+                "'datetime' (YYYY-MM-DD HH:MM)"
+            ),
+        )
     output_group.add_argument(
         "--detailed-usernames",
         action="store_true",
@@ -274,13 +279,17 @@ def add_email_arguments(
     group.add_argument(
         "--sender-email",
         required=required,
-        help="Sender email address" + (" (required with --send-email)" if not required else ""),
+        help=(
+            "Sender email address" + (" (required with --send-email)" if not required else "")
+        ),
     )
     group.add_argument(
         "--recipient-email",
         required=required,
-        help="Recipient email address"
-        + (" (required with --send-email)" if not required else ""),
+        help=(
+            "Recipient email address"
+            + (" (required with --send-email)" if not required else "")
+        ),
     )
     group.add_argument(
         "--sender-name",
@@ -298,13 +307,15 @@ def add_email_arguments(
     group.add_argument(
         "--smtp-host",
         required=required,
-        help="SMTP server hostname" + (" (required with --send-email)" if not required else ""),
+        help=(
+            "SMTP server hostname" + (" (required with --send-email)" if not required else "")
+        ),
     )
     group.add_argument(
         "--smtp-port",
         type=int,
         required=required,
-        help="SMTP server port" + (" (required with --send-email)" if not required else ""),
+        help=("SMTP server port" + (" (required with --send-email)" if not required else "")),
     )
     group.add_argument(
         "--smtp-no-ssl",
@@ -353,13 +364,14 @@ def read_api_key(file: Path | None, env_var: str) -> str:
 
 
 def make_es_client(args: argparse.Namespace) -> ElasticsearchClient:
-    """Construct an :class:`~app.elasticsearch_client.ElasticsearchClient` from parsed args.
+    """Build an Elasticsearch client from parsed args.
 
-    When ``args.es_username`` is set, prompts for a password via
-    :func:`prompt_credentials`.
+    When ``args.es_username`` is set, prompts for a
+    password via :func:`prompt_credentials`.
 
     Raises:
-        AuthCancelledError: If interactive credential entry is cancelled.
+        AuthCancelledError: If interactive credential
+            entry is cancelled.
     """
     if args.es_username:
         credentials = prompt_credentials(args.es_username)
@@ -379,7 +391,7 @@ def make_es_client(args: argparse.Namespace) -> ElasticsearchClient:
 
 
 def make_jupyterhub_client(args: argparse.Namespace) -> JupyterHubClient:
-    """Construct a :class:`~app.jupyterhub_client.JupyterHubClient` from parsed args."""
+    """Build a JupyterHub client from parsed args."""
     return JupyterHubClient(
         endpoint=args.jupyterhub_endpoint,
         api_key=read_api_key(args.jupyterhub_api_key, "JUPYTERHUB_API_KEY"),
@@ -397,11 +409,13 @@ def configure_report_parser(
     *,
     source: str,
     default_subject: str,
+    include_date_format: bool = True,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Configure shared report command argument groups.
 
     Raises:
-        ValueError: If *source* is not ``"jupyterhub"`` or ``"es"``.
+        ValueError: If *source* is not ``"jupyterhub"``
+            or ``"es"``.
     """
     if source == "jupyterhub":
         add_jupyterhub_argument_group(parser)
@@ -411,7 +425,10 @@ def configure_report_parser(
         raise ValueError(f"Unsupported report source: {source!r}")
 
     query_group = add_query_argument_group(parser)
-    add_output_argument_group(parser)
+    add_output_argument_group(
+        parser,
+        include_date_format=include_date_format,
+    )
     add_email_argument_group(parser, default_subject=default_subject)
     return query_group
 

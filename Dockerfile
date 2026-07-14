@@ -1,4 +1,4 @@
-FROM python:3.14-slim AS main
+FROM python:3.14-slim
 ARG VERSION
 
 RUN --mount=type=bind,source=dist,target=/context/dist <<ENDRUN
