@@ -3,7 +3,7 @@
 import argparse
 import sys
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from app.cli.runtime import run_command
@@ -33,6 +33,8 @@ def filter_new_users(
 
         try:
             created_dt = datetime.fromisoformat(created_str)
+            if created_dt.tzinfo is None:
+                created_dt = created_dt.replace(tzinfo=timezone.utc)
             if cutoff_time <= created_dt <= end_time:
                 new_users.append(
                     {
@@ -40,7 +42,7 @@ def filter_new_users(
                         "created": created_str,
                     }
                 )
-        except ValueError, TypeError, AttributeError:
+        except (ValueError, TypeError, AttributeError):
             continue
 
     return new_users

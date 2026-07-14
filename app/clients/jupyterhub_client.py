@@ -57,10 +57,10 @@ class JupyterHubClient:
             page = cast(list[dict[str, Any]], response.json())
             yield from page
 
-            if len(page) < limit:
+            if not page:
                 break
 
-            offset += limit
+            offset += len(page)
 
     def list_servers(self) -> list[dict[str, Any]]:
         """Get the list of servers from JupyterHub.
