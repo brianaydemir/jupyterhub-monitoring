@@ -81,8 +81,15 @@ def _format_created(created_str: str, strftime_fmt: str, tz: tzinfo) -> str:
     try:
         dt = datetime.fromisoformat(created_str).astimezone(tz)
         return dt.strftime(strftime_fmt)
-    except (ValueError, TypeError, AttributeError):
+    except ValueError, TypeError, AttributeError:
         return created_str
+
+
+def _format_first_server(ts: int | None, strftime_fmt: str, tz: tzinfo) -> str:
+    """Format a user's first server-start time, or ``"n/a"`` if never."""
+    if ts is None:
+        return "n/a"
+    return datetime.fromtimestamp(ts, tz).strftime(strftime_fmt)
 
 
 def _show_method(domain_id_pairs: list[tuple[str, str]], detailed_usernames: bool) -> bool:
@@ -106,31 +113,33 @@ def _user_table(
     tz: tzinfo,
     strftime_fmt: str,
     detailed_usernames: bool,
+    first_server: dict[str, int],
 ) -> tuple[list[str], list[list[str]]]:
     """Build headers and rows for the new-users table."""
     parsed = [
         (
             _format_created(user.get("created", ""), strftime_fmt, tz),
+            _format_first_server(first_server.get(user.get("name", "")), strftime_fmt, tz),
             parse_name(user.get("name", "")),
         )
         for user in users
     ]
-    show_method = _show_method([(pn.domain, pn.uid) for _, pn in parsed], detailed_usernames)
+    show_method = _show_method([(pn.domain, pn.uid) for _, _, pn in parsed], detailed_usernames)
     if show_method:
-        sorted_rows = sorted(parsed, key=lambda r: (r[0], r[1].priority, r[1].domain, r[1].uid))
+        sorted_rows = sorted(parsed, key=lambda r: (r[0], r[2].priority, r[2].domain, r[2].uid))
     else:
         sorted_rows = sorted(
             parsed,
-            key=lambda r: (r[0], trailing_domain_key(r[1].domain), r[1].domain, r[1].uid),
+            key=lambda r: (r[0], trailing_domain_key(r[2].domain), r[2].domain, r[2].uid),
         )
 
-    headers = ["Created", "Institution", "ID"]
+    headers = ["Created", "First server", "Institution", "ID"]
     if show_method:
         headers.append("Login method")
 
     rows: list[list[str]] = []
-    for created, pn in sorted_rows:
-        row = [created, pn.domain, pn.uid]
+    for created, first, pn in sorted_rows:
+        row = [created, first, pn.domain, pn.uid]
         if show_method:
             row.append(pn.login_method)
         rows.append(row)
@@ -144,8 +153,14 @@ def build_new_users_report(
     tz_name: str,
     strftime_fmt: str,
     detailed_usernames: bool = False,
+    first_server: dict[str, int] | None = None,
 ) -> Report:
-    """Build a report object for recently created JupyterHub users."""
+    """Build a report object for recently created JupyterHub users.
+
+    *first_server* maps a username to the epoch-seconds time of that
+    user's first server start; users absent from the mapping are shown as
+    having never started a server.
+    """
     n = len(users)
     tz = start_time.tzinfo
     if tz is None or start_time.utcoffset() is None:
@@ -153,7 +168,7 @@ def build_new_users_report(
     if end_time.tzinfo is None or end_time.utcoffset() is None:
         raise ValueError("end_time must be timezone-aware")
 
-    headers, rows = _user_table(users, tz, strftime_fmt, detailed_usernames)
+    headers, rows = _user_table(users, tz, strftime_fmt, detailed_usernames, first_server or {})
     description = _summary_description(
         count=n,
         singular_phrase="new user created",

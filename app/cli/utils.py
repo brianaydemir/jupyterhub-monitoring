@@ -33,13 +33,13 @@ def prompt_credentials(
     else:
         try:
             username = input("Username: ")
-        except (EOFError, KeyboardInterrupt):
+        except EOFError, KeyboardInterrupt:
             print("\nOperation cancelled.", file=sys.stderr)
             return None
 
     try:
         password = getpass.getpass("Password: ")
-    except (EOFError, KeyboardInterrupt):
+    except EOFError, KeyboardInterrupt:
         print("\nOperation cancelled.", file=sys.stderr)
         return None
 
@@ -498,6 +498,19 @@ def get_strftime_fmt(args: argparse.Namespace) -> str:
     return "%Y-%m-%d" if args.date_format == "date" else "%Y-%m-%d %H:%M"
 
 
+# Per-source dispatch for report commands.  A command's ``source`` is one
+# or more of these tokens joined with ``"+"`` (e.g. ``"jupyterhub+es"``),
+# so a single command can require several credential sets.
+_SOURCE_ADDERS = {
+    "jupyterhub": add_jupyterhub_argument_group,
+    "es": add_es_argument_group,
+}
+_SOURCE_VALIDATORS = {
+    "jupyterhub": validate_jupyterhub_arguments,
+    "es": validate_es_arguments,
+}
+
+
 def configure_report_parser(
     parser: argparse.ArgumentParser,
     *,
@@ -507,16 +520,17 @@ def configure_report_parser(
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Configure shared report command argument groups.
 
+    *source* is one or more of ``"jupyterhub"`` and ``"es"`` joined with
+    ``"+"`` (e.g. ``"jupyterhub+es"``).
+
     Raises:
-        ValueError: If *source* is not ``"jupyterhub"``
-            or ``"es"``.
+        ValueError: If *source* contains an unsupported token.
     """
-    if source == "jupyterhub":
-        add_jupyterhub_argument_group(parser)
-    elif source == "es":
-        add_es_argument_group(parser)
-    else:
-        raise ValueError(f"Unsupported report source: {source!r}")
+    for token in source.split("+"):
+        adder = _SOURCE_ADDERS.get(token)
+        if adder is None:
+            raise ValueError(f"Unsupported report source: {token!r}")
+        adder(parser)
 
     query_group = add_query_argument_group(parser)
     add_output_argument_group(
@@ -535,15 +549,17 @@ def validate_report_arguments(
 ) -> None:
     """Run shared validation for report commands.
 
+    *source* is one or more of ``"jupyterhub"`` and ``"es"`` joined with
+    ``"+"`` (e.g. ``"jupyterhub+es"``).
+
     Raises:
-        ValueError: If *source* is not ``"jupyterhub"`` or ``"es"``.
+        ValueError: If *source* contains an unsupported token.
     """
-    if source == "jupyterhub":
-        validate_jupyterhub_arguments(args, parser)
-    elif source == "es":
-        validate_es_arguments(args, parser)
-    else:
-        raise ValueError(f"Unsupported report source: {source!r}")
+    for token in source.split("+"):
+        validator = _SOURCE_VALIDATORS.get(token)
+        if validator is None:
+            raise ValueError(f"Unsupported report source: {token!r}")
+        validator(args, parser)
     validate_query_arguments(args, parser)
     validate_email_arguments(args, parser)
 

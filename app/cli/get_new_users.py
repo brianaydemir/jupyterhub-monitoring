@@ -6,15 +6,17 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import Any
 
+from app.cli.get_new_activity import build_query
 from app.cli.runtime import run_command
 from app.cli.utils import (
     compute_report_time_range,
     configure_report_parser,
     get_strftime_fmt,
+    make_es_client,
     make_jupyterhub_client,
     validate_report_arguments,
 )
-from app.core.errors import ExternalServiceError
+from app.core.errors import AppError, ExternalServiceError
 from app.reports.builders import build_new_users_report
 from app.reports.delivery import deliver_report
 
@@ -42,10 +44,38 @@ def filter_new_users(
                         "created": created_str,
                     }
                 )
-        except (ValueError, TypeError, AttributeError):
+        except ValueError, TypeError, AttributeError:
             continue
 
     return new_users
+
+
+def compute_first_server(
+    documents: Iterable[dict[str, Any]],
+) -> dict[str, int]:
+    """Find each user's earliest server-start time from Elasticsearch documents.
+
+    Returns a mapping from ``user.name`` to the smallest
+    ``meta.snapshot-time`` (epoch seconds) seen for that user among the
+    given "server up" snapshot documents.  Documents missing a usable
+    ``user.name`` or numeric ``meta.snapshot-time`` are silently skipped.
+    """
+    earliest: dict[str, int] = {}
+
+    for doc in documents:
+        user = doc.get("user.name")
+        snapshot_time = doc.get("meta.snapshot-time")
+
+        if not isinstance(user, str) or not user:
+            continue
+        if not isinstance(snapshot_time, (int, float)) or isinstance(snapshot_time, bool):
+            continue
+
+        ts = int(snapshot_time)
+        if user not in earliest or ts < earliest[user]:
+            earliest[user] = ts
+
+    return earliest
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -74,7 +104,7 @@ Environment variables:
     )
     configure_report_parser(
         parser,
-        source="jupyterhub",
+        source="jupyterhub+es",
         default_subject="JupyterHub New Users Report",
     )
     return parser
@@ -85,7 +115,7 @@ def _validate_arguments(
     parser: argparse.ArgumentParser,
 ) -> None:
     """Run post-parse argument validation."""
-    validate_report_arguments(args, parser, source="jupyterhub")
+    validate_report_arguments(args, parser, source="jupyterhub+es")
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -103,6 +133,8 @@ def _run(args: argparse.Namespace) -> int:
 
     new_users = filter_new_users(users, start_time, end_time)
 
+    first_server = _query_first_server(args, start_time) if new_users else {}
+
     strftime_fmt = get_strftime_fmt(args)
 
     report = build_new_users_report(
@@ -112,8 +144,36 @@ def _run(args: argparse.Namespace) -> int:
         tz_name=args.timezone,
         strftime_fmt=strftime_fmt,
         detailed_usernames=args.detailed_usernames,
+        first_server=first_server,
     )
     return deliver_report(args, report)
+
+
+def _query_first_server(
+    args: argparse.Namespace,
+    start_time: datetime,
+) -> dict[str, int]:
+    """Query Elasticsearch for each user's first-ever server-start time.
+
+    Searches from *start_time* through now: a new user cannot have started
+    a server before being created, so this captures their true first start
+    even if it occurred after the reporting window.
+
+    Raises:
+        ExternalServiceError: If Elasticsearch querying fails.
+    """
+    now = datetime.now(timezone.utc)
+    try:
+        with make_es_client(args) as client:
+            query = build_query(
+                cutoff=int(start_time.timestamp()),
+                end=int(now.timestamp()),
+            )
+            return compute_first_server(client.query(index=args.es_index, query=query))
+    except AppError:
+        raise
+    except Exception as e:
+        raise ExternalServiceError(f"Querying Elasticsearch failed: {e}") from e
 
 
 def main() -> int:
