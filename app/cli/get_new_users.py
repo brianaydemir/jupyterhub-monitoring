@@ -106,6 +106,7 @@ Environment variables:
         parser,
         source="jupyterhub+es",
         default_subject="JupyterHub New Users Report",
+        include_anonymize=True,
     )
     return parser
 
@@ -145,6 +146,7 @@ def _run(args: argparse.Namespace) -> int:
         strftime_fmt=strftime_fmt,
         detailed_usernames=args.detailed_usernames,
         first_server=first_server,
+        anonymize=args.anonymize,
     )
     return deliver_report(args, report)
 

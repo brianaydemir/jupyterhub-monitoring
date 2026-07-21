@@ -319,6 +319,8 @@ def add_output_argument_group(
     parser: argparse.ArgumentParser,
     *,
     include_date_format: bool = True,
+    date_format_default: str = "date",
+    include_anonymize: bool = False,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Add report output-format arguments and return the group."""
     output_group = parser.add_argument_group("Output")
@@ -346,13 +348,14 @@ def add_output_argument_group(
         help="Write output as an Excel workbook (.xlsx) with one sheet per table block",
     )
     if include_date_format:
+        other = "datetime" if date_format_default == "date" else "date"
         output_group.add_argument(
             "--date-format",
             choices=["date", "datetime"],
-            default="date",
+            default=date_format_default,
             help=(
-                "Format for creation timestamps: 'date' (default, YYYY-MM-DD) or "
-                "'datetime' (YYYY-MM-DD HH:MM)"
+                f"Format for timestamps: '{date_format_default}' (default) or "
+                f"'{other}'; 'date' is YYYY-MM-DD, 'datetime' is YYYY-MM-DD HH:MM"
             ),
         )
     output_group.add_argument(
@@ -360,6 +363,15 @@ def add_output_argument_group(
         action="store_true",
         help='Always show the "Login method" column in the output',
     )
+    if include_anonymize:
+        output_group.add_argument(
+            "--anonymize",
+            action="store_true",
+            help=(
+                "Replace within-institution identifiers with generic "
+                "pseudonyms; the institution is still shown"
+            ),
+        )
     return output_group
 
 
@@ -517,6 +529,8 @@ def configure_report_parser(
     source: str,
     default_subject: str,
     include_date_format: bool = True,
+    date_format_default: str = "date",
+    include_anonymize: bool = False,
 ) -> argparse._ArgumentGroup:  # pyright: ignore[reportPrivateUsage]
     """Configure shared report command argument groups.
 
@@ -536,6 +550,8 @@ def configure_report_parser(
     add_output_argument_group(
         parser,
         include_date_format=include_date_format,
+        date_format_default=date_format_default,
+        include_anonymize=include_anonymize,
     )
     add_email_argument_group(parser, default_subject=default_subject)
     return query_group

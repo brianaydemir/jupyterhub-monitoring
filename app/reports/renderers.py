@@ -12,8 +12,7 @@ from app.reports.model import Report, ReportAttachment, TableBlock, TextBlock
 
 _ENV = Environment(loader=BaseLoader(), autoescape=True, trim_blocks=True, lstrip_blocks=True)
 
-_HTML_TEMPLATE = _ENV.from_string(
-    """
+_HTML_TEMPLATE = _ENV.from_string("""
 <style>
   @media (prefers-color-scheme: dark) {
     .th { background: #1d4060 !important; color: #d0e8f8 !important; border-color: #3a607a !important; }
@@ -65,8 +64,7 @@ _HTML_TEMPLATE = _ENV.from_string(
   {% endfor %}
   </ul>
 {% endif %}
-"""
-)
+""")
 
 
 def _render_text_table(block: TableBlock) -> list[str]:

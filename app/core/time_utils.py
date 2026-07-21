@@ -23,7 +23,7 @@ def parse_timezone(tz_str: str) -> tzinfo:
     # Try IANA name / abbreviation first.
     try:
         return ZoneInfo(tz_str)
-    except (ZoneInfoNotFoundError, KeyError):
+    except ZoneInfoNotFoundError, KeyError:
         pass
 
     # Try fixed UTC offset: ±HH:MM
