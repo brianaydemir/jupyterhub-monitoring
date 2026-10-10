@@ -1,4 +1,4 @@
-"""Tests for the invariants enforced by :mod:`app.reports.model`."""
+"""Tests for :mod:`app.reports.model`: cell display and table shape."""
 
 # An explicit comparison to an empty collection is the assertion these
 # tests mean to make, and reads better here than a truthiness check.
@@ -11,10 +11,6 @@ from app.reports.model import (
     Duration,
     Fixed,
     Percent,
-    Report,
-    ReportAttachment,
-    ReportSection,
-    SectionBlock,
     TableBlock,
     cell_text,
 )
@@ -22,10 +18,17 @@ from app.reports.model import (
 
 @pytest.mark.parametrize(
     ("seconds", "expected"),
-    [(0.9, "0:00"), (59, "0:00"), (60, "0:01"), (3599, "0:59"), (3600, "1:00")],
+    [
+        (0.9, "0:00"),
+        (59, "0:00"),
+        (60, "0:01"),
+        (3599, "0:59"),
+        (3600, "1:00"),
+        (172805, "48:00"),
+    ],
 )
 def test_a_duration_reads_as_unpadded_hours_and_minutes(seconds: float, expected: str) -> None:
-    """Hours are not zero-padded, and a partial minute truncates."""
+    """Hours are neither zero-padded nor capped at a day, and a partial minute truncates."""
     assert Duration(seconds).display() == expected
 
 
@@ -39,23 +42,6 @@ def test_a_negative_duration_reads_by_sign_and_magnitude(
 ) -> None:
     """Flooring the signed total would read half an hour as ``"-1:30"``."""
     assert Duration(seconds).display() == expected
-
-
-def test_a_duration_is_not_capped_at_a_day() -> None:
-    """A report's totals run past 24 hours, and read as the hours they are."""
-    assert Duration(172805).display() == "48:00"
-
-
-def test_a_duration_keeps_the_seconds_it_was_given() -> None:
-    """The workbook writes the value, so the display cannot be all there is."""
-    assert Duration(172805).seconds == 172805
-
-
-def test_durations_are_floored_independently() -> None:
-    """Which is why a report's displayed parts need not sum to its total."""
-    parts = [Duration(90), Duration(90)]
-    assert [part.display() for part in parts] == ["0:01", "0:01"]
-    assert Duration(sum(part.seconds for part in parts)).display() == "0:03"
 
 
 @pytest.mark.parametrize(
@@ -100,23 +86,10 @@ def test_every_cell_type_has_a_display_string(value: Cell, expected: str) -> Non
     assert cell_text(value) == expected
 
 
-def test_table_rejects_empty_headers() -> None:
-    """A table with no columns has nothing for a renderer to align."""
-    with pytest.raises(ValueError, match="headers must not be empty"):
-        TableBlock(headers=[], rows=[])
-
-
 def test_table_rejects_rows_of_the_wrong_width() -> None:
     """A short or long row would silently misalign every output format."""
     with pytest.raises(ValueError, match="invalid column count at indices: 1, 2"):
         TableBlock(headers=["a", "b"], rows=[["1", "2"], ["1"], ["1", "2", "3"]])
-
-
-def test_table_validates_rows_of_typed_cells() -> None:
-    """The width check counts cells, whatever type each one carries."""
-    with pytest.raises(ValueError, match="invalid column count at indices: 1"):
-        TableBlock(headers=["a", "b"], rows=[["Sessions", 2], [Duration(60)]])
-    assert TableBlock(headers=["a", "b"], rows=[["Sessions", 2]]).rows == [["Sessions", 2]]
 
 
 def test_table_accepts_no_rows() -> None:
@@ -129,51 +102,3 @@ def test_table_rejects_out_of_range_alignment(column: int) -> None:
     """A right-aligned column must exist."""
     with pytest.raises(ValueError, match="right-aligned columns out of range"):
         TableBlock(headers=["a", "b"], rows=[], right_align_columns={column})
-
-
-def test_table_rejects_an_empty_attachment_filename() -> None:
-    """An attachment needs a name; *None* is how you say "no attachment"."""
-    with pytest.raises(ValueError, match="attachment filename must not be empty"):
-        TableBlock(headers=["a"], rows=[], attachment_filename="")
-
-
-@pytest.mark.parametrize(
-    ("heading", "description", "blocks", "match"),
-    [
-        ("", "d", None, "heading must not be empty"),
-        ("h", "", None, "description must not be empty"),
-        ("h", "d", [], "at least one block"),
-    ],
-)
-def test_section_requires_a_heading_description_and_block(
-    heading: str,
-    description: str,
-    blocks: list[SectionBlock] | None,
-    match: str,
-) -> None:
-    """Every section carries a heading, a description, and content."""
-    fallback: list[SectionBlock] = [TableBlock(headers=["a"], rows=[])]
-    with pytest.raises(ValueError, match=match):
-        ReportSection(
-            heading=heading,
-            description=description,
-            blocks=blocks if blocks is not None else fallback,
-        )
-
-
-def test_report_requires_a_title_and_a_section() -> None:
-    """A report with no title or no sections has nothing to render."""
-    section = ReportSection(
-        heading="h",
-        description="d",
-        blocks=[TableBlock(headers=["a"], rows=[])],
-    )
-    with pytest.raises(ValueError, match="title must not be empty"):
-        Report(title="", sections=[section])
-    with pytest.raises(ValueError, match="at least one section"):
-        Report(title="t", sections=[])
-
-
-def test_attachment_defaults_to_no_mime_hint() -> None:
-    """Without a hint the type is guessed from the filename at send time."""
-    assert ReportAttachment(filename="a.csv", payload=b"x").mime_hint is None

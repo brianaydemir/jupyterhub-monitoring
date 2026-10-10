@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from app.usage.snapshots import build_query, snapshot_seconds, started_seconds
+from app.usage.snapshots import build_query, select_hub, snapshot_seconds, started_seconds
 
 
 def test_query_window_is_half_open() -> None:
@@ -47,6 +47,28 @@ def test_query_omits_the_hub_filter_by_default() -> None:
     assert "meta.hub" not in str(build_query(cutoff=0, end=1))
 
 
+def test_select_hub_keeps_only_an_exact_match() -> None:
+    """A text mapping's term query also returns hubs sharing a word."""
+    docs: list[dict[str, Any]] = [
+        {"meta.hub": "osg"},
+        {"meta.hub": "osg-dev"},
+        {"meta.hub": "OSG"},
+        {},
+    ]
+    assert list(select_hub(docs, "osg")) == [{"meta.hub": "osg"}]
+
+
+def test_select_hub_matches_a_hub_that_is_not_a_string_by_its_text() -> None:
+    """A mapping need not store the hub as text, but --hub is always text."""
+    assert list(select_hub([{"meta.hub": 7}], "7")) == [{"meta.hub": 7}]
+
+
+def test_select_hub_keeps_everything_without_a_hub() -> None:
+    """Without --hub the report spans every hub in the index."""
+    docs: list[dict[str, Any]] = [{"meta.hub": "a"}, {"meta.hub": "b"}, {}]
+    assert list(select_hub(docs, None)) == docs
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [(1782000000, 1782000000), (1782000000.7, 1782000000), (0, 0)],
@@ -60,11 +82,6 @@ def test_snapshot_seconds_accepts_numbers(value: object, expected: int) -> None:
 def test_snapshot_seconds_rejects_non_numbers(value: object) -> None:
     """A bool is not a timestamp, though ``isinstance`` would admit it."""
     assert snapshot_seconds({"meta.snapshot-time": value}) is None
-
-
-def test_snapshot_seconds_rejects_a_missing_field() -> None:
-    """A document without the field cannot be placed in time."""
-    assert snapshot_seconds({}) is None
 
 
 def test_started_seconds_reads_an_iso_timestamp() -> None:

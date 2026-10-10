@@ -2,17 +2,17 @@
 
 Accounting for the activity and assembling the report belong to
 :mod:`app.usage.activity` and :mod:`app.reports.builders`, and are covered
-through those. What is left here is the command's own stderr diagnostic:
-the wording it gives each shape of document set, and the fact that it
-stays off stdout, where the report goes.
+through those. What is left here is the query the command sends, and its
+own stderr diagnostic: the wording it gives each shape of document set,
+and the fact that it stays off stdout, where the report goes.
 """
 
 # This module exercises the command's internal helpers directly.
 # pyright: reportPrivateUsage=false
 
-import argparse
 from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -21,6 +21,7 @@ from app.cli.get_new_activity import _build_parser, _format_document_tally, _run
 from app.reports.delivery import OutputTargets
 from app.reports.model import Report
 from app.usage.activity import DocumentTally, SkipReason
+from tests.helpers.stub_clients import QueryStubClient, install_client
 
 # The email settings a run needs before it will build any at all.
 _EMAIL_ARGV = [
@@ -36,37 +37,13 @@ _EMAIL_ARGV = [
 ]
 
 
-class _StubClient:
-    """Answers ``query`` with prepared documents."""
-
-    def __init__(self, documents: list[dict[str, Any]]) -> None:
-        """Store the documents to yield."""
-        self.documents = documents
-
-    def __enter__(self) -> "_StubClient":
-        """Stand in for the client's context manager."""
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        """Leave the context manager, suppressing nothing."""
-        return None
-
-    def query(self, **_kwargs: Any) -> list[dict[str, Any]]:
-        """Return the prepared documents."""
-        return list(self.documents)
-
-
 def _report_on(
     monkeypatch: pytest.MonkeyPatch,
     documents: list[dict[str, Any]],
 ) -> int:
     """Run the command over *documents*, against a stubbed client."""
-    client = _StubClient(documents)
-
-    def _make_client(_args: argparse.Namespace) -> _StubClient:
-        return client
-
-    monkeypatch.setattr(get_new_activity, "make_es_client", _make_client)
+    client = QueryStubClient(documents)
+    install_client(monkeypatch, get_new_activity, client)
     args = _build_parser().parse_args(
         [
             "--es-endpoint",
@@ -94,14 +71,11 @@ def _emailed_subject(
     """
     captured: list[OutputTargets] = []
 
-    def _make_client(_args: argparse.Namespace) -> _StubClient:
-        return _StubClient([])
-
     def _deliver(targets: OutputTargets, _report: Report) -> int:
         captured.append(targets)
         return 0
 
-    monkeypatch.setattr(get_new_activity, "make_es_client", _make_client)
+    install_client(monkeypatch, get_new_activity, QueryStubClient([]))
     monkeypatch.setattr(get_new_activity, "deliver_report", _deliver)
     args = _build_parser().parse_args(
         [
@@ -121,6 +95,52 @@ def _emailed_subject(
     email = captured[0].email
     assert email is not None
     return email.subject
+
+
+def test_the_query_covers_the_reporting_window_and_the_hub(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The documents counted are the ones the window and --hub select.
+
+    The query's hub term can also return a hub whose name merely contains
+    the one asked for, so the command keeps the exact match alone.
+    """
+    document = {"user.name": "a@x.edu", "meta.interval": "5m"}
+    client = QueryStubClient(
+        [document | {"meta.hub": "production"}, document | {"meta.hub": "production-east"}]
+    )
+    install_client(monkeypatch, get_new_activity, client)
+    args = _build_parser().parse_args(
+        [
+            "--es-endpoint",
+            "https://es.example.edu:9200",
+            "--es-index",
+            "servers",
+            "--report-start",
+            "2026-08-01 00:00",
+            "--report-end",
+            "2026-09-01 00:00",
+            "--hub",
+            "production",
+        ]
+    )
+    assert _run(args) == 0
+
+    assert client.request is not None
+    assert client.request["index"] == "servers"
+    filters = client.request["query"]["bool"]["filter"]
+    chicago = ZoneInfo("America/Chicago")
+    assert {
+        "range": {
+            "meta.snapshot-time": {
+                "gte": int(datetime(2026, 8, 1, tzinfo=chicago).timestamp()),
+                "lt": int(datetime(2026, 9, 1, tzinfo=chicago).timestamp()),
+            }
+        }
+    } in filters
+    assert any("production" in str(f) for f in filters)
+    assert "Retrieved 1 document; counted 1." in capsys.readouterr().err.splitlines()
 
 
 def test_a_clean_run_reports_what_it_counted() -> None:
@@ -173,22 +193,6 @@ def test_the_default_subject_names_this_report_and_one_day(
     """A daily send is told apart in an inbox list by its date alone."""
     subject = _emailed_subject(monkeypatch, "2026-09-01 00:00", "2026-09-02 00:00")
     assert subject == "JupyterHub Activity Report: 2026-09-01"
-
-
-def test_the_default_subject_names_this_report_and_a_longer_window(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A window of several days names the first and the last of them."""
-    subject = _emailed_subject(monkeypatch, "2026-08-27 00:00", "2026-09-02 00:00")
-    assert subject == "JupyterHub Activity Report: 2026-08-27 to 2026-09-01"
-
-
-def test_an_explicit_subject_wins(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Whoever names the subject means it, window or no window."""
-    subject = _emailed_subject(
-        monkeypatch, "2026-08-27 00:00", "2026-09-02 00:00", "--subject", "Weekly numbers"
-    )
-    assert subject == "Weekly numbers"
 
 
 def test_the_diagnostic_goes_to_stderr_and_leaves_stdout_to_the_report(

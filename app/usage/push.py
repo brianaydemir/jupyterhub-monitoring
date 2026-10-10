@@ -9,10 +9,10 @@ Printing a document and uploading it are two sinks for one document
 stream, not two modes: the choice belongs to the caller, which is why
 ``--debug`` lives in the command module and not in this pipeline.
 
-A sink is handed whole batches rather than one document at a time,
-because a round trip per server made the run's length grow with the size
-of the hub, and a run that outlasts its own ``--interval`` is what lets
-two of them overlap and count one real interval twice.
+A sink is handed whole batches rather than one document at a time, so
+that a run's length does not grow with the size of the hub: a run that
+outlasts its own ``--interval`` lets two runs overlap and count one real
+interval twice.
 """
 
 import json
@@ -36,6 +36,9 @@ class ServerLister(Protocol):
         *limit*, when given, caps how many documents are returned and is
         expected to spare the implementation the work of finding the
         rest.
+
+        Raises:
+            ExternalServiceError: If the list cannot be fetched.
         """
         raise NotImplementedError
 
@@ -75,6 +78,11 @@ class DocumentSink(Protocol):
         ask which kind of sink it is holding. Returns one entry per
         document, in order: ``None`` where the document was handled, and
         the reason it was not otherwise.
+
+        Raises:
+            ExternalServiceError: If the batch as a whole could not be
+                sent; the pipeline then counts each of its documents as
+                failed and goes on to the next batch.
         """
         raise NotImplementedError
 
@@ -148,9 +156,7 @@ def _server_label(server: dict[str, Any]) -> str:
 def _rejection_reason(result: dict[str, Any]) -> str | None:
     """Say why Elasticsearch rejected a bulk item, or None if it took it.
 
-    An item carries an ``error`` if and only if its operation failed, so
-    one without either that or a ``result`` reads as a success whose
-    outcome is unknown, which is what a single upload reported too.
+    An item carries an ``error`` if and only if its operation failed.
     """
     error = cast(object, result.get("error"))
     if not error:
@@ -291,10 +297,9 @@ def _process_batch(
     """
     try:
         outcomes = sink.send_all(documents, first_index, total_servers)
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        # The single request carrying them failed, so every document in
-        # it did. Naming each one keeps the stderr lines and the tally
-        # in the command's summary counting the same things.
+    except ExternalServiceError as e:
+        # The one request carrying the batch failed, so every document
+        # in it did.
         outcomes = [str(e)] * len(documents)
 
     successful = 0
@@ -369,18 +374,12 @@ def push_servers(
     started = monotonic()
     parsed_interval = _validate_interval(interval)
 
-    try:
-        servers = jupyterhub_client.list_servers(limit)
-    except Exception as e:
-        raise ExternalServiceError(f"Fetching servers from JupyterHub failed: {e}") from e
-
+    servers = jupyterhub_client.list_servers(limit)
     total_servers = len(servers)
     print(f"Found {total_servers} server(s) to process")
 
-    # Stamp before any batch is built, because _make_doc_id reads the
-    # snapshot time: an unstamped batch would go out under the one id
-    # that names no server at all, and the bulk response would call
-    # every one of those writes a success.
+    # Stamp every document before any batch is sent, because the id
+    # _make_doc_id builds includes the snapshot time.
     stamp = _snapshot_metadata(datetime.now(timezone.utc), interval, metadata)
     for server in servers:
         server.update(stamp)

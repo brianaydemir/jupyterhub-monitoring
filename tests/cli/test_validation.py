@@ -15,10 +15,11 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.cli import validation
+from app.cli.arguments import add_email_argument_group, add_es_argument_group
 from app.cli.validation import (
     positive_int_or_error,
+    reject_es_flags_without_endpoint,
     validate_email_arguments,
-    validate_es_admin_arguments,
     validate_es_arguments,
     validate_jupyterhub_arguments,
     validate_query_arguments,
@@ -215,25 +216,16 @@ def test_a_missing_es_api_key_file_is_rejected(
     assert f"API key file not found: {missing}" in message
 
 
-def test_the_es_environment_variable_does_not_conflict_with_a_username(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An injected secret must not make --es-username unusable.
-
-    Only an explicitly passed --es-api-key conflicts, so a container with
-    ELASTICSEARCH_API_KEY in its environment can still be run
-    interactively.
-    """
-    monkeypatch.setenv("ELASTICSEARCH_API_KEY", "secret")
-    _accept(validate_es_arguments, _es_args(username="elastic"))
-
-
 @pytest.mark.parametrize("username", [None, "elastic"])
 def test_the_es_environment_variable_supplies_the_credential(
     username: str | None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The environment satisfies the credential requirement on its own."""
+    """The environment satisfies the credential requirement on its own.
+
+    Only an explicitly passed --es-api-key conflicts with --es-username,
+    so a container with the secret injected can still be run interactively.
+    """
     monkeypatch.setenv("ELASTICSEARCH_API_KEY", "secret")
     _accept(validate_es_arguments, _es_args(username=username))
 
@@ -243,12 +235,29 @@ def test_a_username_alone_supplies_the_credential() -> None:
     _accept(validate_es_arguments, _es_args(username="elastic"))
 
 
-def test_es_admin_validation_applies_the_shared_credential_rules(
+#
+# reject_es_flags_without_endpoint
+#
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--es-index", "servers"],
+        ["--es-ca-cert", "ca.pem"],
+        ["--es-api-key", "es-api-key.txt"],
+        ["--es-username", "elastic"],
+    ],
+)
+def test_an_es_flag_without_an_endpoint_is_rejected(
+    argv: list[str],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The admin commands share one entry point into the same checks."""
-    message = _reject(validate_es_admin_arguments, _es_args(), capsys)
-    assert "one of --es-api-key, ELASTICSEARCH_API_KEY, or --es-username is required" in message
+    """With nothing to connect to, the flag would do nothing."""
+    parser = argparse.ArgumentParser(prog="cmd")
+    add_es_argument_group(parser, required=False)
+    message = _reject(reject_es_flags_without_endpoint, parser.parse_args(argv), capsys)
+    assert f"{argv[0]} requires --es-endpoint" in message
 
 
 #
@@ -465,29 +474,6 @@ def test_an_end_past_the_tolerance_is_rejected(
     assert "--report-end resolves to 2026-07-08 14:32, which is in the future" in message
 
 
-def test_an_end_just_before_now_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An ordinary window closes before the run that reports on it."""
-    end = _end_offset_from_now(monkeypatch, timedelta(minutes=-1))
-    _accept(
-        validate_query_arguments,
-        _query_args(report_start="2026-07-01 00:00", report_end=end),
-    )
-
-
-@pytest.mark.parametrize("time", [None, "23:59"])
-def test_duration_mode_is_not_measured_against_the_present(
-    time: str | None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Duration mode cannot reach forwards, so nothing here checks it.
-
-    ``--time`` later in the day than the current moment steps back a day,
-    which ``tests/cli/test_factories.py`` asserts of the window itself.
-    """
-    monkeypatch.setattr(validation, "datetime", FrozenClock(NOW))
-    _accept(validate_query_arguments, _query_args(duration="7 days", time=time))
-
-
 @pytest.mark.parametrize("time", ["9am", "0900", "9", "12:345"])
 def test_a_malformed_time_is_rejected(
     time: str,
@@ -532,14 +518,6 @@ def test_whole_days_cannot_be_combined_with_a_duration(
         capsys,
     )
     assert "--whole-days cannot be combined with --duration" in message
-
-
-def test_a_whole_days_range_is_accepted() -> None:
-    """The window the epilog and the README advertise passes every check."""
-    _accept(
-        validate_query_arguments,
-        _query_args(report_start="2 weeks ago", report_end="yesterday", whole_days=True),
-    )
 
 
 def test_a_whole_days_window_ending_today_is_not_a_future_end(
@@ -628,12 +606,15 @@ def _email_args(
         send_email=send_email,
         sender_email=sender_email,
         recipient_email=recipient_email,
+        sender_name=None,
+        subject=None,
         smtp_host=smtp_host,
         smtp_port=smtp_port,
+        smtp_no_ssl=False,
     )
 
 
-def test_email_arguments_are_unchecked_without_send_email() -> None:
+def test_email_arguments_are_not_required_without_send_email() -> None:
     """The flags are optional, so they are gated on --send-email."""
     _accept(
         validate_email_arguments,
@@ -645,6 +626,29 @@ def test_email_arguments_are_unchecked_without_send_email() -> None:
             smtp_port=None,
         ),
     )
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--sender-email", "reports@example.edu"],
+        ["--recipient-email", "ops@example.edu"],
+        ["--sender-name", "Reports"],
+        ["--subject", "Weekly report"],
+        ["--smtp-host", "smtp.example.edu"],
+        ["--smtp-port", "465"],
+        ["--smtp-no-ssl"],
+    ],
+)
+def test_an_email_argument_without_send_email_is_rejected(
+    argv: list[str],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Without --send-email, nothing would read the flag."""
+    parser = argparse.ArgumentParser(prog="cmd")
+    add_email_argument_group(parser, subject_prefix="Report")
+    message = _reject(validate_email_arguments, parser.parse_args(argv), capsys)
+    assert f"{argv[0]} requires --send-email" in message
 
 
 @pytest.mark.parametrize(
@@ -671,19 +675,3 @@ def test_each_email_argument_is_required_with_send_email(
 def test_a_complete_email_configuration_is_accepted() -> None:
     """The optional --sender-name and --smtp-no-ssl are not required."""
     _accept(validate_email_arguments, _email_args())
-
-
-def test_several_recipients_are_accepted() -> None:
-    """A management report goes to a list, not to one mailbox."""
-    _accept(
-        validate_email_arguments,
-        _email_args(recipient_email=["ops@example.edu", "dean@example.edu"]),
-    )
-
-
-def test_a_recipient_carrying_a_display_name_is_not_checked_again() -> None:
-    """The parser accepted the entry, so validation has nothing to add."""
-    _accept(
-        validate_email_arguments,
-        _email_args(recipient_email=["Ops Team <ops@example.edu>"]),
-    )

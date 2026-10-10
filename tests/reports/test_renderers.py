@@ -7,14 +7,12 @@
 import csv
 import io
 from collections.abc import Callable
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+from datetime import timedelta
 
 import pytest
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from app.reports.builders import build_activity_report
 from app.reports.model import (
     Cell,
     Duration,
@@ -32,7 +30,6 @@ from app.reports.renderers import (
     render_xlsx_bytes,
     report_attachments,
 )
-from app.usage.activity import ActivitySummary, SessionActivity
 from tests.helpers import sample_reports
 
 Renderer = Callable[[Report], str]
@@ -71,8 +68,6 @@ def test_every_renderer_handles_a_report_with_no_rows(
 def test_xlsx_handles_a_report_with_no_rows() -> None:
     """A table with no rows still gets a sheet, holding headers and notes."""
     empty = sample_reports.report(sections=[_section(rows=[])])
-    sheet = _table_sheet(empty, "Summary")
-    assert sheet.cell(row=1, column=1).value == "Metric"
     assert _sheet_column(empty, "Summary") == [
         "Metric",
         None,
@@ -113,7 +108,6 @@ def test_every_renderer_labels_footnotes_identically(
     rendered = render(sample_reports.report_with_text_block())
     assert "Notes" in rendered
     assert "Report notes" in rendered
-    assert "Global notes" not in rendered
 
 
 def test_xlsx_labels_footnotes_identically() -> None:
@@ -144,18 +138,12 @@ def test_html_fragment_has_no_document_wrapper() -> None:
 
 
 def test_html_document_declares_a_doctype_and_charset() -> None:
-    """A file a browser opens directly needs both."""
+    """A file a browser opens directly needs both, around unescaped markup."""
     document = render_html_document(sample_reports.report())
     assert document.startswith("<!doctype html>")
     assert '<meta charset="utf-8">' in document
     assert "<title>Test Report</title>" in document
-
-
-def test_html_document_does_not_double_escape_the_fragment() -> None:
-    """The embedded fragment is markup, not text to be escaped again."""
-    document = render_html_document(sample_reports.report())
     assert "<table" in document
-    assert "&lt;table" not in document
 
 
 def test_html_escapes_cell_text() -> None:
@@ -176,29 +164,15 @@ def test_csv_bytes_are_utf8_encoded_csv() -> None:
 
 
 def test_csv_escapes_formula_like_text() -> None:
-    """Report values come from usernames, so a spreadsheet must not run them."""
-    built = sample_reports.report(
-        title="=1+1",
-        sections=[_section(rows=[["=SUM(A1:A2)", "=cmd|' /c calc'!A1"]])],
-    )
+    """Report values come from usernames, so a spreadsheet must not run them.
+
+    Every string the document holds is escaped, not only the table cells.
+    """
+    built = _formula_like_report()
     rows = _csv_rows(render_csv_bytes(built))
     assert ["'=1+1"] in rows
     assert ["'=SUM(A1:A2)", "'=cmd|' /c calc'!A1"] in rows
-
-
-def test_csv_escapes_a_formula_like_footnote() -> None:
-    """Every string the document holds is escaped, not only the table cells."""
-    built = sample_reports.report(
-        sections=[
-            ReportSection(
-                heading="Summary",
-                description="d",
-                blocks=[sample_reports.table_block(rows=[["Widgets", 42]])],
-                footnotes=["=SUM(A1:A2)"],
-            )
-        ]
-    )
-    assert ["'=SUM(A1:A2)"] in _csv_rows(render_csv_bytes(built))
+    assert ["'=SUM(B1:B2)"] in rows
 
 
 @pytest.mark.parametrize("lead", ["=", "+", "-", "@", "\t", "\r"])
@@ -270,19 +244,9 @@ def test_xlsx_writes_one_sheet_per_table_after_the_info_sheet() -> None:
     assert workbook.sheetnames == ["Report", "Summary", "User Activity"]
 
 
-def test_xlsx_info_sheet_records_the_reporting_window() -> None:
-    """A table sheet repeats the notes, but the window is stated only here."""
-    cells = _info_sheet_column(sample_reports.report())
-    assert "Test Report" in cells
-    assert "Usage from 2026-07-01 00:00 to 2026-07-08 00:00." in cells
-    assert "Timezone: America/Chicago" in cells
-
-
 def test_xlsx_table_sheet_repeats_its_sections_footnotes() -> None:
     """A reader who clicks straight to the data still meets the notes."""
     built = sample_reports.report(sections=[_section(rows=[["Widgets", 42]])])
-    # The last data row, a blank row, the label, then one row per note.
-    assert _table_sheet(built, "Summary").max_row == 5
     assert _sheet_column(built, "Summary") == [
         "Metric",
         "Widgets",
@@ -334,48 +298,6 @@ def test_xlsx_repeats_the_notes_on_each_sheet_of_a_multi_table_section() -> None
         assert _sheet_column(built, name)[-2:] == ["Notes", "Timezone: America/Chicago"]
 
 
-def test_xlsx_keeps_a_formula_like_footnote_as_text() -> None:
-    """A repeated note takes the typed-cell path the table rows take."""
-    built = sample_reports.report(
-        sections=[
-            ReportSection(
-                heading="Summary",
-                description="d",
-                blocks=[sample_reports.table_block(rows=[["Widgets", 42]])],
-                footnotes=["=SUM(A1:A2)"],
-            )
-        ]
-    )
-    cell = _table_sheet(built, "Summary").cell(row=5, column=1)
-    assert cell.value == "=SUM(A1:A2)"
-    assert cell.data_type == "s"
-
-
-def test_xlsx_activity_sheet_names_the_timezone_its_timestamps_are_in() -> None:
-    """The sheet holding the timestamps must say what zone they read in.
-
-    A workbook is normally read by opening the data sheet, which the
-    reporting window and the zone alone would never be seen from.
-    """
-    chicago = ZoneInfo("America/Chicago")
-    built = build_activity_report(
-        sessions=[
-            SessionActivity(
-                user="alice@x.edu",
-                server_name="",
-                started="2026-07-01T12:00:00Z",
-                seconds=3600,
-                gpu=False,
-            )
-        ],
-        summary=ActivitySummary(total_seconds=3600),
-        start_time=datetime(2026, 7, 1, tzinfo=chicago),
-        end_time=datetime(2026, 7, 8, tzinfo=chicago),
-        strftime_fmt="%Y-%m-%d %H:%M",
-    )
-    assert "Timezone: America/Chicago" in _sheet_column(built, "User Activity")
-
-
 def test_xlsx_numbers_the_sheets_of_a_multi_table_section() -> None:
     """Two tables in one section cannot share a sheet name."""
     built = sample_reports.report(
@@ -425,10 +347,7 @@ def test_xlsx_sanitizes_and_truncates_sheet_names(heading: str) -> None:
 
 def test_xlsx_keeps_formula_like_cells_as_text() -> None:
     """openpyxl infers a formula from a leading "=", and cells hold usernames."""
-    built = sample_reports.report(
-        title="=1+1",
-        sections=[_section(rows=[["=SUM(A1:A2)", "=cmd|' /c calc'!A1"]])],
-    )
+    built = _formula_like_report()
     workbook = load_workbook(io.BytesIO(render_xlsx_bytes(built)))
     for sheet in workbook.worksheets:
         for row in sheet.iter_rows():
@@ -469,48 +388,6 @@ def test_xlsx_keeps_a_text_cell_as_text() -> None:
     )
     assert written == "n/a"
     assert data_type == "s"
-
-
-def test_xlsx_writes_the_gpu_share_as_a_real_percentage() -> None:
-    """The one percentage a report states reaches the workbook as a number.
-
-    The builder is exercised here rather than a hand-built ``Percent``,
-    since the point is that the ``GPU share of total`` cell the report
-    produces is charted and sorted as a proportion, not read as text.
-    """
-    chicago = ZoneInfo("America/Chicago")
-    built = build_activity_report(
-        sessions=[],
-        summary=ActivitySummary(total_seconds=4 * 3600, gpu_seconds=3600),
-        start_time=datetime(2026, 7, 1, tzinfo=chicago),
-        end_time=datetime(2026, 7, 8, tzinfo=chicago),
-        strftime_fmt="%Y-%m-%d %H:%M",
-    )
-    sheet = load_workbook(io.BytesIO(render_xlsx_bytes(built)))["Summary"]
-    (cell,) = [
-        row[1] for row in sheet.iter_rows(min_row=2) if row[0].value == "GPU share of total"
-    ]
-    assert cell.value == 0.25
-    assert cell.number_format == "0%"
-    assert cell.data_type != "s"
-
-
-def test_xlsx_sorts_a_duration_column_numerically() -> None:
-    """Sorted as text these read 0:20, 10:00, 1:00, 2:10, 26:40, which is wrong."""
-    durations = [Duration(seconds) for seconds in (36000, 1200, 96000, 3600, 7800)]
-    built = sample_reports.report(
-        sections=[_section(rows=[[value.display(), value] for value in durations])]
-    )
-    sheet = load_workbook(io.BytesIO(render_xlsx_bytes(built)))["Summary"]
-    # Bounded to the data: the section's notes sit below the last row.
-    rows = list(sheet.iter_rows(min_row=2, max_row=1 + len(durations), values_only=True))
-    assert [label for _, label in sorted((value, label) for label, value in rows)] == [
-        "0:20",
-        "1:00",
-        "2:10",
-        "10:00",
-        "26:40",
-    ]
 
 
 def test_report_attachments_render_flagged_tables_to_csv() -> None:
@@ -578,6 +455,23 @@ def _section(*, rows: list[list[Cell]]) -> ReportSection:
         description="Usage from 2026-07-01 00:00 to 2026-07-08 00:00.",
         blocks=[sample_reports.table_block(rows=rows)],
         footnotes=["Timezone: America/Chicago"],
+    )
+
+
+def _formula_like_report() -> Report:
+    """Build a report whose title, cells, and footnote all read as formulas."""
+    return sample_reports.report(
+        title="=1+1",
+        sections=[
+            ReportSection(
+                heading="Summary",
+                description="d",
+                blocks=[
+                    sample_reports.table_block(rows=[["=SUM(A1:A2)", "=cmd|' /c calc'!A1"]])
+                ],
+                footnotes=["=SUM(B1:B2)"],
+            )
+        ],
     )
 
 

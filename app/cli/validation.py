@@ -18,15 +18,9 @@ from app.core.time_utils import (
 )
 
 # How far past the present a resolved ``--report-end`` may fall before it
-# is rejected. ``--report-end "now"`` is legitimate, and the value is
-# resolved once here and again in
-# :func:`app.cli.factories.compute_report_time_range`, so the two answers
-# sit a fraction of a second apart; one minute is orders of magnitude
-# more slack than that, and it is also the finest unit any of this
-# project's timestamps display, so a window this check admits can never
-# show a clock time the user would read as still to come. A real typo is
-# further out by a wide margin: ``"tomorrow"`` lands a day ahead and
-# ``"next week"`` seven.
+# is rejected. ``--report-end "now"`` is resolved here and again in
+# :func:`app.cli.factories.compute_report_time_range`, a moment apart, so
+# it needs some slack; a minute is also the finest unit the reports show.
 _FUTURE_END_TOLERANCE = timedelta(minutes=1)
 
 
@@ -93,6 +87,27 @@ def validate_es_arguments(
         parser.error(f"API key file not found: {args.es_api_key}")
 
 
+def reject_es_flags_without_endpoint(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Reject an Elasticsearch flag given without ``--es-endpoint``.
+
+    For a command whose Elasticsearch group is optional, every other flag
+    in the group does nothing without an endpoint to connect to.
+    """
+    if args.es_endpoint is not None:
+        return
+    for flag, attr in [
+        ("--es-index", "es_index"),
+        ("--es-ca-cert", "es_ca_cert"),
+        ("--es-api-key", "es_api_key"),
+        ("--es-username", "es_username"),
+    ]:
+        if getattr(args, attr) is not None:
+            parser.error(f"{flag} requires --es-endpoint")
+
+
 def validate_query_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
@@ -139,25 +154,13 @@ def _validate_report_range(
 ) -> None:
     """Validate the ``--report-start`` / ``--report-end`` window.
 
-    *tz* is the already-parsed ``--timezone``, so the window's bounds are
-    read in the same zone the caller validated.
+    An end in the future is rejected, because no data can exist for it;
+    a future start is then caught by the ordering check.
 
-    An end past ``_FUTURE_END_TOLERANCE`` is rejected, because no data can
-    exist for a window reaching beyond the present. Only the end is
-    checked: a future start is either later than the end, which the
-    ordering check catches, or earlier than an end that is further into
-    the future still. Duration mode needs no such check, since
-    :func:`app.core.time_utils.compute_time_range` ends its window at the
-    current moment or at a wall-clock time it has already stepped back
-    into the past.
-
-    ``--whole-days`` widens the window before those last two checks, so
-    that they judge the window the report will actually cover, which is
-    the one :func:`app.cli.factories.compute_report_time_range` echoes.
-    The ordering check runs both before and after the snap: the first
-    names the bounds the user wrote, and the second catches the one way a
-    forward-running window can still come out empty, a start and an end
-    that land on the same midnight.
+    ``--whole-days`` is applied before the final checks, so that they
+    judge the window the report will actually cover. The ordering check
+    runs again after it, because a start and an end within one unfinished
+    day snap to the same midnight.
     """
     if args.report_start is None or args.report_end is None:
         parser.error("--report-start and --report-end must be used together")
@@ -202,22 +205,28 @@ def validate_email_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
-    """Validate required email arguments when ``--send-email`` is set.
+    """Validate the email arguments against ``--send-email``.
 
-    ``--recipient-email`` collects a list, so it is missing when that
-    list is absent rather than when it is empty: the parser refuses an
-    occurrence naming no recipient, which leaves nothing between the
-    two.
+    With it, the connection arguments are required. Without it, nothing
+    reads any email argument, so giving one is an error.
     """
+    required = [
+        ("--sender-email", "sender_email"),
+        ("--recipient-email", "recipient_email"),
+        ("--smtp-host", "smtp_host"),
+        ("--smtp-port", "smtp_port"),
+    ]
     if args.send_email:
-        for flag, attr in [
-            ("--sender-email", "sender_email"),
-            ("--recipient-email", "recipient_email"),
-            ("--smtp-host", "smtp_host"),
-            ("--smtp-port", "smtp_port"),
-        ]:
+        for flag, attr in required:
             if getattr(args, attr) is None:
                 parser.error(f"{flag} is required when --send-email is set")
+        return
+
+    for flag, attr in [*required, ("--sender-name", "sender_name"), ("--subject", "subject")]:
+        if getattr(args, attr) is not None:
+            parser.error(f"{flag} requires --send-email")
+    if args.smtp_no_ssl:
+        parser.error("--smtp-no-ssl requires --send-email")
 
 
 def validate_es_admin_arguments(
@@ -226,12 +235,9 @@ def validate_es_admin_arguments(
 ) -> None:
     """Validate the arguments the Elasticsearch admin commands share.
 
-    The admin commands need nothing beyond the credential and CA
-    certificate checks in :func:`validate_es_arguments`, so this
-    function only delegates for now. It is the validation counterpart to
-    :func:`app.cli.arguments.configure_es_admin_parser`, and exists so
-    that a rule applying to the admin commands alone has one home where
-    all four of them pick it up, rather than being added to the shared
-    function the report and push commands also call.
+    The validation counterpart to
+    :func:`app.cli.arguments.configure_es_admin_parser`. It only
+    delegates for now, but gives a rule for the admin commands alone one
+    place to live.
     """
     validate_es_arguments(args, parser)

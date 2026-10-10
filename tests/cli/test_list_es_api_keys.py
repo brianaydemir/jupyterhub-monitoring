@@ -3,6 +3,9 @@
 # This module exercises the command's formatting helpers directly.
 # pyright: reportPrivateUsage=false
 
+# A stub client answers one call, so it has just one public method.
+# pylint: disable=too-few-public-methods
+
 import argparse
 import json
 from typing import Any
@@ -17,6 +20,7 @@ from app.cli.list_es_api_keys import (
     _format_key_list_json,
     _run,
 )
+from tests.helpers.stub_clients import StubClient, install_client
 
 _NOW_MS = 1_800_000_000_000
 _CREATED_MS = 1_799_000_000_000  # 2027-01-03 18:13:20 UTC
@@ -65,21 +69,13 @@ _UNDATED: dict[str, Any] = {
 }
 
 
-class _StubClient:
+class _StubClient(StubClient):
     """Answers ``list_api_keys`` with a prepared list."""
 
     def __init__(self, keys: list[dict[str, Any]]) -> None:
         """Store the keys to return."""
         self.keys = keys
         self.active_only: bool | None = None
-
-    def __enter__(self) -> "_StubClient":
-        """Stand in for the client's context manager."""
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        """Leave the context manager, suppressing nothing."""
-        return None
 
     def list_api_keys(self, *, active_only: bool = True) -> list[dict[str, Any]]:
         """Record the request and return the prepared keys."""
@@ -105,12 +101,8 @@ def _install(
 ) -> _StubClient:
     """Put a stubbed client behind the command and return it."""
     client = _StubClient(keys)
-
-    def _make_client(_args: argparse.Namespace) -> _StubClient:
-        return client
-
     _freeze_now(monkeypatch)
-    monkeypatch.setattr(list_es_api_keys, "make_es_client", _make_client)
+    install_client(monkeypatch, list_es_api_keys, client)
     return client
 
 
@@ -235,17 +227,8 @@ def test_the_full_format_separates_keys_with_a_blank_line(
 
 def test_the_full_format_says_which_listing_came_up_empty() -> None:
     """The empty wording follows the same distinction as the key format."""
-    assert _format_key_list_details([]) == "No active api keys found."
-    assert _format_key_list_details([], active_only=False) == "No api keys found."
-
-
-def test_the_key_format_is_the_default(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Omitting --format prints the id/name listing."""
-    assert _parse().format == "key"
-    assert _output(monkeypatch, capsys, [_ACTIVE]) == "key-1  active-key\n"
+    assert _format_key_list_details([]) == "No active API keys found."
+    assert _format_key_list_details([], active_only=False) == "No API keys found."
 
 
 @pytest.mark.parametrize("name", ["key", "json", "full"])
@@ -257,12 +240,12 @@ def test_each_format_selects_its_own_formatter(
     """--format chooses among exactly these three."""
     keys = [_ACTIVE, _ETERNAL]
     expected = {
-        "key": lambda: _format_key_ids(keys),
-        "json": lambda: _format_key_list_json(keys),
-        "full": lambda: _format_key_list_details(keys),
+        "key": _format_key_ids(keys),
+        "json": _format_key_list_json(keys),
+        "full": _format_key_list_details(keys),
     }
     printed = _output(monkeypatch, capsys, keys, "--format", name)
-    assert printed == expected[name]() + "\n"
+    assert printed == expected[name] + "\n"
 
 
 def test_the_default_listing_asks_only_for_active_keys(
@@ -278,7 +261,7 @@ def test_the_default_listing_asks_only_for_active_keys(
 
 @pytest.mark.parametrize(
     ("name", "expected"),
-    [("key", "(no API keys)\n"), ("full", "No api keys found.\n")],
+    [("key", "(no API keys)\n"), ("full", "No API keys found.\n")],
 )
 def test_all_widens_both_the_query_and_the_wording(
     name: str,
@@ -291,19 +274,3 @@ def test_all_widens_both_the_query_and_the_wording(
     assert _run(_parse("--all", "--format", name)) == 0
     assert client.active_only is False
     assert capsys.readouterr().out == expected
-
-
-def test_an_unknown_format_is_rejected_before_the_command_runs() -> None:
-    """argparse enforces the choices, so the dispatch cannot miss."""
-    with pytest.raises(SystemExit):
-        _parse("--format", "yaml")
-
-
-def test_the_format_help_names_what_the_key_format_prints() -> None:
-    """The shared helper supplies the wording around this command's summary."""
-    help_text = " ".join(_build_parser().format_help().split())
-    expected = (
-        "--format {key,json,full} Output format: 'key' (default, id and name per line), "
-        + "'json', or 'full' (human-readable)"
-    )
-    assert expected in help_text

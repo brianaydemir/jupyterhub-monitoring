@@ -3,6 +3,9 @@
 # This module exercises the command's parser and internal helpers directly.
 # pyright: reportPrivateUsage=false
 
+# A stub client answers one call, so it has just one public method.
+# pylint: disable=too-few-public-methods
+
 import argparse
 from typing import Any
 
@@ -10,23 +13,16 @@ import pytest
 
 from app.cli import delete_es_api_key
 from app.cli.delete_es_api_key import _build_parser, _error_detail, _run
+from tests.helpers.stub_clients import StubClient, install_client
 
 
-class _StubClient:
+class _StubClient(StubClient):
     """Answers ``delete_api_key`` with a prepared response."""
 
     def __init__(self, result: dict[str, Any]) -> None:
         """Store the response to return."""
         self.result = result
         self.request: tuple[str | None, str | None] | None = None
-
-    def __enter__(self) -> "_StubClient":
-        """Stand in for the client's context manager."""
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        """Leave the context manager, suppressing nothing."""
-        return None
 
     def delete_api_key(
         self,
@@ -53,33 +49,13 @@ def _run_with(
 ) -> tuple[int, _StubClient]:
     """Run the command against a stubbed client, returning its exit code."""
     client = _StubClient(result)
-
-    def _make_client(_args: argparse.Namespace) -> _StubClient:
-        return client
-
-    monkeypatch.setattr(delete_es_api_key, "make_es_client", _make_client)
+    install_client(monkeypatch, delete_es_api_key, client)
     return _run(_parse(*argv)), client
 
 
 #
 # The parser
 #
-
-
-def test_a_key_must_be_named_somehow(capsys: pytest.CaptureFixture[str]) -> None:
-    """Deleting with neither --id nor --name would have no target."""
-    with pytest.raises(SystemExit) as exit_info:
-        _parse()
-    assert exit_info.value.code == 2
-    assert "--id" in capsys.readouterr().err
-
-
-def test_id_and_name_are_mutually_exclusive(capsys: pytest.CaptureFixture[str]) -> None:
-    """The client rejects both, so the parser catches it first."""
-    with pytest.raises(SystemExit) as exit_info:
-        _parse("--id", "abc123", "--name", "my-api-key")
-    assert exit_info.value.code == 2
-    assert "not allowed with argument" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

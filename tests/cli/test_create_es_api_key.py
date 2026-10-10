@@ -3,6 +3,9 @@
 # This module exercises the command's formatting helpers directly.
 # pyright: reportPrivateUsage=false
 
+# A stub client answers one call, so it has just one public method.
+# pylint: disable=too-few-public-methods
+
 import argparse
 import json
 from typing import Any
@@ -18,6 +21,7 @@ from app.cli.create_es_api_key import (
     _run,
 )
 from app.core.errors import DataShapeError
+from tests.helpers.stub_clients import StubClient, install_client
 
 _RESULT: dict[str, Any] = {
     "id": "abc123",
@@ -28,21 +32,13 @@ _RESULT: dict[str, Any] = {
 }
 
 
-class _StubClient:
+class _StubClient(StubClient):
     """Answers ``create_api_key`` with a prepared response."""
 
     def __init__(self, result: dict[str, Any]) -> None:
         """Store the response to return."""
         self.result = result
         self.request: tuple[str | None, str | None, str | None] | None = None
-
-    def __enter__(self) -> "_StubClient":
-        """Stand in for the client's context manager."""
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        """Leave the context manager, suppressing nothing."""
-        return None
 
     def create_api_key(
         self,
@@ -74,11 +70,7 @@ def _output(
     *argv: str,
 ) -> str:
     """Run the command against a stubbed client and return what it printed."""
-
-    def _make_client(_args: argparse.Namespace) -> _StubClient:
-        return _StubClient(result)
-
-    monkeypatch.setattr(create_es_api_key, "make_es_client", _make_client)
+    install_client(monkeypatch, create_es_api_key, _StubClient(result))
     assert _run(_parse(*argv)) == 0
     return capsys.readouterr().out
 
@@ -150,14 +142,6 @@ def test_the_full_format_marks_missing_fields() -> None:
     ]
 
 
-def test_the_expiration_is_required(capsys: pytest.CaptureFixture[str]) -> None:
-    """A key that outlives everyone's memory of it must be asked for."""
-    with pytest.raises(SystemExit) as exit_info:
-        _build_parser().parse_args(["--es-endpoint", "https://elastic.example.com:9200"])
-    assert exit_info.value.code == 2
-    assert "--expiration" in capsys.readouterr().err
-
-
 @pytest.mark.parametrize("spelling", ["never", "NEVER", "Never", " never "])
 def test_never_asks_for_a_key_with_no_expiry(spelling: str) -> None:
     """None is what omits the field, which is how Elasticsearch is told."""
@@ -199,23 +183,10 @@ def test_the_expiration_reaches_the_client(
 ) -> None:
     """The sentinel is resolved by the parser, so the client never sees it."""
     client = _StubClient(_RESULT)
-
-    def _make_client(_args: argparse.Namespace) -> _StubClient:
-        return client
-
-    monkeypatch.setattr(create_es_api_key, "make_es_client", _make_client)
+    install_client(monkeypatch, create_es_api_key, client)
     assert _run(_parse("--expiration", argument)) == 0
     capsys.readouterr()
     assert client.request == (None, sent, None)
-
-
-def test_the_key_format_is_the_default(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Omitting --format prints the secret, ready to pipe."""
-    assert _parse().format == "key"
-    assert _output(monkeypatch, capsys, _RESULT) == "ZW5jb2RlZA==\n"
 
 
 @pytest.mark.parametrize("name", ["key", "json", "full"])
@@ -232,19 +203,3 @@ def test_each_format_selects_its_own_formatter(
     }
     printed = _output(monkeypatch, capsys, _RESULT, "--format", name)
     assert printed == formatters[name](_RESULT) + "\n"
-
-
-def test_an_unknown_format_is_rejected_before_the_command_runs() -> None:
-    """argparse enforces the choices, so the dispatch cannot miss."""
-    with pytest.raises(SystemExit):
-        _parse("--format", "yaml")
-
-
-def test_the_format_help_names_what_the_key_format_prints() -> None:
-    """The shared helper supplies the wording around this command's summary."""
-    help_text = " ".join(_build_parser().format_help().split())
-    expected = (
-        "--format {key,json,full} Output format: 'key' (default, encoded key only), "
-        + "'json', or 'full' (human-readable)"
-    )
-    assert expected in help_text

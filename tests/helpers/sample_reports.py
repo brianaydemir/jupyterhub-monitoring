@@ -1,9 +1,4 @@
-"""Sample :mod:`app.reports.model` values for the report tests.
-
-Named for what they are, rather than "factories", to keep them apart
-from :mod:`app.cli.factories` and the report builders in
-:mod:`app.reports.builders`.
-"""
+"""Sample :mod:`app.reports.model` values for the report tests."""
 
 from app.reports.model import Cell, Duration, Report, ReportSection, TableBlock, TextBlock
 

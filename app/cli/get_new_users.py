@@ -23,17 +23,15 @@ from app.cli.runtime import run_command
 from app.reports.builders import build_new_users_report
 from app.reports.delivery import deliver_report
 from app.usage.new_users import compute_first_server, filter_new_users
-from app.usage.snapshots import build_query
+from app.usage.snapshots import build_query, select_hub
 
 # The data this report draws on. Shared by the parser and the validator
 # so that the two cannot disagree about which arguments exist.
 _SOURCES: Final = (JUPYTERHUB_SOURCE, OPTIONAL_ELASTICSEARCH_SOURCE)
 
-# The fixed part of the default email subject, which
-# :func:`~app.cli.factories.make_output_targets` completes with the
-# reporting window. Shared by the parser, which names it in the help for
-# ``--subject``, and the run that fills it in, so that the default the
-# help describes is the one a message actually carries.
+# The fixed part of the default email subject, which the run completes
+# with the reporting window. Shared with the parser, whose help for
+# ``--subject`` names it.
 _SUBJECT_PREFIX: Final = "JupyterHub New Users Report"
 
 
@@ -87,10 +85,7 @@ def _validate_arguments(
 
     ``--hub`` scopes the Elasticsearch lookup alone, so passing it
     without ``--es-endpoint`` is an error rather than a filter that
-    silently does nothing. The check lives here rather than in
-    :func:`~app.cli.report_arguments.validate_report_arguments` because
-    ``get-new-activity`` requires Elasticsearch outright, leaving it
-    nothing to catch there.
+    silently does nothing.
     """
     validate_report_arguments(args, parser, sources=_SOURCES)
     if args.hub is not None and args.es_endpoint is None:
@@ -100,14 +95,8 @@ def _validate_arguments(
 def _format_user_tally(retrieved: int, created: int) -> str:
     """Render the retrieved/new user diagnostic for stderr.
 
-    A run that retrieved no users at all says only that, since none of
-    them can then have been created in the window. The pair is what
-    separates the failure that matters here, an endpoint or token that
-    returns few or no users, from a window that was merely quiet; a
-    mistaken endpoint that answers at all is otherwise a report of no
-    new users. This is the counterpart of ``get-new-activity``'s
-    document tally, and stops at the same boundary: what became of the
-    new users is the report's own Adoption section, not this line.
+    The total is what tells a quiet window apart from an endpoint or
+    token that reached a hub with few or no users on it.
     """
     noun = "user" if retrieved == 1 else "users"
     if not retrieved:
@@ -119,14 +108,8 @@ def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
     Elasticsearch is consulted for first-server times only when
-    ``--es-endpoint`` was given.
-
-    The user tally goes to stderr, beside the reporting window that
-    :func:`~app.cli.factories.compute_report_time_range` echoes there, so
-    the report :func:`~app.reports.delivery.deliver_report` writes to
-    stdout stays safe to pipe. Both counts are lengths of lists this
-    function already holds, so no counting rule is repeated to produce
-    them.
+    ``--es-endpoint`` was given. The user tally goes to stderr, so that
+    stdout holds only the report.
 
     Raises:
         ExternalServiceError: If listing users or querying Elasticsearch
@@ -188,7 +171,8 @@ def _query_first_server(
             end=int(now.timestamp()),
             hub=args.hub,
         )
-        return compute_first_server(client.query(index=args.es_index, query=query))
+        documents = select_hub(client.query(index=args.es_index, query=query), args.hub)
+        return compute_first_server(documents)
 
 
 def main() -> int:

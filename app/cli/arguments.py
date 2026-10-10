@@ -11,25 +11,16 @@ from email.utils import getaddresses
 from pathlib import Path
 from typing import cast
 
-# argparse keeps these two names private, but they are its only
-# vocabulary for argument groups: ``add_argument_group`` returns an
-# ``_ArgumentGroup``, and ``add_argument`` is defined on the
-# ``_ActionsContainer`` that a group and a parser both are. Every helper
-# below therefore has one of them in its signature. Aliasing them once
-# here keeps the suppressions the linters want to these two lines
-# instead of on each signature, and, because both
-# ``reportUnnecessaryTypeIgnoreComment`` and ``useless-suppression`` are
-# enabled, an argparse that made these public would fail here rather
-# than leave ten stale copies behind.
+# argparse keeps its argument-group types private, but the helpers below
+# need them in their signatures. Aliasing them here keeps the linter
+# suppressions to these two lines.
 # pylint: disable=protected-access
 type ArgumentGroup = argparse._ArgumentGroup  # pyright: ignore[reportPrivateUsage]
 type ActionsContainer = argparse._ActionsContainer  # pyright: ignore[reportPrivateUsage]
 # pylint: enable=protected-access
 
-# The parser behind ``To:``. ``_recipient`` needs it to tell a group
-# apart from the addresses it holds, which ``getaddresses`` cannot;
-# building one registry here rather than per call keeps that second
-# parse to the one line that reads the value.
+# The parser behind ``To:``, which ``_recipient`` uses to detect group
+# syntax.
 _HEADERS = HeaderRegistry()
 
 
@@ -181,13 +172,7 @@ def add_query_argument_group(
 def add_hub_argument(
     group: ActionsContainer,
 ) -> None:
-    """Add the ``--hub`` filter that both report commands share.
-
-    Spelled once here so the two cannot drift apart. Each adds it to the
-    "Query" group :func:`add_query_argument_group` returns, and each
-    passes it to :func:`app.usage.snapshots.build_query`, though
-    ``get-new-users`` has only its first-server lookup to scope with it.
-    """
+    """Add the ``--hub`` filter that both report commands share."""
     group.add_argument(
         "--hub",
         help="Filter results to documents with this meta.hub value",
@@ -261,38 +246,19 @@ def add_output_argument_group(
 def _recipient(value: str) -> str:
     """Check that one ``--recipient-email`` value names usable mailboxes.
 
-    A recipient is written the way a ``To:`` header writes one, so
-    ``email.utils.getaddresses`` decides what the value means and the
-    value itself reaches the namespace unchanged; rendering it is
-    :func:`app.reports.email_utils.create_message`'s job. One occurrence
-    may name several mailboxes, the way that header lists them, and
-    repeated occurrences still collect into a list, one entry each, so
-    the two spellings say the same thing and may be mixed.
+    The value is written as a ``To:`` header writes it, so it may list
+    several mailboxes. It is returned as typed, stripped; rendering it
+    is :func:`app.reports.email_utils.create_message`'s job.
 
-    The parsed addresses are inspected because the parse alone is too
-    forgiving to trust. An empty or malformed field yields a pair
-    holding an empty address; a quoted ``"a@host, b@host"`` yields one
-    pair holding two addresses; and a display name with no address at
-    all is truncated to its first word, which the flag invites by
-    advertising display names. Requiring an ``@`` and no comma of every
-    mailbox catches those three, and refuses a bare local name such as
-    ``root`` along with them. An empty list is refused in its own right,
-    since a check holding for every mailbox holds vacuously for none.
-    Past that the SMTP server is the authority on what an address may
-    look like.
+    ``getaddresses`` is too forgiving to trust on its own: a malformed
+    value yields an empty address, a quoted ``"a@host, b@host"`` yields
+    one address holding a comma, and a bare display name yields its
+    first word. Requiring an ``@`` and no comma in every address catches
+    all three, and also refuses a local name such as ``root``.
 
-    Group syntax, ``Team: a@host, b@host;``, is refused rather than
-    quietly accepted as the mailboxes it holds, whose group name would
-    be dropped on the way to the header. Seeing that a group is there at
-    all takes the second parse, which is the one thing ``getaddresses``
-    cannot report: it returns the same pairs for a group as for the same
-    addresses written without one. Reading the value twice buys the
-    precision a scan for a ``:`` or a ``;`` would lose, ``"Ops: Team"
-    <a@host>`` being one ordinary mailbox. The address checks run first,
-    so this refusal names group syntax only for a value that would
-    otherwise have been accepted, and a group naming no usable address,
-    such as ``undisclosed-recipients:;``, is unreadable for the ordinary
-    reason instead.
+    Group syntax (``Team: a@host, b@host;``) is refused, since the group
+    name would be dropped. ``getaddresses`` cannot see a group, so the
+    header registry parses the value a second time to find one.
 
     Raises:
         argparse.ArgumentTypeError: If the value names no mailbox, names

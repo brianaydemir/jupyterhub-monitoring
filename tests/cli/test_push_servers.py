@@ -2,17 +2,21 @@
 
 The pipeline itself lives in :mod:`app.usage.push` and is covered by
 ``tests/usage/test_push.py``. What is left here is the command's own
-post-parse validation, which decides what ``--debug`` excuses.
+post-parse validation, which decides what ``--debug`` excuses, and the
+exit code and sink its run chooses.
 """
 
 # This module exercises the command's parser and validator directly.
 # pyright: reportPrivateUsage=false
 
 import argparse
+from typing import Any
 
 import pytest
 
-from app.cli.push_servers import _build_parser, _validate_arguments
+from app.cli import push_servers as command
+from app.cli.push_servers import _build_parser, _run, _validate_arguments
+from app.usage.push import DocumentSink, PrintingSink
 
 _HUB = ["--jupyterhub-endpoint", "https://hub.example.edu/hub/api"]
 _ES = ["--es-endpoint", "https://es.example.edu:9200", "--es-index", "servers"]
@@ -79,15 +83,23 @@ def test_the_interval_is_always_required(
     assert "the following arguments are required: --interval" in message
 
 
-def test_debug_needs_no_elasticsearch_but_needs_an_interval(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Debug mode prints documents, so it has nothing to connect to.
-
-    It still stamps meta.interval, so the interval is not excused.
-    """
+def test_debug_needs_no_elasticsearch(capsys: pytest.CaptureFixture[str]) -> None:
+    """Debug mode prints documents, so it has nothing to connect to."""
     _validate(_HUB + ["--debug", "--interval", "5m"])
     assert capsys.readouterr().err == ""
+
+
+def test_debug_tolerates_a_complete_elasticsearch_group() -> None:
+    """Appending --debug to a working command line tries it without pushing."""
+    _validate(_HUB + _ES + ["--debug", "--interval", "5m"])
+
+
+def test_debug_does_not_excuse_an_index_without_an_endpoint(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The index would be useless even without --debug."""
+    message = _reject(_HUB + ["--es-index", "servers", "--debug", "--interval", "5m"], capsys)
+    assert "--es-index requires --es-endpoint" in message
 
 
 def test_an_unparsable_interval_is_rejected(capsys: pytest.CaptureFixture[str]) -> None:
@@ -117,7 +129,7 @@ def test_malformed_metadata_is_reported_as_a_usage_error(
 ) -> None:
     """A typo in --metadata is the user's mistake, not a runtime failure."""
     argv = _HUB + _ES + ["--interval", "5m", "--metadata", "hub"]
-    assert "hub" in _reject(argv, capsys)
+    assert "Invalid metadata format 'hub'" in _reject(argv, capsys)
 
 
 def test_reserved_metadata_keys_are_reported_as_a_usage_error(
@@ -125,4 +137,48 @@ def test_reserved_metadata_keys_are_reported_as_a_usage_error(
 ) -> None:
     """The command sets these itself, so a caller cannot also supply them."""
     argv = _HUB + _ES + ["--interval", "5m", "--metadata", "interval=5m"]
-    assert "interval" in _reject(argv, capsys)
+    assert "reserved and set automatically: interval" in _reject(argv, capsys)
+
+
+def _stub_pipeline(
+    monkeypatch: pytest.MonkeyPatch, outcome: tuple[int, int]
+) -> list[DocumentSink]:
+    """Replace the hub client and the pipeline, recording the sink chosen."""
+    sinks: list[DocumentSink] = []
+
+    def _push(**kwargs: Any) -> tuple[int, int]:
+        sinks.append(kwargs["sink"])
+        return outcome
+
+    def _make_client(_args: argparse.Namespace) -> object:
+        return object()
+
+    monkeypatch.setattr(command, "make_jupyterhub_client", _make_client)
+    monkeypatch.setattr(command, "push_servers", _push)
+    return sinks
+
+
+@pytest.mark.parametrize(("outcome", "code"), [((3, 0), 0), ((0, 0), 0), ((2, 1), 1)])
+def test_any_failed_document_fails_the_run(
+    outcome: tuple[int, int],
+    code: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A partial push exits 1, as the README documents; an idle hub does not."""
+    _stub_pipeline(monkeypatch, outcome)
+    assert _run(_build_parser().parse_args(_HUB + ["--debug", "--interval", "5m"])) == code
+
+
+def test_debug_prints_instead_of_connecting_to_elasticsearch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Connection flags given alongside --debug must not send anything."""
+    sinks = _stub_pipeline(monkeypatch, (1, 0))
+
+    def _refuse(_args: argparse.Namespace) -> None:
+        raise AssertionError("--debug must not connect to Elasticsearch")
+
+    monkeypatch.setattr(command, "make_es_client", _refuse)
+    _run(_build_parser().parse_args(_HUB + _ES + ["--debug", "--interval", "5m"]))
+    assert len(sinks) == 1
+    assert isinstance(sinks[0], PrintingSink)

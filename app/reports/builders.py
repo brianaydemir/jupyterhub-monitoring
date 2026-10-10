@@ -88,10 +88,8 @@ def _timezone_footnote(tz: tzinfo) -> str:
     return f"Timezone: {format_timezone(tz)}"
 
 
-# The unit every duration in a section is shown in. It is stated once
-# per table rather than in a column header, because a cell now carries
-# its own format: the header names the quantity, and this names the
-# unit for the whole table, however many duration columns it has.
+# The unit every duration in a section is shown in, stated once per
+# table rather than in each column header.
 _DURATION_FOOTNOTE = "Times are HH:MM."
 
 
@@ -225,10 +223,9 @@ class _UserDisplay:
         The key reads the value shown in the ID column (a pseudonym when
         anonymizing), so ordering does not leak the raw identifier.
 
-        Either branch leaves an unrecognized name last: its priority is
-        the highest one, and
-        :func:`~app.core.name_utils.trailing_domain_key` ranks its empty
-        domain past even the trailing domains.
+        With the ``Login method`` column shown, rows group by login
+        method first; otherwise by institution, with the trailing domains
+        last. Either way an unrecognized name sorts last.
         """
         pn = self.parsed[user]
         if self.show_method:
@@ -446,12 +443,8 @@ def _session_sort_key(session: SessionActivity) -> tuple[bool, str, str]:
     return (not started, started, session.server_name or "")
 
 
-# The header of the one right-aligned column of the per-session table,
-# matching ``User Totals``' own ``Time``; :data:`_DURATION_FOOTNOTE`
-# states the unit both of them are read in. The optional ``Server``
-# column moves the column, so the section looks it up by name rather
-# than hard-coding the index it lands at. No other header of that table
-# reads ``Time``, so the lookup cannot land on the wrong one.
+# The header of the per-session table's one right-aligned column. The
+# optional ``Server`` column moves it, so it is found by name.
 _ACTIVITY_TIME_HEADER = "Time"
 
 
@@ -572,19 +565,12 @@ def _summary_rows(summary: ActivitySummary) -> list[list[Cell]]:
     The window's length leads, so that a reader meets the scale the
     quantities below it are measured against before the quantities.
 
-    Every row states one quantity: the GPU time and its share of the
-    total are two rows, as the busiest day and that day's time are, so
-    that a spreadsheet can sort, chart, or read either half on its own.
-    Each pair stays adjacent, the figure ahead of the figure derived
-    from it. A total of no time leaves the share at ``0%`` rather than
-    dividing by that total.
+    Every row states one quantity, so that a spreadsheet can sort or
+    chart any of them: the GPU time and its share of the total are two
+    rows, as the busiest day and that day's time are.
 
-    Since every day of the window is now a row of ``Activity by Day``,
-    the busiest day is the busiest *active* one: a window whose days are
-    all zero has no busiest day to name, and both of its rows read
-    ``"n/a"``, as a window holding no day at all does. The time reads
-    ``"n/a"`` too rather than ``"0:00"``, which would state a duration
-    for a day the report cannot name.
+    The busiest day is the busiest *active* one. When no day saw
+    activity, both of its rows read ``"n/a"``.
     """
     total = summary.total_seconds
     gpu = summary.gpu_seconds

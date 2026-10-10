@@ -191,13 +191,18 @@ which inflates every duration `get-new-activity` reports.
 
 `--metadata KEY=VALUE` (repeatable) tags documents
 with additional identifying context;
-both report commands can filter on `meta.hub` via `--hub`.
+both report commands can filter on `meta.hub` via `--hub`,
+which matches the value exactly,
+so `--hub osg` selects neither `osg-dev` nor `OSG`.
 The keys `interval`, `snapshot-time`, and `snapshot-time-iso` are reserved,
 because the command sets them itself.
 
 Use `--debug` to print documents to stdout
 instead of pushing them to Elasticsearch,
 and `--limit N` to process only the first N servers.
+`--debug` ignores a complete set of Elasticsearch flags,
+so a working command line can be tried by appending it,
+but an `--es-*` flag without `--es-endpoint` is still an error.
 
 ### `get-new-activity`
 
@@ -360,7 +365,7 @@ The window excludes its own end
 so that back-to-back reports do not both count
 the snapshot on their shared boundary.
 Documents missing `user.name` or `meta.interval`
-(e.g., those pushed before `--interval` was introduced),
+(e.g., those 2.x pushed without `--metadata interval=...`),
 and those whose `meta.interval` cannot be parsed
 or is not positive,
 are skipped,
@@ -448,7 +453,8 @@ Pass `--hub` to scope the lookup to one hub's documents,
 as `get-new-activity` does;
 without it, a multi-hub index draws from every hub.
 Because `--hub` scopes only this lookup,
-passing it without `--es-endpoint` is an error.
+passing it without `--es-endpoint` is an error,
+as is passing any other `--es-*` flag without it.
 The search runs from the start of the reporting window through now,
 since a new user cannot have started a server before being created:
 
@@ -712,6 +718,10 @@ Sending email requires
 `--sender-email`, `--recipient-email`, `--smtp-host`, and `--smtp-port`;
 `--sender-name` and `--subject` are optional.
 SSL/TLS is used by default; pass `--smtp-no-ssl` to disable it.
+A server that stops responding for a minute fails the send,
+so that a scheduled run exits 1 rather than hanging.
+Without `--send-email`, every one of these flags is an error,
+since nothing would read it.
 
 A report usually goes to more than one person,
 so `--recipient-email` takes several recipients two ways:
@@ -772,9 +782,9 @@ rather than by the day it stops at.
 An explicit `--subject` is used exactly as given.
 
 The report is sent as both plain text and HTML,
-with the main data table attached as a CSV file
-(`activity.csv` or `new-users.csv`).
-The Summary and Activity by Day tables are not attached separately.
+with its per-user tables attached as CSV files:
+`user-totals.csv` and `activity.csv`, or `new-users.csv`.
+The Summary, Activity by Day, and Adoption tables are not attached separately.
 When `--xlsx-file` is also given, the workbook is attached as well.
 
 `--date-format` selects how `get-new-users` renders its timestamps:
@@ -859,26 +869,28 @@ Release 3.0.0 renames the Elasticsearch flags,
 removes the standalone `send-email` command and `--recipient-name`,
 and reorganizes the Python package.
 
-| 2.4.0                              | 3.0.0                                                    |
-| :--------------------------------- | :------------------------------------------------------- |
-| `send-email` command               | (none; the report commands' `--send-email` is unchanged) |
-| `send-email --attachment`          | (none; attachments are automatic)                        |
-| `--recipient-email` (one address)  | one or more; list them or repeat it                      |
-| `--recipient-name`                 | (none; write it in `--recipient-email`)                  |
-| `--recipient-email root`           | rejected; an address needs an `@`                        |
-| `--elasticsearch-endpoint`         | `--es-endpoint`                                          |
-| `--elasticsearch-api-key`          | `--es-api-key`                                           |
-| `--elasticsearch-ca-cert`          | `--es-ca-cert`                                           |
-| `--elasticsearch-index`            | `--es-index`                                             |
-| `--elasticsearch-username`         | `--es-username`                                          |
-| `push-servers` without an interval | `--interval` now required                                |
-| `--report-end` in the future       | rejected; the window must end by now                     |
-| `app.<command>`                    | `app.cli.<command>`                                      |
-| `app.elasticsearch_client`         | `app.clients.elasticsearch_client`                       |
-| `app.jupyterhub_client`            | `app.clients.jupyterhub_client`                          |
-| `app.name_utils`                   | `app.core.name_utils`                                    |
-| `app.time_utils`                   | `app.core.time_utils`                                    |
-| `app.send_email`                   | `app.reports.email_utils`                                |
+| 2.4.0                                      | 3.0.0                                                    |
+| :----------------------------------------- | :------------------------------------------------------- |
+| `send-email` command                       | (none; the report commands' `--send-email` is unchanged) |
+| `send-email --attachment`                  | (none; attachments are automatic)                        |
+| `--recipient-email` (one address)          | one or more; list them or repeat it                      |
+| `--recipient-name`                         | (none; write it in `--recipient-email`)                  |
+| `--recipient-email root`                   | rejected; an address needs an `@`                        |
+| email flags without `--send-email` ignored | rejected                                                 |
+| `--elasticsearch-endpoint`                 | `--es-endpoint`                                          |
+| `--elasticsearch-api-key`                  | `--es-api-key`                                           |
+| `--elasticsearch-ca-cert`                  | `--es-ca-cert`                                           |
+| `--elasticsearch-index`                    | `--es-index`                                             |
+| `--elasticsearch-username`                 | `--es-username`                                          |
+| `--metadata interval=5m`                   | `--interval 5m`, now required                            |
+| reserved `--metadata` keys ignored         | rejected                                                 |
+| `create-es-api-key` without `--expiration` | `--expiration never`; the flag is now required           |
+| `app.<command>`                            | `app.cli.<command>`                                      |
+| `app.elasticsearch_client`                 | `app.clients.elasticsearch_client`                       |
+| `app.jupyterhub_client`                    | `app.clients.jupyterhub_client`                          |
+| `app.name_utils`                           | `app.core.name_utils`                                    |
+| `app.time_utils`                           | `app.core.time_utils`                                    |
+| `app.send_email`                           | `app.reports.email_utils`                                |
 
 Some modules were split rather than renamed:
 
@@ -923,17 +935,15 @@ New in 3.0.0:
 `--whole-days` for rounding that window out to whole days,
 `--xlsx-file` for Excel output,
 `--anonymize` for pseudonymized reports,
-and `--hub` on `get-new-users`,
-whose first-server lookup previously drew from every hub in the index.
+and the optional Elasticsearch lookup behind `get-new-users`'
+**First server** column and **Adoption** section.
 
 Activity figures also shift slightly.
 The reporting window now excludes its own end,
-so a window reports one interval less than it did in 2.x;
-sessions are keyed by named server as well as start time;
-a `server.user_options` key naming a GPU
-counts only when its value is switched on;
-and a value counts only when it leads with "gpu" or "gpus",
-rather than whenever it names that word anywhere.
+so a snapshot taken exactly on the boundary between two windows
+is counted by only the later one;
+and a document whose `meta.interval` is zero or negative is skipped
+rather than counted.
 
 The activity report's shape changed too.
 2.x printed a single table of users and their total times,
@@ -954,10 +964,9 @@ no longer covers 23 or 25 hours instead of 24.
 `get-new-users` now excludes the end of its window,
 which it previously included.
 
-Documents pushed by 2.x carry no `meta.interval`
-and are skipped by `get-new-activity`,
-so activity reports only cover the period
-since `--interval` started being recorded.
+2.x recorded the push interval only when given `--metadata interval=...`.
+Documents it pushed without one carry no `meta.interval`
+and are skipped by `get-new-activity`, as they were in 2.x.
 The command's document tally on standard error
 now names those skips,
 rather than reporting an index of them as no activity.

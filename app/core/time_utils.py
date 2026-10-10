@@ -206,17 +206,12 @@ def get_now_ms() -> int:
 def parse_duration(duration_str: str) -> timedelta | None:
     """Parse a duration string into a timedelta.
 
-    Uses :func:`pytimeparse2.parse` internally. Zero and negative
-    durations parse successfully, so callers that need a forward-looking
-    window must check the sign themselves.
+    Zero and negative durations parse successfully, so callers that need
+    a positive one must check the sign themselves.
     Returns *None* if *duration_str* cannot be parsed.
 
-    Results are memoized on *duration_str*. The activity metrics parse
-    the same ``meta.interval`` string once per document per pass, and
-    the regex-based parser underneath has no cache of its own; the
-    function is pure and a timedelta is immutable, so the cached value
-    can be shared. The cache is bounded because a run only ever sees a
-    handful of distinct spellings.
+    Results are cached, because the activity metrics parse the same few
+    ``meta.interval`` strings once per document.
     """
     seconds = pytimeparse2.parse(duration_str)
     if seconds is None:

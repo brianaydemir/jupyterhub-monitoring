@@ -1,8 +1,5 @@
 """Tests for :mod:`app.reports.anonymize`."""
 
-import subprocess
-import sys
-
 from app.reports.anonymize import LABEL_WIDTH, NATO_ALPHABET, build_pseudonyms
 
 
@@ -35,31 +32,10 @@ def test_the_same_uid_at_two_institutions_maps_independently() -> None:
     assert labels[("x.edu", "shared")] != labels[("y.edu", "shared")]
 
 
-def test_pseudonyms_survive_a_fresh_interpreter() -> None:
-    """Labels are independent of ``PYTHONHASHSEED``.
+def test_a_pseudonym_does_not_change_between_runs() -> None:
+    """Reports are compared over time, so a user's label is fixed.
 
-    Cross-run stability is the whole point of the pseudonyms, and Python
-    randomizes :func:`hash` per process, so this has to be checked in a
-    separate interpreter rather than in-process.
+    Pinning one label catches a change to the hash, the alphabet, or the
+    width, and a switch to :func:`hash`, which varies per process.
     """
-    script = (
-        "from app.reports.anonymize import build_pseudonyms;"
-        " print(build_pseudonyms([('x.edu', 'a')])[('x.edu', 'a')])"
-    )
-    runs = {
-        subprocess.run(
-            [sys.executable, "-c", script],
-            capture_output=True,
-            check=True,
-            env={"PYTHONHASHSEED": seed, "PATH": "/usr/bin:/bin"},
-            text=True,
-        ).stdout.strip()
-        for seed in ("0", "1", "12345")
-    }
-    assert runs == {build_pseudonyms([("x.edu", "a")])[("x.edu", "a")]}
-
-
-def test_the_label_space_is_the_documented_size() -> None:
-    """The collision figures in the docstring assume 26 ** LABEL_WIDTH."""
-    assert len(NATO_ALPHABET) == 26
-    assert len(NATO_ALPHABET) ** LABEL_WIDTH == 17576
+    assert build_pseudonyms([("x.edu", "a")]) == {("x.edu", "a"): "Lima Yankee Golf"}

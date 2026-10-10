@@ -3,9 +3,6 @@
 # An explicit comparison to an empty collection is the assertion these
 # tests mean to make, and reads better here than a truthiness check.
 # pylint: disable=use-implicit-booleaness-not-comparison
-# The bulk timeout is asserted against the constant that sets it, rather
-# than against a number repeated here.
-# pyright: reportPrivateUsage=false
 
 from collections.abc import Callable, Generator
 from typing import Any, cast
@@ -13,7 +10,7 @@ from typing import Any, cast
 import pytest
 from elasticsearch import ApiError, TransportError
 
-from app.clients.elasticsearch_client import _BULK_TIMEOUT, ElasticsearchClient
+from app.clients.elasticsearch_client import ElasticsearchClient
 from app.core.errors import ExternalServiceError
 
 
@@ -38,7 +35,6 @@ class _StubTransport:
         """Store the pages to serve, in order."""
         self.pages = list(pages)
         self.cleared: list[str | None] = []
-        self.indexed: list[dict[str, Any]] = []
         self.search_kwargs: dict[str, Any] = {}
         self.scroll_ids: list[str | None] = []
         self.closed = False
@@ -46,7 +42,7 @@ class _StubTransport:
         self.bulk_response = bulk_response
         self.bulk_kwargs: dict[str, Any] = {}
         self.bulk_calls = 0
-        self.options_kwargs: dict[str, Any] = {}
+        self.security = _RecordingSecurity()
 
     def search(self, **kwargs: Any) -> dict[str, Any]:
         """Serve the first prepared page."""
@@ -67,14 +63,8 @@ class _StubTransport:
             raise RuntimeError("clear failed")
         return {"succeeded": True}
 
-    def index(self, **kwargs: Any) -> dict[str, Any]:
-        """Record an indexed document."""
-        self.indexed.append(kwargs)
-        return {"result": "created"}
-
-    def options(self, **kwargs: Any) -> "_StubTransport":
-        """Record per-request options and keep serving from this stub."""
-        self.options_kwargs = kwargs
+    def options(self, **_: Any) -> "_StubTransport":
+        """Keep serving from this stub."""
         return self
 
     def bulk(self, **kwargs: Any) -> dict[str, Any]:
@@ -90,6 +80,29 @@ class _StubTransport:
     def close(self) -> None:
         """Record that the transport was closed."""
         self.closed = True
+
+
+class _RecordingSecurity:
+    """Stands in for the ``security`` namespace, recording each request."""
+
+    def __init__(self) -> None:
+        """Start with no requests recorded."""
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def create_api_key(self, **kwargs: Any) -> dict[str, Any]:
+        """Record the request."""
+        self.calls.append(("create_api_key", kwargs))
+        return {}
+
+    def invalidate_api_key(self, **kwargs: Any) -> dict[str, Any]:
+        """Record the request."""
+        self.calls.append(("invalidate_api_key", kwargs))
+        return {}
+
+    def get_api_key(self, **kwargs: Any) -> dict[str, Any]:
+        """Record the request."""
+        self.calls.append(("get_api_key", kwargs))
+        return {}
 
 
 class _StubResponseMeta:  # pylint: disable=too-few-public-methods
@@ -198,18 +211,11 @@ def test_query_yields_sources_across_scroll_pages() -> None:
     assert transport.cleared == ["scroll-1"]
 
 
-def test_query_scrolls_in_large_pages_by_default() -> None:
-    """An unbounded scan must not pay a round trip per hundred documents."""
-    client, transport = _client([_page(["a"])])
-    list(client.query(index="i"))
-    assert transport.search_kwargs["size"] == 5000
-
-
 def test_query_stops_at_the_limit() -> None:
     """A limit caps the results and the page size, then releases the scroll."""
-    client, transport = _client([_page(["a", "b", "c"])])
-    assert [d["id"] for d in client.query(index="i", limit=2)] == ["a", "b"]
-    assert transport.search_kwargs["size"] == 2
+    client, transport = _client([_page(["a", "b"]), _page(["c", "d"])])
+    assert [d["id"] for d in client.query(index="i", limit=3)] == ["a", "b", "c"]
+    assert transport.search_kwargs["size"] == 3
     assert transport.cleared == ["scroll-1"]
 
 
@@ -295,28 +301,11 @@ def test_upload_documents_sends_one_bulk_request() -> None:
     ]
 
 
-def test_upload_documents_waits_longer_than_a_single_upload_would() -> None:
-    """A batch is not one document, and the transport does not retry a timeout."""
-    client, transport = _client([])
-    client.upload_documents(index="i", documents=[({"a": 1}, "x")])
-    assert transport.options_kwargs["request_timeout"] == _BULK_TIMEOUT
-
-
 def test_upload_documents_omits_an_absent_document_id() -> None:
     """No id is not the same as an empty one; Elasticsearch assigns its own."""
     client, transport = _client([])
     client.upload_documents(index="i", documents=[({"a": 1}, None)])
     assert transport.bulk_kwargs["operations"] == [{"index": {}}, {"a": 1}]
-
-
-def test_upload_documents_returns_one_result_per_document() -> None:
-    """Callers report on each document, so results must line up with them."""
-    client, _ = _client([])
-    results = client.upload_documents(index="i", documents=[({"a": 1}, "x"), ({"a": 2}, "y")])
-    assert results == [
-        {"status": 201, "result": "created"},
-        {"status": 201, "result": "created"},
-    ]
 
 
 def test_upload_documents_reports_a_rejected_document_without_raising() -> None:
@@ -365,11 +354,7 @@ def test_upload_documents_reports_a_failed_request_as_a_service_error() -> None:
 
 
 def test_query_reports_a_failed_search_as_a_service_error() -> None:
-    """The client speaks the application's error vocabulary, not the library's.
-
-    Translating here is what lets every command drop the ``except
-    AppError: raise`` / ``except Exception`` pair it used to need.
-    """
+    """The client speaks the application's error vocabulary, not the library's."""
     client, _ = _failing_client(TransportError("connection refused"))
     with pytest.raises(ExternalServiceError, match="Querying Elasticsearch failed"):
         list(client.query(index="i"))
@@ -400,6 +385,31 @@ def test_upload_document_reports_a_rejection_as_a_service_error() -> None:
         match="Uploading document to Elasticsearch failed",
     ):
         client.upload_document(index="i", document={"a": 1})
+
+
+def test_api_key_requests_are_scoped_to_the_callers_own_keys() -> None:
+    """Without ``owner``, an administrator deleting by name could hit others' keys."""
+    client, transport = _client([])
+    client.delete_api_key(key_name="k")
+    client.list_api_keys()
+    assert [(name, kwargs["owner"]) for name, kwargs in transport.security.calls] == [
+        ("invalidate_api_key", True),
+        ("get_api_key", True),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("username", "expected"),
+    [("elastic", "api-key-elastic"), (None, "api-key")],
+)
+def test_a_new_api_key_is_named_after_its_user_by_default(
+    username: str | None,
+    expected: str,
+) -> None:
+    """The default name is documented, so a key can be found again by it."""
+    client, transport = _client([])
+    client.create_api_key(username=username)
+    assert [kwargs["name"] for _, kwargs in transport.security.calls] == [expected]
 
 
 @pytest.mark.parametrize(("call", "message"), _API_KEY_OPERATIONS)

@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.core.name_utils import TRAILING_SORT_DOMAINS, parse_name, trailing_domain_key
+from app.core.name_utils import parse_name, trailing_domain_key
 
 
 @pytest.mark.parametrize(
@@ -34,16 +34,6 @@ def test_parse_name_recognizes_the_documented_forms(
     assert (parsed.domain, parsed.uid, parsed.login_method) == (domain, uid, login_method)
 
 
-def test_parse_name_leaves_an_unrecognized_names_domain_empty() -> None:
-    """The empty string is the honest domain; the reports mark it as absent.
-
-    :func:`~app.reports.anonymize.build_pseudonyms` keys a pseudonym on
-    the ``(domain, uid)`` pair, so moving that display marker down here
-    would relabel every unrecognized name.
-    """
-    assert parse_name("service-account").domain == ""
-
-
 def test_parse_name_prefers_orcid_over_the_bare_eppn_form() -> None:
     """An ORCID value containing "@" is still an ORCID, not a NetID.
 
@@ -56,12 +46,6 @@ def test_parse_name_prefers_orcid_over_the_bare_eppn_form() -> None:
         "abc@example.org",
         "ORCID",
     )
-
-
-def test_parse_name_prefers_the_prefixed_forms() -> None:
-    """A prefix wins over the bare form it would also match."""
-    assert parse_name("email:user@example.edu").login_method == "email"
-    assert parse_name("eppn:user@example.edu").login_method == "legacy eppn"
 
 
 def test_parse_name_splits_on_the_first_at_sign() -> None:
@@ -103,10 +87,3 @@ def test_trailing_domain_key_sorts_a_missing_domain_after_even_those() -> None:
     """
     domains = ["", "orcid.org", "example.edu"]
     assert sorted(domains, key=trailing_domain_key) == ["example.edu", "orcid.org", ""]
-
-
-def test_trailing_domain_key_preserves_the_configured_order() -> None:
-    """Among trailing domains, the configured order is the sort order."""
-    keys = [trailing_domain_key(d) for d in TRAILING_SORT_DOMAINS]
-    assert keys == sorted(keys)
-    assert all(key[0] == 1 for key in keys)

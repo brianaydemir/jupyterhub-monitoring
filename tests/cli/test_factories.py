@@ -233,27 +233,11 @@ def test_email_settings_are_collected_only_with_send_email() -> None:
 
 
 def test_every_recipient_reaches_the_email_settings() -> None:
-    """The parser collects a list; the frozen config holds it as a tuple."""
-    args = _output_args(send_email=True, recipient_email=["a@example.edu", "b@example.edu"])
-    email = _targets(args).email
+    """Each entry is carried across as typed; app.reports parses and renders it."""
+    entries = ["a@example.edu, b@example.edu", "Ops Team <ops@example.edu>"]
+    email = _targets(_output_args(send_email=True, recipient_email=entries)).email
     assert email is not None
-    assert email.recipients == ("a@example.edu", "b@example.edu")
-
-
-def test_an_entry_naming_several_recipients_is_carried_across_whole() -> None:
-    """One entry may be a list; app.cli counts entries, not recipients."""
-    args = _output_args(send_email=True, recipient_email=["a@example.edu, b@example.edu"])
-    email = _targets(args).email
-    assert email is not None
-    assert email.recipients == ("a@example.edu, b@example.edu",)
-
-
-def test_a_recipient_display_name_is_carried_across_unrendered() -> None:
-    """app.cli stores the entry as typed; app.reports renders the header."""
-    args = _output_args(send_email=True, recipient_email=["Ops Team <ops@example.edu>"])
-    email = _targets(args).email
-    assert email is not None
-    assert email.recipients == ("Ops Team <ops@example.edu>",)
+    assert email.recipients == tuple(entries)
 
 
 def test_a_one_day_window_is_named_by_its_single_date() -> None:

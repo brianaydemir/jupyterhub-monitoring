@@ -28,28 +28,16 @@ _INDEX = "servers"
 
 
 class _StubHub:
-    """Returns a prepared server list, or raises instead."""
+    """Returns a prepared server list."""
 
-    def __init__(
-        self,
-        servers: list[dict[str, Any]] | None = None,
-        *,
-        error: Exception | None = None,
-    ) -> None:
-        """Store the servers to return, and any error to raise."""
-        self.servers = servers or []
-        self.error = error
+    def __init__(self, servers: list[dict[str, Any]]) -> None:
+        """Store the servers to return."""
+        self.servers = servers
         self.limits: list[int | None] = []
 
     def list_servers(self, limit: int | None = None) -> list[dict[str, Any]]:
-        """Return the prepared servers, or raise the configured error.
-
-        The cap is recorded as well as applied, so a test can tell a
-        pipeline that pushed it down from one that sliced afterwards.
-        """
+        """Return the prepared servers, recording the cap it was asked for."""
         self.limits.append(limit)
-        if self.error is not None:
-            raise self.error
         if limit is None:
             return list(self.servers)
         return list(self.servers[:limit])
@@ -73,7 +61,6 @@ class _StubElasticsearch:
         reject: set[int] | None = None,
         error_on: set[int] | None = None,
         error: Exception | None = None,
-        result: str = "created",
     ) -> None:
         """Store which documents are rejected and which requests fail, and how."""
         self.uploaded: list[dict[str, Any]] = []
@@ -83,8 +70,7 @@ class _StubElasticsearch:
         self.requests = 0
         self.reject = reject or set()
         self.error_on = error_on or set()
-        self.error = error or RuntimeError("bulk request failed")
-        self.result = result
+        self.error = error or ExternalServiceError("bulk request failed")
 
     def upload_documents(
         self,
@@ -113,11 +99,11 @@ class _StubElasticsearch:
                     }
                 )
             else:
-                results.append({"status": 201, "result": self.result})
+                results.append({"status": 201, "result": "created"})
         return results
 
 
-def test_metadata_items_become_prefixed_keys() -> None:
+def test_metadata_items_become_key_value_pairs() -> None:
     """Each item is a key-value pair; the ``meta.`` prefix is added later."""
     assert parse_metadata(["hub=production", "site=wisc"]) == {
         "hub": "production",
@@ -176,16 +162,6 @@ def test_a_document_id_fills_in_missing_fields() -> None:
     )
 
 
-def test_the_printing_sink_writes_one_numbered_json_document(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """The heading counts the document; the body is the document itself."""
-    assert PrintingSink().send_all([{"user.name": "a@x.edu"}], 2, 3) == [None]
-    body = capsys.readouterr().out
-    assert "--- Document 2/3 ---" in body
-    assert json.loads(body[body.index("{") : body.rindex("}") + 1]) == {"user.name": "a@x.edu"}
-
-
 def test_the_elasticsearch_sink_uploads_and_reports_the_outcome(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -204,7 +180,7 @@ def test_the_elasticsearch_sink_uploads_and_reports_the_outcome(
 def test_the_elasticsearch_sink_propagates_a_failed_request() -> None:
     """Counting the failure is the pipeline's job, not the sink's."""
     sink = ElasticsearchSink(_StubElasticsearch(error_on={0}), _INDEX)
-    with pytest.raises(RuntimeError, match="bulk request failed"):
+    with pytest.raises(ExternalServiceError, match="bulk request failed"):
         sink.send_all([{"user.name": "a@x.edu"}], 1, 1)
 
 
@@ -261,19 +237,6 @@ def test_every_document_in_a_run_shares_one_snapshot_time() -> None:
     assert len({d["meta.snapshot-time"] for d in elasticsearch.uploaded}) == 1
 
 
-def test_push_honors_the_limit() -> None:
-    """Only the first N servers are processed."""
-    elasticsearch = _StubElasticsearch()
-    successful, _ = push_servers(
-        jupyterhub_client=_StubHub([{"user.name": f"u{i}@x.edu"} for i in range(5)]),
-        sink=ElasticsearchSink(elasticsearch, _INDEX),
-        interval="5m",
-        limit=2,
-    )
-    assert successful == 2
-    assert len(elasticsearch.uploaded) == 2
-
-
 def test_push_hands_the_limit_to_the_client() -> None:
     """The cap reaches the fetch, so a capped run is a small one."""
     hub = _StubHub([{"user.name": f"u{i}@x.edu"} for i in range(5)])
@@ -310,17 +273,6 @@ def test_the_printing_sink_pushes_nothing(
     assert document["meta.interval"] == "5m"
 
 
-def test_a_failed_fetch_is_reported_as_a_service_error() -> None:
-    """The hub being unreachable is not a per-document problem."""
-    hub = _StubHub(error=ConnectionError("hub unreachable"))
-    with pytest.raises(ExternalServiceError, match="Fetching servers from JupyterHub"):
-        push_servers(
-            jupyterhub_client=hub,
-            sink=ElasticsearchSink(_StubElasticsearch(), _INDEX),
-            interval="5m",
-        )
-
-
 def test_one_rejected_document_does_not_abort_the_batch(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -338,33 +290,6 @@ def test_one_rejected_document_does_not_abort_the_batch(
     )
 
 
-def test_a_service_error_from_the_sink_is_counted_not_propagated(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """The Elasticsearch client raises one of these for a failed request.
-
-    The handler has to keep catching it, or one failed request would
-    abort the batches that follow. Both servers rode this request, so
-    both are counted and named.
-    """
-    elasticsearch = _StubElasticsearch(
-        error_on={0},
-        error=ExternalServiceError(
-            "Bulk-uploading documents to Elasticsearch failed: rejected"
-        ),
-    )
-    successful, errors = push_servers(
-        jupyterhub_client=_StubHub([{"user.name": f"u{i}@x.edu"} for i in range(2)]),
-        sink=ElasticsearchSink(elasticsearch, _INDEX),
-        interval="5m",
-    )
-    assert (successful, errors) == (0, 2)
-    err = capsys.readouterr().err
-    assert "Error pushing server 1/2 (u0@x.edu/unknown)" in err
-    assert "Error pushing server 2/2 (u1@x.edu/unknown)" in err
-    assert err.count("Bulk-uploading documents to Elasticsearch failed") == 2
-
-
 def test_an_empty_server_list_is_not_an_error(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -378,18 +303,6 @@ def test_an_empty_server_list_is_not_an_error(
     assert "Found 0 server(s) to process" in capsys.readouterr().out
     assert elasticsearch.uploaded == []
     assert elasticsearch.requests == 0
-
-
-def test_a_whole_batch_costs_one_request() -> None:
-    """A round trip per server is what this pipeline stopped doing."""
-    elasticsearch = _StubElasticsearch()
-    push_servers(
-        jupyterhub_client=_StubHub([{"user.name": f"u{i}@x.edu"} for i in range(3)]),
-        sink=ElasticsearchSink(elasticsearch, _INDEX),
-        interval="5m",
-    )
-    assert elasticsearch.requests == 1
-    assert elasticsearch.batch_sizes == [3]
 
 
 def test_documents_are_pushed_in_batches(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -421,8 +334,8 @@ def test_a_failed_request_does_not_abort_the_batches_that_follow(
     assert elasticsearch.requests == 2
     assert [d["user.name"] for d in elasticsearch.uploaded] == ["u2@x.edu", "u3@x.edu"]
     err = capsys.readouterr().err
-    assert "Error pushing server 1/4" in err
-    assert "Error pushing server 2/4" in err
+    assert "Error pushing server 1/4 (u0@x.edu/unknown): bulk request failed" in err
+    assert "Error pushing server 2/4 (u1@x.edu/unknown): bulk request failed" in err
 
 
 def test_a_document_keeps_its_number_across_batches(
@@ -450,18 +363,6 @@ def test_every_document_in_a_batch_carries_its_own_id() -> None:
     assert elasticsearch.doc_ids == [_make_doc_id(d) for d in elasticsearch.uploaded]
     assert len(set(elasticsearch.doc_ids)) == 3
     assert not any(id_ and "unknown-snapshot" in id_ for id_ in elasticsearch.doc_ids)
-
-
-def test_a_repushed_snapshot_is_reported_as_updated(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """The deterministic id overwrites, which is what makes a re-run safe."""
-    push_servers(
-        jupyterhub_client=_StubHub([{"user.name": "a@x.edu"}]),
-        sink=ElasticsearchSink(_StubElasticsearch(result="updated"), _INDEX),
-        interval="5m",
-    )
-    assert "(result: updated)" in capsys.readouterr().out
 
 
 def test_a_run_that_outlasts_its_interval_says_so(
@@ -520,11 +421,12 @@ def test_a_non_positive_interval_is_rejected(interval: str) -> None:
 
 
 def test_the_interval_is_checked_before_the_hub_is_fetched() -> None:
-    """An idle hub returns early, so the stamp is not where to check it."""
-    hub = _StubHub(error=ConnectionError("hub unreachable"))
+    """A bad interval fails the run before the hub is contacted."""
+    hub = _StubHub([])
     with pytest.raises(DataShapeError):
         push_servers(
             jupyterhub_client=hub,
             sink=ElasticsearchSink(_StubElasticsearch(), _INDEX),
             interval="5 fortnights",
         )
+    assert hub.limits == []

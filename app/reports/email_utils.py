@@ -13,22 +13,19 @@ from email.utils import formataddr, formatdate, getaddresses, make_msgid
 
 from app.reports.model import ReportAttachment
 
+# Seconds to wait on the SMTP server before giving up, so that a relay
+# that stops answering fails a scheduled run instead of hanging it. This
+# also bounds sending the whole message, attachments included.
+_SMTP_TIMEOUT = 60
+
 
 @dataclass(frozen=True)
 class EmailConfig:
     """The settings a report email is composed and sent with.
 
-    The CLI layer builds one from its parsed arguments, so nothing here
-    has to know how those arguments are spelled. One field per email
-    flag.
-
     *recipients* holds at least one entry, each of them one or more
-    ``To:`` header mailboxes as they were typed — a bare address, an
+    ``To:`` header mailboxes as they were typed: a bare address, an
     address with a display name, or a comma-separated list of either.
-    An entry therefore need not be one recipient, and the count of
-    entries is not the count of people the report reaches. Turning them
-    into a header is :func:`_format_recipients`'s job, and into envelope
-    addresses :func:`send_email`'s.
     """
 
     sender_name: str | None
@@ -111,18 +108,9 @@ def _mailboxes(recipients: Sequence[str]) -> list[tuple[str, str]]:
     """Parse each recipient into a display name and an address.
 
     An entry may name several mailboxes, so this returns a flat list
-    rather than one pair per entry.
-
-    Each entry is parsed on its own rather than the joined list, which
-    is not the same thing: ``getaddresses`` given every entry at once
-    parses their comma-joined text as a single header field, so one
-    entry with an unbalanced quote swallows the entries after it and
-    returns a single empty mailbox. Parsing one at a time keeps a bad
-    entry from costing anybody else their copy, and matches how
-    :func:`app.cli.arguments._recipient` checked the entry in the first
-    place: that function requires every mailbox it parses out of an
-    entry to carry a readable address, and refuses group syntax, so no
-    group name reaches here to be dropped.
+    rather than one pair per entry. Each entry is parsed on its own, as
+    the CLI checked it: parsed together, one entry with an unbalanced
+    quote would swallow the entries after it.
     """
     return [mailbox for recipient in recipients for mailbox in getaddresses([recipient])]
 
@@ -130,13 +118,10 @@ def _mailboxes(recipients: Sequence[str]) -> list[tuple[str, str]]:
 def _format_recipients(recipients: Sequence[str]) -> str:
     """Render the ``To`` header for one or more recipients.
 
-    Each entry is parsed and rendered again rather than passed through.
-    A display name is the reason: the legacy email policy encodes a
-    header it cannot send as ASCII all in one piece, so a name with an
-    accent in it would take the address into the encoded word with it
-    and leave no address a reader could reply to. ``formataddr``
-    encodes the name alone. A bare address is unchanged by the
-    round trip, and a name holding a comma comes back quoted.
+    Each entry is parsed and rendered again rather than passed through,
+    because the legacy email policy would encode a non-ASCII display
+    name together with its address; ``formataddr`` encodes the name
+    alone.
     """
     return ", ".join(formataddr(mailbox) for mailbox in _mailboxes(recipients))
 
@@ -162,22 +147,20 @@ def send_email(
     """Send an email message via SMTP.
 
     The envelope recipients are the bare addresses parsed out of
-    *recipients*, since an entry may carry a display name that only the
-    ``To`` header wants. A bare string passed here would be taken for a
-    sequence of one-character recipients, which no type checker can
-    catch: :class:`str` is itself a sequence of strings.
+    *recipients*. Pass a sequence even for one recipient: a bare string
+    would be read as one recipient per character.
 
     Raises:
-        OSError: If the SMTP connection fails.
+        OSError: If the SMTP connection fails or times out.
         smtplib.SMTPException: If an SMTP-level error
             occurs.
     """
     to_addrs = [address for _, address in _mailboxes(recipients)]
     if use_ssl:
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=_SMTP_TIMEOUT) as server:
             server.send_message(message, sender_email, to_addrs)
     else:
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=_SMTP_TIMEOUT) as server:
             server.send_message(message, sender_email, to_addrs)
 
 

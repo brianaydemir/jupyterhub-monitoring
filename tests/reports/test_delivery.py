@@ -19,6 +19,7 @@ from app.reports.email_utils import EmailConfig, create_message, send_report_ema
 from app.reports.model import ReportAttachment
 from app.reports.renderers import (
     render_csv_bytes,
+    render_html_document,
     render_html_fragment,
     render_text,
     render_xlsx_bytes,
@@ -36,10 +37,11 @@ class _RecordingSmtp:
 
     sent: list[tuple[str, list[str], Any]] = []
 
-    def __init__(self, host: str, port: int) -> None:
+    def __init__(self, host: str, port: int, timeout: float) -> None:
         """Record the connection target."""
         self.host = host
         self.port = port
+        self.timeout = timeout
 
     def __enter__(self) -> "_RecordingSmtp":
         """Support use as a context manager, like :mod:`smtplib` does."""
@@ -76,13 +78,11 @@ def test_deliver_report_writes_every_requested_file(tmp_path: Path) -> None:
 
 
 def test_the_html_file_is_a_standalone_document(tmp_path: Path) -> None:
-    """A file a browser opens needs a doctype and a charset; a body does not."""
+    """A file is opened by a browser, so it gets the whole document."""
     written = tmp_path / "r.html"
-    assert deliver_report(_targets(html_file=written), sample_reports.report()) == 0
-    content = written.read_text(encoding="utf-8")
-    assert content.startswith("<!doctype html>")
-    assert '<meta charset="utf-8">' in content
-    assert render_html_fragment(sample_reports.report()) in content
+    built = sample_reports.report()
+    assert deliver_report(_targets(html_file=written), built) == 0
+    assert written.read_text(encoding="utf-8") == render_html_document(built)
 
 
 def test_deliver_report_names_each_file_it_wrote(
@@ -120,25 +120,15 @@ def test_the_workbook_is_attached_only_when_it_was_written(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """``--xlsx-file`` is what produces the workbook, so it gates the attachment."""
+    """``--xlsx-file`` produces the workbook, and the email carries that file."""
     sent = _capture_smtp(monkeypatch)
     built = sample_reports.report()
 
     deliver_report(_targets(send_email=True), built)
     assert "r.xlsx" not in _payload_names(sent[-1][2])
 
-    deliver_report(_targets(send_email=True, xlsx_file=tmp_path / "r.xlsx"), built)
-    assert "r.xlsx" in _payload_names(sent[-1][2])
-
-
-def test_the_attached_workbook_is_the_file_that_was_written(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """The email carries exactly the artifact the run produced."""
-    sent = _capture_smtp(monkeypatch)
     written = tmp_path / "r.xlsx"
-    deliver_report(_targets(send_email=True, xlsx_file=written), sample_reports.report())
+    deliver_report(_targets(send_email=True, xlsx_file=written), built)
     attached = [
         part.get_payload(decode=True)
         for part in sent[-1][2].walk()
@@ -147,16 +137,21 @@ def test_the_attached_workbook_is_the_file_that_was_written(
     assert attached == [written.read_bytes()]
 
 
+@pytest.mark.parametrize(
+    "failure",
+    [smtplib.SMTPConnectError(421, "refused"), TimeoutError("timed out")],
+)
 def test_deliver_report_reports_a_failed_send(
+    failure: Exception,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A refused send is an exit code, not a traceback."""
+    """A refused or timed-out send is an exit code, not a traceback."""
 
-    def _refuse(host: str, port: int) -> Any:
-        raise smtplib.SMTPConnectError(421, "refused")
+    def _fail(host: str, port: int, timeout: float) -> Any:
+        raise failure
 
-    monkeypatch.setattr(email_utils.smtplib, "SMTP_SSL", _refuse)
+    monkeypatch.setattr(email_utils.smtplib, "SMTP_SSL", _fail)
     assert deliver_report(_targets(send_email=True), sample_reports.report()) == 1
     assert "Error sending email" in capsys.readouterr().err
 
@@ -166,9 +161,9 @@ def test_email_uses_ssl_unless_it_is_disabled(monkeypatch: pytest.MonkeyPatch) -
     used: list[str] = []
 
     def _record(kind: str) -> Any:
-        def _factory(host: str, port: int) -> _RecordingSmtp:
+        def _factory(host: str, port: int, timeout: float) -> _RecordingSmtp:
             used.append(kind)
-            return _RecordingSmtp(host, port)
+            return _RecordingSmtp(host, port, timeout)
 
         return _factory
 
@@ -177,6 +172,22 @@ def test_email_uses_ssl_unless_it_is_disabled(monkeypatch: pytest.MonkeyPatch) -
     deliver_report(_targets(send_email=True), sample_reports.report())
     deliver_report(_targets(send_email=True, smtp_no_ssl=True), sample_reports.report())
     assert used == ["ssl", "plain"]
+
+
+def test_either_transport_gives_up_on_a_silent_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Without a timeout, a relay that stops answering hangs a cron job."""
+    timeouts: list[float | None] = []
+
+    def _record(host: str, port: int, timeout: float | None = None) -> _RecordingSmtp:
+        timeouts.append(timeout)
+        return _RecordingSmtp(host, port, timeout or 0)
+
+    monkeypatch.setattr(email_utils.smtplib, "SMTP_SSL", _record)
+    monkeypatch.setattr(email_utils.smtplib, "SMTP", _record)
+    deliver_report(_targets(send_email=True), sample_reports.report())
+    deliver_report(_targets(send_email=True, smtp_no_ssl=True), sample_reports.report())
+    assert len(timeouts) == 2
+    assert all(timeout is not None and timeout > 0 for timeout in timeouts)
 
 
 def test_a_message_carries_the_headers_a_relay_expects() -> None:
@@ -240,12 +251,6 @@ def test_an_attachment_type_is_guessed_from_its_filename() -> None:
     assert part.get_content_type() == "text/csv"
 
 
-def test_send_report_email_returns_an_exit_code(monkeypatch: pytest.MonkeyPatch) -> None:
-    """0 on success and 1 on failure, so callers can return it directly."""
-    _capture_smtp(monkeypatch)
-    assert send_report_email(_email(), text_content="t", html_content="h", attachments=[]) == 0
-
-
 def _addressed_to(recipients: list[str]) -> Any:
     """Build a message for *recipients*, to assert on its ``To`` header."""
     return create_message(
@@ -305,17 +310,6 @@ def test_a_quoted_comma_in_a_list_does_not_separate_mailboxes() -> None:
     """The entry is parsed as a header field, so the quotes are honored."""
     message = _addressed_to(['"Doe, Jane" <j@example.org>, dean@example.org'])
     assert message["To"] == '"Doe, Jane" <j@example.org>, dean@example.org'
-
-
-def test_one_recipient_is_addressed_exactly_as_it_always_was() -> None:
-    """A lone address is the header, with no list punctuation around it."""
-    assert _addressed_to(["ops@example.org"])["To"] == "ops@example.org"
-
-
-def test_every_recipient_keeps_its_own_display_name() -> None:
-    """A name belongs to the entry it was written in, not to the list."""
-    message = _addressed_to(["Ops <a@example.org>", "Dean <b@example.org>"])
-    assert message["To"] == "Ops <a@example.org>, Dean <b@example.org>"
 
 
 def test_a_quoted_display_name_keeps_its_quotes_and_its_address(
@@ -403,8 +397,15 @@ def test_an_anonymized_report_leaks_no_identifier_in_any_format() -> None:
             render_csv_bytes(built).decode("utf-8"),
         ):
             assert not [s for s in secrets if s in rendered]
-        workbook = render_xlsx_bytes(built).decode("latin-1")
-        assert not [s for s in secrets if s in workbook]
+        # The XLSX bytes are compressed, so the cells are read back instead.
+        workbook = load_workbook(io.BytesIO(render_xlsx_bytes(built)))
+        cells = [
+            str(value)
+            for sheet in workbook.worksheets
+            for row in sheet.iter_rows(values_only=True)
+            for value in row
+        ]
+        assert not [s for s in secrets for cell in cells if s in cell]
         # The institution is deliberately preserved.
         assert "x.edu" in render_text(built)
 

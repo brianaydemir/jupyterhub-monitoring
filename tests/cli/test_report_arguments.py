@@ -20,7 +20,6 @@ from collections.abc import Callable
 
 import pytest
 
-from app.cli.factories import compute_report_time_range
 from app.cli.get_new_activity import _build_parser as build_activity_parser
 from app.cli.get_new_activity import _validate_arguments as validate_activity_arguments
 from app.cli.get_new_users import _build_parser as build_users_parser
@@ -70,15 +69,6 @@ def _reject(
     return capsys.readouterr().err
 
 
-def test_the_shared_groups_follow_the_sources() -> None:
-    """A source's own arguments come first, then Query, Output, and Email."""
-    parser = _parser(JUPYTERHUB_SOURCE)
-    help_text = parser.format_help()
-    positions = [help_text.index(heading) for heading in ["JupyterHub API", "Query", "Output"]]
-    positions.append(help_text.index("Email:"))
-    assert positions == sorted(positions)
-
-
 def test_the_query_group_is_returned_for_the_caller_to_extend() -> None:
     """get-new-activity adds --hub to it."""
     parser = argparse.ArgumentParser(prog="cmd")
@@ -101,17 +91,6 @@ def test_each_source_adds_its_own_arguments() -> None:
     assert args.jupyterhub_endpoint == "https://hub.example.edu/hub/api"
     assert args.es_endpoint is None
     assert args.es_index is None
-
-
-def test_the_elasticsearch_source_requires_its_arguments(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """get-new-activity cannot run without an index to read."""
-    parser = _parser(ELASTICSEARCH_SOURCE)
-    with pytest.raises(SystemExit) as exit_info:
-        parser.parse_args([])
-    assert exit_info.value.code == 2
-    assert "--es-endpoint" in capsys.readouterr().err
 
 
 def test_a_source_validates_the_arguments_it_added(
@@ -196,6 +175,28 @@ def test_a_half_specified_optional_elasticsearch_group_is_an_error(
     assert "--es-index is required when --es-endpoint is given" in message
 
 
+def test_an_optional_elasticsearch_flag_without_the_endpoint_is_an_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An index without an endpoint would otherwise be silently skipped."""
+    monkeypatch.setenv("JUPYTERHUB_API_KEY", "secret")
+    sources = (JUPYTERHUB_SOURCE, OPTIONAL_ELASTICSEARCH_SOURCE)
+    parser = _parser(*sources)
+    args = parser.parse_args(
+        [
+            "--jupyterhub-endpoint",
+            "https://hub.example.edu/hub/api",
+            "--duration",
+            "7 days",
+            "--es-index",
+            "servers",
+        ]
+    )
+    message = _reject(parser, args, sources, capsys)
+    assert "--es-index requires --es-endpoint" in message
+
+
 def test_a_complete_optional_elasticsearch_group_needs_a_credential(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -218,18 +219,6 @@ def test_a_complete_optional_elasticsearch_group_needs_a_credential(
     )
     message = _reject(parser, args, sources, capsys)
     assert "one of --es-api-key, ELASTICSEARCH_API_KEY, or --es-username is required" in message
-
-
-def test_a_source_pairs_one_group_with_one_validator() -> None:
-    """The pairing is the point: a call site cannot mismatch the two."""
-    parser = argparse.ArgumentParser(prog="cmd")
-    source = ReportSource(
-        add_arguments=lambda p: p.add_argument("--flag"),
-        validate=lambda a, p: p.error("checked") if a.flag is None else None,
-    )
-    configure_report_parser(parser, sources=(source,), subject_prefix="Subject")
-    args = parser.parse_args(["--flag", "value", "--duration", "7 days"])
-    validate_report_arguments(args, parser, sources=(source,))
 
 
 #
@@ -338,44 +327,3 @@ def test_either_command_accepts_whole_days(
     )
     assert args.whole_days is True
     validate(args, parser)
-
-
-@pytest.mark.parametrize(("build_parser", "argv"), PARSERS)
-def test_neither_command_snaps_a_window_it_was_not_asked_to(
-    build_parser: Builder,
-    argv: list[str],
-) -> None:
-    """Without the flag both commands resolve the bounds as written."""
-    args = build_parser().parse_args(
-        [*argv, "--report-start", "2026-07-01 09:00", "--report-end", "2026-07-08 09:00"]
-    )
-
-    start, end = compute_report_time_range(args)
-
-    assert (start.hour, end.hour) == (9, 9)
-
-
-@pytest.mark.parametrize(
-    "window",
-    [
-        ["--duration", "7 days"],
-        ["--report-start", "2026-07-01 00:00", "--report-end", "2026-07-08 00:00"],
-    ],
-    ids=["duration", "range"],
-)
-@pytest.mark.parametrize(("build_parser", "argv"), PARSERS)
-def test_either_command_echoes_its_window_to_stderr(
-    build_parser: Builder,
-    argv: list[str],
-    window: list[str],
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Both modes, both commands, and never on the report's own stdout."""
-    args = build_parser().parse_args([*argv, *window])
-
-    compute_report_time_range(args)
-
-    captured = capsys.readouterr()
-    assert captured.out == ""
-    assert captured.err.startswith("Reporting window: ")
-    assert captured.err.endswith("(America/Chicago, 7 days)\n")

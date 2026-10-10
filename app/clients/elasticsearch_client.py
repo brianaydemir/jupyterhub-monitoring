@@ -13,20 +13,14 @@ from app.core.errors import ExternalServiceError
 
 _SCROLL_TIMEOUT = "2m"
 
-# Scroll pages of this size keep a full-index export to a few hundred
-# sequential round trips instead of one per hundred documents. It sits at
-# the top of the conventional 1,000-5,000 range: the documents this
-# project scrolls over are small, and a caller that wants less can pass
-# its own *size*, or a *limit*, which caps the page size to match.
+# Documents per scroll page. Snapshot documents are small, so a large
+# page keeps a full-index export to a few hundred round trips.
 _DEFAULT_PAGE_SIZE = 5000
 
-# A whole batch is not one document, and the transport does not retry a
-# timeout. Its ten-second default is ample for a single upload and tight
-# for a bulk request, and a bulk request that times out has probably
-# been applied anyway, so the caller counts documents it did store as
-# failures. This is the client-side wait, not the ``timeout`` parameter
-# of the bulk API, which is how long Elasticsearch itself waits on a
-# shard.
+# Client-side wait, in seconds, for a bulk request. The transport's
+# ten-second default is tight for a whole batch, and a request that times
+# out has probably been applied anyway, so its documents would be
+# miscounted as failures.
 _BULK_TIMEOUT = 30
 
 
@@ -162,25 +156,18 @@ class ElasticsearchClient:
     ) -> Iterator[dict[str, Any]]:
         """Query an index and yield ``_source`` documents.
 
-        Accepts either Query DSL (*query*) or query-string
-        syntax (*query_string*). When both are ``None``,
-        the query defaults to ``match_all``. Results are
-        streamed via scroll pagination in pages of *size*,
-        which defaults to a batch large enough that a bulk
-        export does not pay a round trip per hundred
-        documents. When *limit* is set, yielded results are
-        capped and page size is also capped to avoid
-        over-fetching; a *limit* of zero or less yields
-        nothing.
+        Accepts either Query DSL (*query*) or query-string syntax
+        (*query_string*); with neither, the query is ``match_all``.
+        Results are streamed via scroll pagination in pages of *size*.
+        *limit* caps both the results yielded and the page size; a
+        *limit* of zero or less yields nothing.
 
-        Because this is a generator, no request is made
-        until it is first iterated, and failures surface
-        there rather than at the call that created it.
+        Because this is a generator, no request is made until it is
+        first iterated, and failures surface there rather than at the
+        call that created it.
 
         Raises:
-            ExternalServiceError: If Elasticsearch rejects
-                a search or scroll request, or a
-                transport-level failure occurs.
+            ExternalServiceError: If a search or scroll request fails.
         """
         if limit is not None and limit < 1:
             return

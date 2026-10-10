@@ -3,7 +3,6 @@
 import argparse
 import json
 import sys
-from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from typing import Any
 
@@ -73,9 +72,10 @@ def _format_key_list_details(
     active_only: bool = True,
 ) -> str:
     """Format a list of keys as a human-readable listing."""
-    label = "Active API Keys" if active_only else "API Keys"
     if not keys:
-        return f"No {label.lower()} found."
+        return "No active API keys found." if active_only else "No API keys found."
+
+    label = "Active API Keys" if active_only else "API Keys"
 
     lines = [f"{label} ({len(keys)}):", ""]
     now_ms = get_now_ms()
@@ -144,17 +144,16 @@ def _run(args: argparse.Namespace) -> int:
     Raises:
         ExternalServiceError: If listing API keys fails.
     """
-    with make_es_client(args) as client:
-        keys = client.list_api_keys(active_only=not args.all_keys)
-
     active_only = not args.all_keys
-    formatters: Mapping[str, Callable[[], str]] = {
-        "key": lambda: _format_key_ids(keys, active_only=active_only),
-        "json": lambda: _format_key_list_json(keys),
-        "full": lambda: _format_key_list_details(keys, active_only=active_only),
-    }
+    with make_es_client(args) as client:
+        keys = client.list_api_keys(active_only=active_only)
 
-    print(formatters[args.format]())
+    if args.format == "json":
+        print(_format_key_list_json(keys))
+    elif args.format == "full":
+        print(_format_key_list_details(keys, active_only=active_only))
+    else:
+        print(_format_key_ids(keys, active_only=active_only))
     return 0
 
 

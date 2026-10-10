@@ -89,7 +89,8 @@ It is organized into the following sub-packages:
 - `app/usage` —
   the JupyterHub usage domain:
   `snapshots` (the Elasticsearch query for active server documents,
-  and the accessors for a snapshot's timestamps),
+  the exact `--hub` match its results go through,
+  and the accessors for a snapshot's hub and timestamps),
   `activity` (per-session accounting, the report summary,
   and the tally of which documents could be counted),
   `new_users` (new-user selection, first-server times, and adoption), and
@@ -152,8 +153,9 @@ which is what keeps two same-named test modules
 in different sub-packages from colliding.
 `tests/helpers` is the one directory that mirrors nothing;
 it holds the stand-ins the tests share,
-`clock` (a frozen `datetime`) and
-`sample_reports` (report values for the renderer and delivery tests).
+`clock` (a frozen `datetime`),
+`sample_reports` (report values for the renderer and delivery tests), and
+`stub_clients` (stand-in Elasticsearch clients for the command tests).
 
 Most modules have a test module of their own.
 These do not, and are covered through the code that uses them:
@@ -209,6 +211,15 @@ Keep entries in the following sections in alphabetical order:
 **Note:**
 In `[tool.poetry.dependencies]` only,
 `python` is an exception and should always come first.
+
+### Command-line flags
+
+A flag that does nothing unless some other flag is also given
+is an error when given without it,
+rather than silently ignored:
+for example, `--es-index` without `--es-endpoint`,
+or `--subject` without `--send-email`.
+Report it from a validator in `app/cli/validation.py`.
 
 ### Spacing
 

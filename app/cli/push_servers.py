@@ -8,6 +8,7 @@ from app.cli.factories import make_es_client, make_jupyterhub_client
 from app.cli.runtime import run_command
 from app.cli.validation import (
     positive_int_or_error,
+    reject_es_flags_without_endpoint,
     validate_es_arguments,
     validate_jupyterhub_arguments,
 )
@@ -92,6 +93,9 @@ def _validate_arguments(
     """Run post-parse argument validation."""
     validate_jupyterhub_arguments(args, parser)
 
+    # --debug excuses a complete Elasticsearch group, but not a flag that
+    # would be useless even without it.
+    reject_es_flags_without_endpoint(args, parser)
     if not args.debug:
         if not args.es_endpoint:
             parser.error("--es-endpoint is required unless --debug is used")
@@ -99,18 +103,15 @@ def _validate_arguments(
             parser.error("--es-index is required unless --debug is used")
         validate_es_arguments(args, parser)
 
-    # Report a bad interval as a usage error here; push_servers
-    # enforces the same rule for callers that skip this command.
+    positive_int_or_error(args.limit, parser=parser, flag="--limit")
+
+    # The run checks --interval and --metadata again as it uses them;
+    # checking them here reports a mistake as a usage error.
     interval = parse_duration(args.interval)
     if interval is None:
         parser.error(f"--interval: invalid duration {args.interval!r}")
     if interval.total_seconds() <= 0:
         parser.error(f"--interval must be positive, not {args.interval!r}")
-
-    positive_int_or_error(args.limit, parser=parser, flag="--limit")
-    # Check the format here so a typo is reported as a usage error; _run
-    # parses the value it actually uses, rather than a validator stashing
-    # an undeclared attribute on the namespace.
     try:
         parse_metadata(args.metadata)
     except DataShapeError as e:

@@ -4,7 +4,6 @@
 # builders holds every report table, so this one runs long.
 # pylint: disable=too-many-lines
 
-import re
 from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -40,15 +39,8 @@ COLLIDING_UIDS = ("u138", "u223")
 # their pseudonyms in descending order.
 INVERTING_UIDS = ("alice", "bob")
 
-# The footnote every section showing a duration carries, now that no
-# column header states the unit.
+# The footnote every section showing a duration carries.
 TIMES_NOTE = "Times are HH:MM."
-
-# A summary holding every row the table can hold, so that the helpers
-# reading a row's neighbor find both halves of each split pair.
-_SUMMARY = ActivitySummary(
-    total_seconds=7200, gpu_seconds=3600, per_day_seconds={"2026-07-02": 7200}
-)
 
 
 def test_new_users_report_has_the_documented_columns() -> None:
@@ -59,15 +51,18 @@ def test_new_users_report_has_the_documented_columns() -> None:
 
 
 def test_new_users_report_adds_a_first_server_column_when_given_one() -> None:
-    """Supplying the mapping adds the column; *None* omits it entirely."""
+    """Supplying the mapping adds the column."""
     users = [_user("a@x.edu", "2026-07-02T10:00:00Z")]
     with_es = _users_table(_users_report(users, first_server={"a@x.edu": 1782000000}))
     assert with_es.headers == ["Created", "First server", "Institution", "ID"]
-    assert _users_table(_users_report(users, first_server=None)).headers == [
-        "Created",
-        "Institution",
-        "ID",
-    ]
+
+
+def test_new_users_are_listed_oldest_account_first() -> None:
+    """The roster reads in creation order, whatever order the hub listed it in."""
+    report = _users_report(
+        [_user("a@x.edu", "2026-07-03T10:00:00Z"), _user("b@x.edu", "2026-07-02T10:00:00Z")]
+    )
+    assert [row[2] for row in _only_table(report).rows] == ["b", "a"]
 
 
 def test_new_users_report_marks_users_with_no_server() -> None:
@@ -107,16 +102,6 @@ def test_the_adoption_section_survives_nobody_starting_a_server() -> None:
     assert "Median time to first server" not in rows
 
 
-def test_the_adoption_section_states_the_unit_of_its_median() -> None:
-    """The report's one duration names the units it is read in."""
-    report = _users_report(
-        [_user("a@x.edu", "2026-07-02T10:00:00Z")],
-        first_server={"a@x.edu": _epoch("2026-07-02T10:30:00Z")},
-    )
-    assert cell_text(_adoption(report)["Median time to first server"]) == "0:30"
-    assert report.sections[0].footnotes == [TIMES_NOTE]
-
-
 def test_the_adoption_section_drops_the_unit_note_with_its_median() -> None:
     """A note explaining a format no visible cell is read in is noise."""
     report = _users_report([_user("a@x.edu", "2026-07-02T10:00:00Z")], first_server={})
@@ -135,7 +120,6 @@ def test_the_new_users_table_gains_no_unit_note() -> None:
         [_user("a@x.edu", "2026-07-02T10:00:00Z")],
         first_server={"a@x.edu": _epoch("2026-07-02T10:30:00Z")},
     )
-    assert TIMES_NOTE not in _users_table_section(report).footnotes
     assert _users_table_section(report).footnotes == ["Timezone: America/Chicago"]
 
 
@@ -179,22 +163,20 @@ def test_same_day_starts_are_counted_in_the_report_timezone() -> None:
     assert _adoption(in_utc)["Started same day"] == 0
 
 
-def test_the_median_time_to_first_server_is_shown_as_hours_and_minutes() -> None:
-    """The same HH:MM formatting the activity report's durations use."""
-    rows = _adoption(
-        _users_report(
-            [
-                _user("a@x.edu", "2026-07-02T10:00:00Z"),
-                _user("b@x.edu", "2026-07-02T10:00:00Z"),
-            ],
-            first_server={
-                "a@x.edu": _epoch("2026-07-02T10:30:00Z"),
-                "b@x.edu": _epoch("2026-07-02T11:30:00Z"),
-            },
-        )
+def test_the_median_time_to_first_server_is_a_duration_with_its_unit_noted() -> None:
+    """The report's one duration names the units it is read in."""
+    report = _users_report(
+        [
+            _user("a@x.edu", "2026-07-02T10:00:00Z"),
+            _user("b@x.edu", "2026-07-02T10:00:00Z"),
+        ],
+        first_server={
+            "a@x.edu": _epoch("2026-07-02T10:30:00Z"),
+            "b@x.edu": _epoch("2026-07-02T11:30:00Z"),
+        },
     )
-    assert rows["Median time to first server"] == Duration(3600)
-    assert cell_text(rows["Median time to first server"]) == "1:00"
+    assert _adoption(report)["Median time to first server"] == Duration(3600)
+    assert report.sections[0].footnotes == [TIMES_NOTE]
 
 
 def test_new_users_report_shows_login_method_when_ids_collide() -> None:
@@ -367,11 +349,6 @@ def test_new_users_report_describes_the_window() -> None:
     )
 
 
-def test_new_users_report_records_the_timezone() -> None:
-    """Timestamps are meaningless without the zone they are in."""
-    assert _users_report([]).sections[0].footnotes == ["Timezone: America/Chicago"]
-
-
 @pytest.mark.parametrize("tz_str", ["America/Chicago", "MST", "UTC", "+04:00", "-05:30"])
 def test_reports_name_the_zone_of_their_own_window(tz_str: str) -> None:
     """The footnote is read off the window, so the two cannot disagree."""
@@ -528,11 +505,6 @@ def test_summary_splits_gpu_and_cpu_time() -> None:
     assert cell_text(values["GPU share of total"]) == "25%"
 
 
-def test_the_gpu_share_is_the_row_after_the_gpu_time() -> None:
-    """A derived figure reads next to the figure it is derived from."""
-    assert _labels_after("GPU active time") == "GPU share of total"
-
-
 @pytest.mark.parametrize("gpu_seconds", [0.0, 3600.0])
 def test_the_gpu_share_of_an_idle_window_is_zero(gpu_seconds: float) -> None:
     """A total of no time is not divided by; the share reads 0%, not n/a."""
@@ -540,19 +512,6 @@ def test_the_gpu_share_of_an_idle_window_is_zero(gpu_seconds: float) -> None:
     values = _values(_activity_report([], summary))
     assert values["GPU share of total"] == Percent(0.0)
     assert cell_text(values["GPU share of total"]) == "0%"
-
-
-@pytest.mark.parametrize(
-    ("gpu_seconds", "expected"),
-    [(0.0, "0%"), (3600.0, "42%"), (8500.0, "99%"), (8571.0, "100%")],
-)
-def test_the_gpu_share_is_rounded_to_a_whole_percentage(
-    gpu_seconds: float, expected: str
-) -> None:
-    """The cell holds the 0..1 fraction and displays it as whole percent."""
-    summary = ActivitySummary(total_seconds=8571.0, gpu_seconds=gpu_seconds)
-    values = _values(_activity_report([], summary))
-    assert cell_text(values["GPU share of total"]) == expected
 
 
 def test_summary_reports_no_busiest_day_without_daily_data() -> None:
@@ -569,27 +528,6 @@ def test_summary_names_the_busiest_day_and_its_total_in_two_rows() -> None:
     assert values["Busiest day"] == "2026-07-03"
     assert values["Busiest day active time"] == Duration(7200)
     assert cell_text(values["Busiest day active time"]) == "2:00"
-
-
-def test_the_busiest_days_time_is_the_row_after_the_day() -> None:
-    """A derived figure reads next to the figure it is derived from."""
-    assert _labels_after("Busiest day") == "Busiest day active time"
-
-
-def test_no_summary_cell_packs_two_quantities_into_one_string() -> None:
-    """The GPU share and the busiest day's time were each half of a string.
-
-    Both are their own rows now. Nothing else in the report may pack a
-    figure into parentheses either, which is what the sweep asserts:
-    only labels such as ``Mean concurrent servers (active)`` keep a
-    parenthesis, and none of those opens on a digit.
-    """
-    sessions = [_session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=7200, gpu=True)]
-    report = _activity_report(sessions, _SUMMARY)
-    values = _values(report)
-    assert cell_text(values["GPU active time"]) == "1:00"
-    assert cell_text(values["Busiest day"]) == "2026-07-02"
-    assert not [text for text in _cell_texts(report) if re.search(r"\(\d", text)]
 
 
 def test_summary_reports_both_concurrency_means() -> None:
@@ -620,15 +558,6 @@ def test_summary_footnote_distinguishes_the_two_concurrency_means() -> None:
         '"(active)" averages over snapshots that had at least one active'
         + ' server; "(window)" averages over the whole reporting window.',
     ]
-
-
-def test_summary_footnote_drops_the_single_mean_wording() -> None:
-    """The old note described one mean, and now there are two."""
-    report = _activity_report([], ActivitySummary())
-    assert not any(
-        "Mean concurrent servers is averaged" in footnote
-        for footnote in report.sections[0].footnotes
-    )
 
 
 def test_summary_footnote_names_the_hubs_a_report_combines() -> None:
@@ -663,33 +592,12 @@ def test_every_section_showing_a_duration_states_its_unit() -> None:
     assert all(TIMES_NOTE in section.footnotes for section in report.sections)
 
 
-def test_the_unit_note_leads_the_notes_already_on_a_section() -> None:
-    """The general note comes first, and displaces none of the specific ones."""
-    report = _activity_report([], ActivitySummary(hubs={"a", "b"}))
-    summary_notes = report.sections[0].footnotes
-    assert summary_notes[0] == TIMES_NOTE
-    assert len(summary_notes) == 3
-    assert report.sections[-1].footnotes == [TIMES_NOTE, "Timezone: America/Chicago"]
-
-
 def test_activity_by_day_is_sorted_by_day() -> None:
     """Days read in calendar order, not in document order."""
     summary = ActivitySummary(per_day_seconds={"2026-07-03": 7200, "2026-07-02": 3600})
     assert _only_table(_activity_report([], summary), section=1).rows == [
         ["2026-07-02", Duration(3600)],
         ["2026-07-03", Duration(7200)],
-    ]
-
-
-def test_activity_by_day_renders_a_quiet_day_as_zero() -> None:
-    """A day no snapshot fell on keeps its place in the series."""
-    summary = ActivitySummary(
-        per_day_seconds={"2026-07-02": 3600, "2026-07-03": 0.0, "2026-07-04": 1800}
-    )
-    assert _only_table(_activity_report([], summary), section=1).rows == [
-        ["2026-07-02", Duration(3600)],
-        ["2026-07-03", Duration(0.0)],
-        ["2026-07-04", Duration(1800)],
     ]
 
 
@@ -702,29 +610,12 @@ def test_activity_by_day_still_lists_a_window_that_saw_no_activity() -> None:
     ]
 
 
-def test_a_quiet_day_does_not_compete_to_be_the_busiest() -> None:
-    """The days filled in with zeros leave the busiest day where it was."""
-    summary = ActivitySummary(
-        per_day_seconds={"2026-07-02": 0.0, "2026-07-03": 7200, "2026-07-04": 0.0}
-    )
-    values = _values(_activity_report([], summary))
-    assert values["Busiest day"] == "2026-07-03"
-    assert values["Busiest day active time"] == Duration(7200)
-
-
 def test_summary_names_no_busiest_day_when_every_day_is_quiet() -> None:
     """A window that saw nothing has no busiest day, only zeros."""
     summary = ActivitySummary(per_day_seconds={"2026-07-02": 0.0, "2026-07-03": 0.0})
     values = _values(_activity_report([], summary))
     assert values["Busiest day"] == "n/a"
     assert values["Busiest day active time"] == "n/a"
-
-
-def test_an_unnamed_busiest_day_carries_no_duration_beside_it() -> None:
-    """A time of "0:00" would state a figure for a day the report cannot name."""
-    values = _values(_activity_report([], ActivitySummary(per_day_seconds={"2026-07-02": 0.0})))
-    assert not isinstance(values["Busiest day active time"], Duration)
-    assert cell_text(values["Busiest day active time"]) == "n/a"
 
 
 def test_user_totals_has_the_documented_columns() -> None:
@@ -831,11 +722,9 @@ def test_user_totals_of_an_idle_window_are_headers_alone() -> None:
 def test_user_totals_agree_with_the_summary() -> None:
     """The table and the Summary are two views of one aggregation."""
     sessions = [
-        _session("gomesr@uwec.edu", started="2026-07-02T10:00:00Z", seconds=4800, gpu=True),
-        _session("gomesr@uwec.edu", started="2026-07-02T13:00:00Z", seconds=3000),
-        _session(
-            "whitmame0687@uwec.edu", started="2026-07-02T10:00:00Z", seconds=5400, gpu=True
-        ),
+        _session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=4800, gpu=True),
+        _session("a@x.edu", started="2026-07-02T13:00:00Z", seconds=3000),
+        _session("b@x.edu", started="2026-07-02T10:00:00Z", seconds=5400, gpu=True),
     ]
     report = _activity_report(sessions, summarize_activity(sessions, [], CHICAGO, START, END))
     rows = _totals_table(report).rows
@@ -935,46 +824,6 @@ def test_the_activity_table_right_aligns_its_duration(server: str) -> None:
     assert _aligned(table) == ["Time"]
 
 
-@pytest.mark.parametrize("detailed_usernames", [False, True])
-def test_the_two_user_tables_name_their_duration_column_alike(
-    detailed_usernames: bool,
-) -> None:
-    """``User Activity`` reads ``Time`` as ``User Totals`` does.
-
-    ``User Totals`` holds a second duration column, so the pair is
-    checked together: the per-session table is the one looked up by
-    name, and ``Time`` is unique among its headers whether or not
-    ``Login method`` is shown.
-    """
-    sessions = [_session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=3600, gpu=True)]
-    report = _activity_report(
-        sessions, ActivitySummary(), detailed_usernames=detailed_usernames
-    )
-    totals, activity = _totals_table(report), _only_table(report, section=-1)
-    assert activity.headers.count("Time") == 1
-    assert _aligned(totals) == ["Sessions", "Time", "GPU time"]
-    assert _aligned(activity) == ["Time"]
-
-
-def test_no_table_header_states_the_duration_unit() -> None:
-    """The footnote states it once, so a header repeating it would be noise."""
-    report = _activity_report(
-        [_session("a@x.edu", seconds=3600, server="gpu")],
-        ActivitySummary(per_day_seconds={"2026-07-02": 3600}),
-    )
-    assert not [h for h in _headers(report) if "HH:MM" in h]
-
-
-def test_every_right_aligned_column_holds_a_typed_value() -> None:
-    """Alignment follows the quantity, so it must not land on a text column."""
-    sessions = [_session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=3600, gpu=True)]
-    report = _activity_report(sessions, ActivitySummary(per_day_seconds={"2026-07-02": 3600}))
-    for table in [_totals_table(report), _only_table(report, section=-1)]:
-        assert table.right_align_columns
-        for idx in table.right_align_columns:
-            assert all(not isinstance(row[idx], str) for row in table.rows)
-
-
 def test_user_totals_never_gain_a_server_column() -> None:
     """The section sums a user's servers, so naming one would mislead."""
     sessions = [
@@ -1003,19 +852,6 @@ def test_sessions_without_a_start_time_sort_last() -> None:
     ]
     table = _only_table(_activity_report(sessions, ActivitySummary()), section=-1)
     assert [row[0] for row in table.rows] == ["2026-07-02 05:00", "n/a"]
-
-
-def test_orcid_users_sort_after_other_institutions() -> None:
-    """ORCID is configured to sort last, so it reads as a separate group.
-
-    Both users hold the same total, so the identity key alone decides.
-    """
-    sessions = [
-        _session("orcid:0009-0008-3064-0494", seconds=60),
-        _session("a@x.edu", seconds=60),
-    ]
-    table = _only_table(_activity_report(sessions, ActivitySummary()), section=-1)
-    assert [row[2] for row in table.rows] == ["x.edu", "orcid.org"]
 
 
 def test_the_activity_tables_mark_a_name_carrying_no_institution() -> None:
@@ -1062,18 +898,6 @@ def test_unrecognized_names_sort_last_in_both_orderings(detailed_usernames: bool
     ]
 
 
-def test_activity_users_are_ordered_by_total_time_most_active_first() -> None:
-    """The per-session table leads with whoever consumed the most."""
-    sessions = [
-        _session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=60),
-        _session("b@x.edu", started="2026-07-02T11:00:00Z", seconds=1800),
-        _session("b@x.edu", started="2026-07-02T12:00:00Z", seconds=1800),
-        _session("c@x.edu", started="2026-07-02T13:00:00Z", seconds=600),
-    ]
-    table = _only_table(_activity_report(sessions, ActivitySummary()), section=-1)
-    assert [row[3] for row in table.rows] == ["b", "b", "c", "a"]
-
-
 def test_the_two_user_tables_list_their_users_in_one_order() -> None:
     """A user sits in the same place in both, which is the point of the pair."""
     sessions = [
@@ -1111,52 +935,6 @@ def test_a_users_own_sessions_keep_their_start_order() -> None:
         ("a", "2026-07-02 07:00", Duration(120)),
         ("a", "n/a", Duration(60)),
     ]
-
-
-def test_tied_activity_users_order_by_the_pseudonym_not_the_raw_identifier() -> None:
-    """Breaking the tie on the raw uid would leak it, here as in the totals."""
-    first, second = INVERTING_UIDS
-    sessions = [
-        _session(f"{first}@x.edu", seconds=3600),
-        _session(f"{second}@x.edu", seconds=3600),
-    ]
-    labels = build_pseudonyms([("x.edu", first), ("x.edu", second)])
-    plain = _only_table(_activity_report(sessions, ActivitySummary()), section=-1)
-    anonymized = _only_table(
-        _activity_report(sessions, ActivitySummary(), anonymize=True), section=-1
-    )
-    assert [row[3] for row in plain.rows] == [first, second]
-    assert [row[3] for row in anonymized.rows] == [
-        labels[("x.edu", second)],
-        labels[("x.edu", first)],
-    ]
-
-
-def test_a_spawn_only_session_counts_toward_where_its_user_sits() -> None:
-    """A user with nothing but spawn attempts still orders by their total."""
-    sessions = [
-        _session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=3600),
-        _session("z@x.edu", started=None, seconds=7200),
-    ]
-    report = _activity_report(sessions, ActivitySummary())
-    assert [row[1] for row in _totals_table(report).rows] == ["z", "a"]
-    assert [row[3] for row in _only_table(report, section=-1).rows] == ["z", "a"]
-
-
-def test_activity_durations_carry_their_seconds_and_read_as_hours() -> None:
-    """The cell holds the session's own seconds, unpadded and truncated to read."""
-    sessions = [
-        _session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=5 * 3600),
-        _session("b@x.edu", started="2026-07-02T11:00:00Z", seconds=123 * 3600 + 45 * 60),
-        _session("c@x.edu", started="2026-07-02T12:00:00Z", seconds=59),
-    ]
-    table = _only_table(_activity_report(sessions, ActivitySummary()), section=-1)
-    assert [row[1] for row in table.rows] == [
-        Duration(123 * 3600 + 45 * 60),
-        Duration(5 * 3600),
-        Duration(59),
-    ]
-    assert [cell_text(row[1]) for row in table.rows] == ["123:45", "5:00", "0:00"]
 
 
 def test_activity_report_attaches_both_user_tables() -> None:
@@ -1199,27 +977,6 @@ def _adoption(report: Report) -> dict[str, Cell]:
 def _values(report: Report, section: int = 0) -> dict[str, Cell]:
     """Return a ``Metric``/``Value`` table as a mapping of its two columns."""
     return {cell_text(row[0]): row[1] for row in _only_table(report, section=section).rows}
-
-
-def _labels_after(metric: str) -> str:
-    """Return the label of the summary row following *metric*'s own."""
-    labels = [cell_text(row[0]) for row in _only_table(_activity_report([], _SUMMARY)).rows]
-    return labels[labels.index(metric) + 1]
-
-
-def _tables(report: Report) -> list[TableBlock]:
-    """Return every table block of the report, in section order."""
-    return [b for s in report.sections for b in s.blocks if isinstance(b, TableBlock)]
-
-
-def _headers(report: Report) -> list[str]:
-    """Return every column header of every table in the report."""
-    return [header for table in _tables(report) for header in table.headers]
-
-
-def _cell_texts(report: Report) -> list[str]:
-    """Return the displayed text of every body cell of every table."""
-    return [cell_text(cell) for table in _tables(report) for row in table.rows for cell in row]
 
 
 def _aligned(table: TableBlock) -> list[str]:

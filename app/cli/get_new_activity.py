@@ -27,17 +27,15 @@ from app.usage.activity import (
     summarize_activity,
     tally_documents,
 )
-from app.usage.snapshots import build_query
+from app.usage.snapshots import build_query, select_hub
 
 # The data this report draws on. Shared by the parser and the validator
 # so that the two cannot disagree about which arguments exist.
 _SOURCES: Final = (ELASTICSEARCH_SOURCE,)
 
-# The fixed part of the default email subject, which
-# :func:`~app.cli.factories.make_output_targets` completes with the
-# reporting window. Shared by the parser, which names it in the help for
-# ``--subject``, and the run that fills it in, so that the default the
-# help describes is the one a message actually carries.
+# The fixed part of the default email subject, which the run completes
+# with the reporting window. Shared with the parser, whose help for
+# ``--subject`` names it.
 _SUBJECT_PREFIX: Final = "JupyterHub Activity Report"
 
 
@@ -46,9 +44,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     There is no ``--date-format``: the ``Started`` column identifies a
     session, so a bare date would render a user's separate same-day runs
-    of one server as rows differing only in a duration. The timestamps
-    are always :data:`~app.core.time_utils.DATETIME_FMT`, as they were
-    before the option reached this command.
+    of one server as rows differing only in a duration.
     """
     parser = argparse.ArgumentParser(
         description="Report active server time per JupyterHub user from Elasticsearch",
@@ -93,12 +89,8 @@ def _validate_arguments(
 def _format_document_tally(tally: DocumentTally) -> str:
     """Render the retrieved/counted/skipped diagnostic for stderr.
 
-    A run that retrieved nothing says only that, since it has nothing to
-    have counted or skipped. Skips are broken out by reason, which is
-    what separates the ways a zero report arises: an idle hub, a wrong
-    ``--es-index``, and a ``--hub`` matching no document all retrieve
-    nothing at all, whereas documents the counting rule rejects were
-    retrieved and then discarded, and only a skip count says so.
+    Skips are broken out by reason, which is what tells a report emptied
+    by unreadable documents apart from one whose query found nothing.
     """
     noun = "document" if tally.retrieved == 1 else "documents"
     retrieved = f"Retrieved {tally.retrieved} {noun}"
@@ -118,28 +110,25 @@ def _format_document_tally(tally: DocumentTally) -> str:
 def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
-    The document tally goes to stderr, beside the reporting window that
-    :func:`~app.cli.factories.compute_report_time_range` echoes there, so
-    the report :func:`~app.reports.delivery.deliver_report` writes to
-    stdout stays safe to pipe.
+    The document tally goes to stderr, so that stdout holds only the
+    report.
 
     Raises:
         DataShapeError: If the reporting window is not timezone-aware.
         ExternalServiceError: If Elasticsearch querying fails.
     """
     start_time, end_time = compute_report_time_range(args)
-    cutoff = int(start_time.timestamp())
     tz = start_time.tzinfo
     if tz is None:
         raise DataShapeError("start_time must be timezone-aware")
 
     with make_es_client(args) as client:
         query = build_query(
-            cutoff=cutoff,
+            cutoff=int(start_time.timestamp()),
             end=int(end_time.timestamp()),
             hub=args.hub,
         )
-        documents = list(client.query(index=args.es_index, query=query))
+        documents = list(select_hub(client.query(index=args.es_index, query=query), args.hub))
 
     print(_format_document_tally(tally_documents(documents)), file=sys.stderr)
 

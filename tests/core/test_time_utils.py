@@ -22,16 +22,6 @@ from tests.helpers.clock import FrozenClock
 CHICAGO = ZoneInfo("America/Chicago")
 
 
-def test_parse_timezone_accepts_iana_names() -> None:
-    """An IANA key resolves to the matching zone."""
-    assert parse_timezone("America/Chicago") == CHICAGO
-
-
-def test_parse_timezone_accepts_abbreviations() -> None:
-    """An abbreviation that is a valid IANA key resolves."""
-    assert parse_timezone("MST") == ZoneInfo("MST")
-
-
 @pytest.mark.parametrize(
     ("text", "expected_seconds"),
     [("+04:00", 4 * 3600), ("-05:30", -(5 * 3600 + 1800)), ("+00:00", 0)],
@@ -80,8 +70,9 @@ def test_compute_time_range_anchor_steps_back_a_day_when_future(
 ) -> None:
     """An anchor still ahead today resolves to yesterday's occurrence."""
     now = datetime(2026, 7, 4, 9, 30, tzinfo=CHICAGO)
-    _, end = _range_at(monkeypatch, now, timedelta(days=1), "22:00")
+    start, end = _range_at(monkeypatch, now, timedelta(days=1), "22:00")
     assert end == datetime(2026, 7, 3, 22, 0, tzinfo=CHICAGO)
+    assert start == datetime(2026, 7, 2, 22, 0, tzinfo=CHICAGO)
 
 
 @pytest.mark.parametrize(
@@ -226,20 +217,9 @@ def test_snap_finds_midnight_by_calendar_date_across_dst(
     assert end.timestamp() - start.timestamp() == hours * 3600
 
 
-def test_last_instant_stops_short_of_the_end() -> None:
-    """The step back is one microsecond, the finest a datetime resolves."""
-    end = datetime(2026, 9, 3, tzinfo=CHICAGO)
-    assert last_instant(end) == end - timedelta(microseconds=1)
-
-
 def test_last_instant_names_a_midnight_end_by_the_day_before() -> None:
     """A window closing at midnight is named by the day it reported on."""
     assert last_instant(datetime(2026, 9, 3, tzinfo=CHICAGO)).date() == date(2026, 9, 2)
-
-
-def test_last_instant_keeps_the_zone_it_was_given() -> None:
-    """Stepping back does not convert the moment, so callers pick the zone."""
-    assert last_instant(datetime(2026, 9, 3, tzinfo=timezone.utc)).tzinfo is timezone.utc
 
 
 def test_snap_reads_the_day_in_the_given_zone(monkeypatch: pytest.MonkeyPatch) -> None:

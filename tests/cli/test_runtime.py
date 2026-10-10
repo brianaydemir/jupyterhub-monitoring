@@ -6,9 +6,19 @@ codes documented in the README are decided here.
 
 import argparse
 import sys
+from collections.abc import Callable
 
 import pytest
 
+from app.cli import (
+    create_es_api_key,
+    delete_es_api_key,
+    get_es_docs,
+    get_new_activity,
+    get_new_users,
+    list_es_api_keys,
+    push_servers,
+)
 from app.cli.runtime import parse_and_validate, run_command
 from app.core.errors import AppError, ExternalServiceError
 
@@ -27,7 +37,7 @@ def fixed_argv(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_validators_see_the_parsed_arguments_and_the_parser() -> None:
-    """A validator reports through the same parser that produced the args."""
+    """A validator is handed the parsed arguments and a parser to report through."""
     seen: list[tuple[argparse.Namespace, argparse.ArgumentParser]] = []
 
     args = parse_and_validate(_build_parser, [lambda a, p: seen.append((a, p))])
@@ -35,6 +45,7 @@ def test_validators_see_the_parsed_arguments_and_the_parser() -> None:
     assert args.name == "value"
     assert len(seen) == 1
     assert seen[0][0] is args
+    assert seen[0][1].prog == "cmd"
 
 
 def test_validators_run_in_the_order_given() -> None:
@@ -45,11 +56,6 @@ def test_validators_run_in_the_order_given() -> None:
         [lambda a, p: order.append(1), lambda a, p: order.append(2)],
     )
     assert order == [1, 2]
-
-
-def test_no_validators_is_allowed() -> None:
-    """Commands without post-parse checks pass nothing."""
-    assert parse_and_validate(_build_parser).name == "value"
 
 
 def test_a_command_returns_its_runner_s_exit_code() -> None:
@@ -108,3 +114,46 @@ def test_an_error_raised_by_a_validator_is_reported_as_a_failure(
 
     assert run_command(_build_parser, lambda args: 0, validators=[_validate]) == 1
     assert capsys.readouterr().err == "Error: bad input\n"
+
+
+_HUB = ["--jupyterhub-endpoint", "https://hub.example.edu/hub/api"]
+_ES = ["--es-endpoint", "https://es.example.edu:9200"]
+_CREDENTIALS_REQUIRED = "one of --es-api-key, ELASTICSEARCH_API_KEY, or --es-username"
+
+
+@pytest.mark.parametrize(
+    ("main", "argv", "message"),
+    [
+        (push_servers.main, [*_HUB, "--debug", "--interval", "0s"], "must be positive"),
+        (get_new_activity.main, [*_ES, "--es-index", "i"], _CREDENTIALS_REQUIRED),
+        (get_new_users.main, [*_HUB, "--duration", "1 day", "--hub", "h"], "--hub requires"),
+        (get_es_docs.main, [*_ES, "--es-index", "i", "--query", "q"], _CREDENTIALS_REQUIRED),
+        (create_es_api_key.main, [*_ES, "--expiration", "7d"], _CREDENTIALS_REQUIRED),
+        (delete_es_api_key.main, [*_ES, "--id", "k"], _CREDENTIALS_REQUIRED),
+        (list_es_api_keys.main, _ES, _CREDENTIALS_REQUIRED),
+    ],
+    ids=[
+        "push-servers",
+        "get-new-activity",
+        "get-new-users",
+        "get-es-docs",
+        "create-es-api-key",
+        "delete-es-api-key",
+        "list-es-api-keys",
+    ],
+)
+def test_every_command_runs_its_own_validators(
+    main: Callable[[], int],
+    argv: list[str],
+    message: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A command line argparse accepts is still a usage error, exiting 2."""
+    monkeypatch.setenv("JUPYTERHUB_API_KEY", "secret")
+    monkeypatch.delenv("ELASTICSEARCH_API_KEY", raising=False)
+    monkeypatch.setattr(sys, "argv", ["cmd", *argv])
+    with pytest.raises(SystemExit) as exit_info:
+        main()
+    assert exit_info.value.code == 2
+    assert message in capsys.readouterr().err

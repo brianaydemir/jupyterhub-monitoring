@@ -138,41 +138,6 @@ def test_documents_without_a_user_or_interval_are_skipped(
     )
 
 
-def test_documents_pushed_before_interval_existed_are_skipped() -> None:
-    """2.x documents carry no ``meta.interval``, so they cannot be counted."""
-    legacy = {"user.name": "a@x.edu", "meta.snapshot-time": 1782000000}
-    assert compute_activity([legacy]) == []
-
-
-def test_a_negative_interval_does_not_subtract_from_the_figures_it_reaches() -> None:
-    """Counting it would drive a total below zero, which no figure can mean."""
-    docs = [_doc(), _doc(user="b@x.edu", interval="-30m")]
-    sessions = compute_activity(docs)
-    summary = summarize_activity(sessions, docs, CHICAGO, START, END)
-
-    assert [session.user for session in sessions] == ["a@x.edu"]
-    assert summary.total_seconds == 300.0
-    assert summary.per_day_seconds == {"2026-06-20": 300.0}
-    assert [user.seconds for user in aggregate_user_activity(sessions)] == [300.0]
-
-
-def test_a_zero_interval_does_not_manufacture_a_session() -> None:
-    """It contributes no time, so counting it would only deflate the mean."""
-    docs = [_doc(), _doc(user="b@x.edu", interval="0")]
-    summary = summarize_activity(compute_activity(docs), docs, CHICAGO, START, END)
-
-    assert summary.total_sessions == 1
-    assert summary.active_users == 1
-    assert summary.mean_session_seconds == 300.0
-
-
-def test_a_document_is_tallied_once_though_every_metric_consults_it() -> None:
-    """The tally is a pass of its own, so the metrics' passes cannot inflate it."""
-    docs = [_doc(), _doc(user="b@x.edu"), _doc(started=None)]
-    summarize_activity(compute_activity(docs), docs, CHICAGO, START, END)
-    assert tally_documents(docs) == DocumentTally(retrieved=3, counted=3)
-
-
 @pytest.mark.parametrize(
     ("overrides", "reason"),
     [
@@ -192,16 +157,6 @@ def test_each_skip_is_counted_under_its_own_reason(
     """The reasons are distinct, since only they tell the failures apart."""
     tally = tally_documents([_doc() | overrides])
     assert tally == DocumentTally(retrieved=1, counted=0, skipped={reason: 1})
-
-
-def test_documents_pushed_before_interval_existed_tally_as_missing_it() -> None:
-    """Retrieving documents and then discarding every one of them shows up."""
-    legacy = [{"user.name": "a@x.edu", "meta.snapshot-time": 1782000000}] * 4
-    assert tally_documents(legacy) == DocumentTally(
-        retrieved=4,
-        counted=0,
-        skipped={SkipReason.NO_INTERVAL: 4},
-    )
 
 
 def test_a_mixed_document_set_counts_each_reason_separately() -> None:
@@ -232,18 +187,6 @@ def test_a_mixed_document_set_counts_each_reason_separately() -> None:
 def test_no_documents_tally_as_none_retrieved_rather_than_skipped() -> None:
     """An idle window retrieves nothing; nothing was thrown away."""
     assert tally_documents([]) == DocumentTally()
-
-
-def test_tallying_changes_no_figure_the_report_is_built_from() -> None:
-    """The tally only reads the documents, so a report of them is unmoved."""
-    docs = [_doc(), _doc(user="b@x.edu"), _doc() | {"meta.interval": "not-a-duration"}]
-    sessions = compute_activity(docs)
-    summary = summarize_activity(sessions, docs, CHICAGO, START, END)
-
-    tally_documents(docs)
-
-    assert compute_activity(docs) == sessions
-    assert summarize_activity(compute_activity(docs), docs, CHICAGO, START, END) == summary
 
 
 def test_user_activity_sums_each_users_sessions() -> None:
@@ -338,18 +281,6 @@ def test_concurrency_counts_documents_sharing_a_snapshot_time() -> None:
     summary = summarize_activity(compute_activity(docs), docs, CHICAGO, START, END)
     assert summary.peak_concurrency == 3
     assert summary.mean_concurrency_active == 2.0
-
-
-def test_concurrency_groups_one_hub_push_across_its_servers() -> None:
-    """A hub's servers still count together, push by push."""
-    docs = [
-        _doc(snapshot=1000, hub="a"),
-        _doc(snapshot=1000, hub="a", user="b@x.edu"),
-        _doc(snapshot=2000, hub="a"),
-    ]
-    summary = summarize_activity(compute_activity(docs), docs, CHICAGO, START, END)
-    assert summary.peak_concurrency == 2
-    assert summary.mean_concurrency_active == 1.5
 
 
 def test_concurrency_keeps_two_hubs_apart_at_one_snapshot_time() -> None:

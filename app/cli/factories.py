@@ -142,20 +142,13 @@ def compute_report_time_range(
 ) -> tuple[datetime, datetime]:
     """Return the ``(start, end)`` datetime pair for the reporting window.
 
-    Handles both window modes. Assumes the arguments have already passed
-    :func:`app.cli.validation.validate_query_arguments`, which snaps a
-    ``--whole-days`` window exactly as this does, so the window checked
-    there is the window reported on here.
+    Assumes the arguments have already passed
+    :func:`app.cli.validation.validate_query_arguments`, which resolves
+    the window the same way.
 
     Echoes the resolved window to stderr, which is what makes a misparse
     visible: ``dateparser`` reads a bare ``"a"`` as a date rather than
-    refusing it. The echo comes after the snap, so it names the window
-    the report covers rather than the bounds as written. This is the one
-    place both report commands resolve their window, so neither can be
-    run without the echo, and both reach it only after validation has
-    passed, so a usage error never prints one. stderr keeps the report
-    itself, which :func:`app.reports.delivery.deliver_report` writes to
-    stdout, safe to pipe.
+    refusing it.
 
     Raises:
         DataShapeError: If a duration-mode ``--duration`` cannot be parsed.

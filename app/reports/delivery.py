@@ -33,35 +33,6 @@ class OutputTargets:
     email: EmailConfig | None
 
 
-class RenderedReport:
-    """Cached rendered report content for selected destinations."""
-
-    def __init__(self, report: Report) -> None:
-        """Store report object and initialize lazy render cache."""
-        self.report = report
-        self._text: str | None = None
-        self._html: str | None = None
-        self._html_document: str | None = None
-
-    def text(self) -> str:
-        """Return plain text rendering, computing it once lazily."""
-        if self._text is None:
-            self._text = render_text(self.report)
-        return self._text
-
-    def html(self) -> str:
-        """Return the HTML fragment for an email body, computed once."""
-        if self._html is None:
-            self._html = render_html_fragment(self.report)
-        return self._html
-
-    def html_document(self) -> str:
-        """Return the standalone HTML document for a file, computed once."""
-        if self._html_document is None:
-            self._html_document = render_html_document(self.report)
-        return self._html_document
-
-
 def deliver_report(targets: OutputTargets, report: Report) -> int:
     """Deliver a report to stdout and every configured destination.
 
@@ -72,16 +43,16 @@ def deliver_report(targets: OutputTargets, report: Report) -> int:
     Raises:
         OSError: If an output file cannot be written.
     """
-    rendered = RenderedReport(report)
+    text = render_text(report)
 
-    print(f"---\n{rendered.text()}\n---")
+    print(f"---\n{text}\n---")
 
     if targets.text_file:
-        targets.text_file.write_text(rendered.text() + "\n", encoding="utf-8")
+        targets.text_file.write_text(text + "\n", encoding="utf-8")
         print(f"Plain text output written to: {targets.text_file}", file=sys.stderr)
 
     if targets.html_file:
-        targets.html_file.write_text(rendered.html_document(), encoding="utf-8")
+        targets.html_file.write_text(render_html_document(report), encoding="utf-8")
         print(f"HTML output written to: {targets.html_file}", file=sys.stderr)
 
     if targets.csv_file:
@@ -97,8 +68,8 @@ def deliver_report(targets: OutputTargets, report: Report) -> int:
     if targets.email is not None:
         return send_report_email(
             targets.email,
-            text_content=rendered.text(),
-            html_content=rendered.html(),
+            text_content=text,
+            html_content=render_html_fragment(report),
             attachments=_email_attachments(report, targets.xlsx_file, xlsx_payload),
         )
 
@@ -121,7 +92,7 @@ def _email_attachments(
             ReportAttachment(
                 filename=xlsx_file.name,
                 payload=xlsx_payload,
-                mime_hint=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+                mime_hint="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         )
     return attachments

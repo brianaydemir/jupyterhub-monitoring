@@ -69,13 +69,15 @@ class JupyterHubClient:
                 if state is not None:
                     params["state"] = state
 
+                # A body that is not JSON, such as a login page answered
+                # with 200, raises a RequestException too.
                 try:
                     response = session.get(url, params=params, timeout=30)
                     response.raise_for_status()
+                    page = cast(list[dict[str, Any]], response.json())
                 except requests.exceptions.RequestException as e:
                     raise ExternalServiceError(f"Listing users failed: {e}") from e
 
-                page = cast(list[dict[str, Any]], response.json())
                 names = [user.get("name") for user in page]
 
                 if names == previous_names:

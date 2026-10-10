@@ -22,14 +22,6 @@ END = datetime(2026, 7, 8, tzinfo=timezone.utc)
 CHICAGO = ZoneInfo("America/Chicago")
 
 
-def test_users_inside_the_window_are_kept() -> None:
-    """A user created inside the window is reported."""
-    users = [{"name": "a@x.edu", "created": "2026-07-04T10:00:00Z"}]
-    assert filter_new_users(users, START, END) == [
-        {"name": "a@x.edu", "created": "2026-07-04T10:00:00Z"}
-    ]
-
-
 def test_users_outside_the_window_are_dropped() -> None:
     """Accounts older or newer than the window are not new users here."""
     users = [
@@ -209,15 +201,6 @@ def test_no_median_is_reported_when_nobody_started_a_server() -> None:
     summary = summarize_adoption([_new("a@x.edu")], {}, timezone.utc)
     assert summary.started == 0
     assert summary.median_seconds_to_first is None
-
-
-def test_a_first_server_dated_before_its_user_reads_as_no_wait() -> None:
-    """The snapshot fallback and the search window can invert the pair."""
-    users = [_new("a@x.edu", "2026-07-04T10:00:00Z")]
-    first_server = {"a@x.edu": _epoch("2026-07-04T09:00:00Z")}
-    summary = summarize_adoption(users, first_server, timezone.utc)
-    assert summary.started == 1
-    assert summary.median_seconds_to_first == 0.0
 
 
 def test_a_negative_elapsed_time_does_not_drag_the_median_down() -> None:

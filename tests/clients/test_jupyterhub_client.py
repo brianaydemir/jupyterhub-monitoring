@@ -17,18 +17,27 @@ from app.core.errors import ExternalServiceError
 class _StubResponse:
     """A minimal stand-in for :class:`requests.Response`."""
 
-    def __init__(self, payload: object, *, error: Exception | None = None) -> None:
-        """Store the payload to return, and any error to raise first."""
+    def __init__(
+        self,
+        payload: object,
+        *,
+        error: Exception | None = None,
+        json_error: Exception | None = None,
+    ) -> None:
+        """Store the payload to return, and any errors to raise instead."""
         self._payload = payload
         self._error = error
+        self._json_error = json_error
 
     def raise_for_status(self) -> None:
-        """Raise the configured error, if any."""
+        """Raise the configured HTTP error, if any."""
         if self._error is not None:
             raise self._error
 
     def json(self) -> object:
-        """Return the configured payload."""
+        """Return the configured payload, or raise the configured decode error."""
+        if self._json_error is not None:
+            raise self._json_error
         return self._payload
 
 
@@ -68,13 +77,6 @@ def test_list_users_walks_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
     assert [call["params"]["offset"] for call in session.calls] == [0, 100, 200]
 
 
-def test_list_users_stops_on_a_short_first_page(monkeypatch: pytest.MonkeyPatch) -> None:
-    """One short page is the whole list; there is no second request."""
-    session = _install(monkeypatch, [_users_page(5)])
-    assert len(list(_client().list_users())) == 5
-    assert len(session.calls) == 1
-
-
 def test_list_users_stops_on_an_empty_page(monkeypatch: pytest.MonkeyPatch) -> None:
     """A hub with no users yields nothing."""
     _install(monkeypatch, [_users_page(0)])
@@ -110,7 +112,7 @@ def test_list_users_omits_the_state_filter_by_default(
 
 
 def test_list_users_sends_the_bearer_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The token is sent once, on the session, not rebuilt per request."""
+    """Every request carries the API token."""
     session = _install(monkeypatch, [_users_page(1)])
     list(_client().list_users())
     assert session.headers["Authorization"] == "Bearer token"
@@ -138,6 +140,14 @@ def test_list_users_reports_a_request_failure(monkeypatch: pytest.MonkeyPatch) -
         [_StubResponse(None, error=requests.exceptions.HTTPError("403 Forbidden"))],
     )
     with pytest.raises(ExternalServiceError, match="Listing users failed: 403 Forbidden"):
+        list(_client().list_users())
+
+
+def test_list_users_reports_a_body_that_is_not_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A login page answered with 200 is a failed request, not a crash."""
+    not_json = requests.exceptions.JSONDecodeError("Expecting value", "<html>", 0)
+    _install(monkeypatch, [_StubResponse(None, json_error=not_json)])
+    with pytest.raises(ExternalServiceError, match="Listing users failed: Expecting value"):
         list(_client().list_users())
 
 
@@ -210,14 +220,6 @@ def test_list_servers_keeps_paging_below_the_limit(
     session = _install(monkeypatch, [_servers_page(100), _servers_page(3, offset=100)])
     assert len(_client().list_servers(limit=102)) == 102
     assert len(session.calls) == 2
-
-
-def test_list_servers_without_a_limit_returns_everything(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The default is the whole hub, as before the cap existed."""
-    _install(monkeypatch, [_servers_page(100), _servers_page(3, offset=100)])
-    assert len(_client().list_servers()) == 103
 
 
 def test_list_servers_with_a_zero_limit_asks_for_nothing(

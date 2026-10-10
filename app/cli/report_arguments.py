@@ -22,6 +22,7 @@ from app.cli.arguments import (
     add_query_argument_group,
 )
 from app.cli.validation import (
+    reject_es_flags_without_endpoint,
     validate_email_arguments,
     validate_es_arguments,
     validate_jupyterhub_arguments,
@@ -42,10 +43,12 @@ def _validate_optional_es_arguments(
 ) -> None:
     """Validate an optional Elasticsearch group.
 
-    ``--es-endpoint`` is the switch: without it, Elasticsearch is simply
-    not used. With it, the rest of the group must be complete, so a
-    half-specified connection is an error rather than a silent skip.
+    ``--es-endpoint`` is the switch: without it, Elasticsearch is not
+    used, and any other flag in the group is an error. With it, the rest
+    of the group must be complete. Either way, a half-specified connection
+    is an error rather than a silent skip.
     """
+    reject_es_flags_without_endpoint(args, parser)
     if args.es_endpoint is None:
         return
     if args.es_index is None:

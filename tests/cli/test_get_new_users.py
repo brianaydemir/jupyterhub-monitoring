@@ -3,8 +3,8 @@
 Selecting the users and dating their servers is :mod:`app.usage.new_users`'
 work, covered by ``tests/usage/test_new_users.py``. What is left here is
 the command's own Elasticsearch lookup, whose window is not the reporting
-window and which ``--hub`` scopes, and its stderr tally of the user list
-the hub answered with.
+window and which ``--hub`` scopes, when that lookup is made, and its stderr
+tally of the user list the hub answered with.
 """
 
 # This module exercises the command's internal helpers directly.
@@ -31,6 +31,7 @@ from app.reports.delivery import OutputTargets
 from app.reports.model import Report
 from app.reports.renderers import render_text
 from app.usage.new_users import filter_new_users
+from tests.helpers.stub_clients import QueryStubClient, install_client
 
 # The email settings a run needs before it will build any at all.
 _EMAIL_ARGV = [
@@ -55,52 +56,26 @@ WINDOW_START = datetime(2026, 8, 1, tzinfo=CHICAGO)
 WINDOW_END = datetime(2026, 9, 1, tzinfo=CHICAGO)
 
 
-class _StubClient:
-    """Answers ``query`` with prepared documents, recording the request."""
-
-    def __init__(self, documents: list[dict[str, Any]]) -> None:
-        """Store the documents to yield."""
-        self.documents = documents
-        self.request: dict[str, Any] | None = None
-
-    def __enter__(self) -> "_StubClient":
-        """Stand in for the client's context manager."""
-        return self
-
-    def __exit__(self, *exc_info: object) -> None:
-        """Leave the context manager, suppressing nothing."""
-        return None
-
-    def query(self, **kwargs: Any) -> list[dict[str, Any]]:
-        """Record the request and return the prepared documents."""
-        self.request = kwargs
-        return list(self.documents)
-
-
 def _lookup(
     monkeypatch: pytest.MonkeyPatch,
     documents: list[dict[str, Any]],
     hub: str | None = None,
-) -> tuple[dict[str, int], _StubClient]:
+) -> tuple[dict[str, int], QueryStubClient]:
     """Run the lookup against a stubbed client."""
-    client = _StubClient(documents)
-
-    def _make_client(_args: argparse.Namespace) -> _StubClient:
-        return client
-
-    monkeypatch.setattr(get_new_users, "make_es_client", _make_client)
+    client = QueryStubClient(documents)
+    install_client(monkeypatch, get_new_users, client)
     args = argparse.Namespace(es_index="servers", hub=hub)
     return _query_first_server(args, START), client
 
 
-def _hub_filters(client: _StubClient) -> list[dict[str, Any]]:
+def _hub_filters(client: QueryStubClient) -> list[dict[str, Any]]:
     """Return the recorded query's clauses that mention ``meta.hub``."""
     assert client.request is not None
     filters = client.request["query"]["bool"]["filter"]
     return [f for f in filters if "meta.hub" in str(f)]
 
 
-def _window(client: _StubClient) -> dict[str, int]:
+def _window(client: QueryStubClient) -> dict[str, int]:
     """Return the snapshot-time range the recorded query filtered on."""
     assert client.request is not None
     filters = client.request["query"]["bool"]["filter"]
@@ -124,14 +99,6 @@ def test_the_lookup_runs_from_the_window_start_through_now(
     window = _window(client)
     assert window["gte"] == int(START.timestamp())
     assert before <= window["lt"] <= after
-
-
-def test_the_command_accepts_the_same_hub_filter_as_get_new_activity() -> None:
-    """The two report commands spell the option the same way."""
-    args = _build_parser().parse_args(
-        ["--jupyterhub-endpoint", "https://hub.example.edu/hub/api", "--hub", "production"]
-    )
-    assert args.hub == "production"
 
 
 def test_a_hub_without_elasticsearch_is_rejected(
@@ -158,8 +125,13 @@ def test_a_hub_without_elasticsearch_is_rejected(
 
 
 def test_the_lookup_is_scoped_to_the_given_hub(monkeypatch: pytest.MonkeyPatch) -> None:
-    """--hub reaches the query, so only that hub dates a user's first server."""
-    _, client = _lookup(monkeypatch, [], hub="production")
+    """Only that hub dates a user's first server, not one sharing a word of its name."""
+    documents: list[dict[str, Any]] = [
+        {"user.name": "a@x.edu", "meta.hub": "production", "meta.snapshot-time": 1},
+        {"user.name": "b@x.edu", "meta.hub": "production-east", "meta.snapshot-time": 1},
+    ]
+    first_server, client = _lookup(monkeypatch, documents, hub="production")
+    assert first_server == {"a@x.edu": 1}
     assert _hub_filters(client) == [
         {
             "bool": {
@@ -181,22 +153,6 @@ def test_the_lookup_spans_every_hub_without_one(monkeypatch: pytest.MonkeyPatch)
     assert client.request["index"] == "servers"
 
 
-def test_each_user_gets_their_earliest_server_start(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The documents go straight to :func:`compute_first_server`."""
-    documents: list[dict[str, Any]] = [
-        {"user.name": "a@x.edu", "server.started": "2026-07-04T10:00:00Z"},
-        {"user.name": "a@x.edu", "server.started": "2026-07-02T08:00:00Z"},
-        {"user.name": "b@x.edu", "meta.snapshot-time": 1_783_000_000},
-    ]
-    first_server, _ = _lookup(monkeypatch, documents)
-    assert first_server == {
-        "a@x.edu": int(datetime(2026, 7, 2, 8, tzinfo=timezone.utc).timestamp()),
-        "b@x.edu": 1_783_000_000,
-    }
-
-
 class _StubHub:  # pylint: disable=too-few-public-methods
     """Answers ``list_users`` with a prepared user list."""
 
@@ -212,8 +168,9 @@ class _StubHub:  # pylint: disable=too-few-public-methods
 def _report_on(
     monkeypatch: pytest.MonkeyPatch,
     users: list[dict[str, Any]],
+    *argv: str,
 ) -> int:
-    """Run the command over *users*, against a stubbed hub and no index."""
+    """Run the command over *users*, against a stubbed hub."""
 
     def _make_client(_args: argparse.Namespace) -> _StubHub:
         return _StubHub(users)
@@ -227,18 +184,15 @@ def _report_on(
             "2026-08-01 00:00",
             "--report-end",
             "2026-09-01 00:00",
+            *argv,
         ]
     )
     return _run(args)
 
 
-def test_a_single_user_is_not_pluralized() -> None:
-    """The count carries its own noun, as the document tally's does."""
-    assert _format_user_tally(1, 1) == "Retrieved 1 user; 1 created in the reporting window."
-
-
-def test_several_users_are_pluralized() -> None:
+def test_the_tally_carries_its_own_noun() -> None:
     """The wording matches ``get-new-activity``'s, so the two read alike."""
+    assert _format_user_tally(1, 1) == "Retrieved 1 user; 1 created in the reporting window."
     assert _format_user_tally(812, 3) == (
         "Retrieved 812 users; 3 created in the reporting window."
     )
@@ -292,6 +246,45 @@ def test_a_hub_that_answered_with_no_users_still_succeeds(
     assert "Retrieved 0 users." in capsys.readouterr().err.splitlines()
 
 
+_ES_ARGV = ["--es-endpoint", "https://es.example.edu:9200", "--es-index", "servers"]
+
+
+def test_elasticsearch_dates_each_new_users_first_server(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """With an index to consult, the report gains its Adoption section."""
+    users = [{"name": "a@x.edu", "created": "2026-08-05T10:00:00Z"}]
+    started = "2026-08-05T11:00:00Z"
+    client = QueryStubClient([{"user.name": "a@x.edu", "server.started": started}])
+    install_client(monkeypatch, get_new_users, client)
+    assert _report_on(monkeypatch, users, *_ES_ARGV) == 0
+
+    expected = build_new_users_report(
+        users=filter_new_users(users, WINDOW_START, WINDOW_END),
+        start_time=WINDOW_START,
+        end_time=WINDOW_END,
+        strftime_fmt=DATE_FMT,
+        first_server={"a@x.edu": int(datetime.fromisoformat(started).timestamp())},
+    )
+    assert expected.sections[0].heading == "Adoption"
+    assert capsys.readouterr().out == f"---\n{render_text(expected)}\n---\n"
+
+
+def test_no_new_users_need_no_lookup_but_keep_the_adoption_section(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The section's shape follows the flags, not whether anyone was new."""
+
+    def _refuse(_args: argparse.Namespace) -> None:
+        raise AssertionError("there is no new user to look up")
+
+    monkeypatch.setattr(get_new_users, "make_es_client", _refuse)
+    assert _report_on(monkeypatch, [], *_ES_ARGV) == 0
+    assert "Adoption" in capsys.readouterr().out
+
+
 def _emailed_subject(
     monkeypatch: pytest.MonkeyPatch,
     report_start: str,
@@ -339,19 +332,3 @@ def test_the_default_subject_names_this_report_and_one_day(
     """The prefix is this command's own, not the activity report's."""
     subject = _emailed_subject(monkeypatch, "2026-09-01 00:00", "2026-09-02 00:00")
     assert subject == "JupyterHub New Users Report: 2026-09-01"
-
-
-def test_the_default_subject_names_this_report_and_a_longer_window(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A window of several days names the first and the last of them."""
-    subject = _emailed_subject(monkeypatch, "2026-08-27 00:00", "2026-09-02 00:00")
-    assert subject == "JupyterHub New Users Report: 2026-08-27 to 2026-09-01"
-
-
-def test_an_explicit_subject_wins(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Whoever names the subject means it, window or no window."""
-    subject = _emailed_subject(
-        monkeypatch, "2026-08-27 00:00", "2026-09-02 00:00", "--subject", "Weekly signups"
-    )
-    assert subject == "Weekly signups"

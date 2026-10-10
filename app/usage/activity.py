@@ -25,7 +25,7 @@ from typing import Any, cast
 
 from app.core.dataclass_defaults import empty_string_set
 from app.core.time_utils import last_instant, parse_duration
-from app.usage.snapshots import snapshot_seconds
+from app.usage.snapshots import snapshot_hub, snapshot_seconds
 
 
 @dataclass(frozen=True)
@@ -34,9 +34,9 @@ class SessionActivity:
 
     A session is identified by a user, one of their named servers, and
     that server's ``server.started`` timestamp. *server_name* is the
-    JupyterHub server name, empty for the default server; *started* is
-    the raw ISO 8601 string, or ``None`` on snapshots taken while the
-    server was still spawning.
+    JupyterHub server name, empty for the default server, or ``None``
+    when the documents name none; *started* is the raw ISO 8601 string,
+    or ``None`` on snapshots taken while the server was still spawning.
     """
 
     user: str
@@ -257,33 +257,12 @@ def _classify_document(doc: dict[str, Any]) -> tuple[str, float] | SkipReason:
 def _document_contribution(doc: dict[str, Any]) -> tuple[str, float] | None:
     """Return ``(user, seconds)`` for a countable snapshot, else ``None``.
 
-    A snapshot counts only when it carries a non-empty ``user.name`` and
-    a ``meta.interval`` that parses to a positive span. Every activity
-    metric applies this same rule, so the per-session, per-day, and
-    concurrency figures are all derived from one document set. This
-    drops the reason :func:`_classify_document` gives, which no metric
-    has a use for.
+    Every activity metric applies this one rule, from
+    :func:`_classify_document`, so all of them are derived from the same
+    document set.
     """
     outcome = _classify_document(doc)
     return None if isinstance(outcome, SkipReason) else outcome
-
-
-def _document_hub(doc: dict[str, Any]) -> str | None:
-    """Return the hub a document names, or ``None`` when it names none.
-
-    ``push-servers`` writes whatever ``--metadata hub=...`` gave it, and
-    :func:`~app.usage.snapshots.build_query` matches the field as both
-    text and keyword, so the value is usually a string but need not be.
-    Any other scalar is rendered with :func:`str`, which keeps every hub
-    hashable and printable; an absent field stays ``None`` and forms a
-    group of its own.
-    """
-    value = doc.get("meta.hub")
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return value
-    return str(value)
 
 
 def compute_activity(
@@ -335,16 +314,8 @@ def compute_activity(
 def tally_documents(documents: Iterable[dict[str, Any]]) -> DocumentTally:
     """Count the documents retrieved, the countable ones, and the rest.
 
-    Each metric makes its own pass over the documents and consults
-    :func:`_document_contribution` on that pass, so a counter kept inside
-    that gate would count one document once per metric. The tally is
-    instead a pass of its own that classifies each document exactly once,
-    and it holds no state for a later pass to touch.
-
-    Counting nothing is not by itself a fault: an idle window
-    legitimately yields no documents at all. It is the reasons that tell
-    that window apart from a run whose documents were all discarded, so
-    they are counted separately rather than summed.
+    The skips are counted by reason, which is what tells an idle window
+    apart from a run whose documents were all discarded.
     """
     retrieved = 0
     counted = 0
@@ -414,7 +385,7 @@ def _concurrency_stats(documents: list[dict[str, Any]]) -> tuple[int, float]:
         snapshot = snapshot_seconds(doc)
         if snapshot is None or _document_contribution(doc) is None:
             continue
-        counts[(_document_hub(doc), snapshot)] += 1
+        counts[(snapshot_hub(doc), snapshot)] += 1
     if not counts:
         return 0, 0.0
     return max(counts.values()), statistics.mean(counts.values())
@@ -446,7 +417,7 @@ def _observed_hubs(documents: list[dict[str, Any]]) -> set[str]:
     for doc in documents:
         if _document_contribution(doc) is None:
             continue
-        hub = _document_hub(doc)
+        hub = snapshot_hub(doc)
         if hub is not None:
             hubs.add(hub)
     return hubs

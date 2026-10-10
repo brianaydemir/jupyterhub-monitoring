@@ -25,12 +25,9 @@ class Duration:
         Because each value is truncated independently, the displayed GPU
         and CPU times need not add up to the displayed total.
 
-        A negative span reads by sign and magnitude (``"-0:30"``) rather
-        than by flooring the signed total, which would render half an
-        hour of deficit as ``"-1:30"``. The magnitude truncates as any
-        other does, so a deficit under a minute reads ``"-0:00"``: the
-        sign is what says the figure went negative, and dropping it
-        would leave that indistinguishable from no time at all.
+        A negative span reads by sign and magnitude (``"-0:30"``, not
+        ``"-1:30"``), and keeps its sign even below a minute
+        (``"-0:00"``).
         """
         total_minutes = int(abs(self.seconds)) // 60
         hours, minutes = divmod(total_minutes, 60)

@@ -4,7 +4,6 @@ import argparse
 import json
 import re
 import sys
-from collections.abc import Callable, Mapping
 from typing import Any
 
 from app.cli.arguments import add_format_argument, configure_es_admin_parser
@@ -62,8 +61,7 @@ def _format_created_key_details(result: dict[str, Any]) -> str:
 
 _EXPIRATION_NEVER = "never"
 
-# Elasticsearch time units, longest first so that "ms" and "micros" are
-# not read as "m" followed by trailing text.
+# A whole number followed by one of Elasticsearch's time units.
 _ES_TIME_VALUE = re.compile(r"(\d+)(nanos|micros|ms|d|h|m|s)", re.IGNORECASE)
 
 
@@ -161,13 +159,12 @@ def _run(args: argparse.Namespace) -> int:
             username=args.es_username,
         )
 
-    formatters: Mapping[str, Callable[[], str]] = {
-        "key": lambda: _format_encoded_key(result),
-        "json": lambda: _format_created_key_json(result),
-        "full": lambda: _format_created_key_details(result),
-    }
-
-    print(formatters[args.format]())
+    if args.format == "json":
+        print(_format_created_key_json(result))
+    elif args.format == "full":
+        print(_format_created_key_details(result))
+    else:
+        print(_format_encoded_key(result))
     return 0
 
 
