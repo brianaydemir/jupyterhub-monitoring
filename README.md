@@ -302,7 +302,8 @@ rather than carried by a column header:
   and the first row's time is its `Max time (one user)`,
   up to the truncation each duration is displayed with independently.
   Users with equal totals fall in order
-  by institution and then by the identifier shown,
+  by institution and then by the identifier shown
+  (by login method first, when that column is shown),
   so `--anonymize` orders on the pseudonym rather than on the raw ID.
   `User Activity` lists the same users in this same order.
   The `Login method` column appears here
@@ -620,6 +621,9 @@ The two midnights are found by calendar date in `--timezone`,
 so a window spanning a daylight-saving transition
 still begins and ends at local midnight,
 even though one of its days runs 23 or 25 hours.
+The length the report states is elapsed time,
+so such a window reads an hour shorter or longer
+than its count of days would suggest.
 
 An end whose next midnight has not yet arrived
 moves back to its own midnight instead,

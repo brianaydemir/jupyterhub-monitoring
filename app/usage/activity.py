@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Any, cast
 
 from app.core.dataclass_defaults import empty_string_set
-from app.core.time_utils import last_instant, parse_duration
+from app.core.time_utils import elapsed, last_instant, parse_duration
 from app.usage.snapshots import snapshot_hub, snapshot_seconds
 
 
@@ -504,7 +504,7 @@ def summarize_activity(
     read against the host's clock; the command rejects such a bound
     before it reaches here.
     """
-    window = end_time - start_time
+    window = elapsed(start_time, end_time)
     users = aggregate_user_activity(sessions)
     gpu_users = {session.user for session in sessions if session.gpu}
 

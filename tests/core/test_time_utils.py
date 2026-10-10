@@ -8,6 +8,7 @@ import pytest
 from app.core import time_utils
 from app.core.time_utils import (
     compute_time_range,
+    elapsed,
     format_timezone,
     get_now_ms,
     last_instant,
@@ -93,6 +94,23 @@ def test_compute_time_range_spans_the_requested_duration_across_dst(
     """A day-long window is a real day, whatever the local offset does."""
     start, end = _range_at(monkeypatch, anchor, timedelta(days=1), None)
     assert end.timestamp() - start.timestamp() == timedelta(days=1).total_seconds()
+
+
+@pytest.mark.parametrize(
+    ("day", "hours"),
+    [
+        pytest.param(datetime(2026, 3, 8, tzinfo=CHICAGO), 23, id="spring-forward"),
+        pytest.param(datetime(2026, 11, 1, tzinfo=CHICAGO), 25, id="fall-back"),
+        pytest.param(datetime(2026, 7, 4, tzinfo=CHICAGO), 24, id="no-transition"),
+    ],
+)
+def test_elapsed_measures_real_time_across_dst(day: datetime, hours: int) -> None:
+    """Subtracting the bounds directly would read every one of these as a day.
+
+    Two datetimes sharing a ``tzinfo`` subtract by wall clock, which is
+    what the report's window length must not do.
+    """
+    assert elapsed(day, day + timedelta(days=1)) == timedelta(hours=hours)
 
 
 def test_compute_time_range_rejects_a_malformed_anchor(

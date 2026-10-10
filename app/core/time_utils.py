@@ -97,6 +97,17 @@ def compute_time_range(
     return start, end
 
 
+def elapsed(start: datetime, end: datetime) -> timedelta:
+    """Return the real time from *start* to *end*.
+
+    Subtracting two datetimes that share a ``tzinfo`` compares their
+    wall-clock readings, so across a daylight-saving transition the
+    difference is an hour off. Converting both to UTC first measures
+    elapsed time, the unit every duration in a report is summed in.
+    """
+    return end.astimezone(timezone.utc) - start.astimezone(timezone.utc)
+
+
 def parse_datetime(text: str, tz: tzinfo) -> datetime | None:
     """Parse a human-readable datetime, normalized to *tz*.
 

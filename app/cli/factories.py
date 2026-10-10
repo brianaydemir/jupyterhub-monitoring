@@ -17,6 +17,7 @@ from app.core.time_utils import (
     DATE_FMT,
     DATETIME_FMT,
     compute_time_range,
+    elapsed,
     format_timezone,
     last_instant,
     parse_datetime,
@@ -151,7 +152,8 @@ def compute_report_time_range(
     refusing it.
 
     Raises:
-        DataShapeError: If a duration-mode ``--duration`` cannot be parsed.
+        DataShapeError: If the window's ``--duration`` or bounds cannot be
+            parsed.
     """
     tz = parse_timezone(args.timezone)
 
@@ -175,7 +177,7 @@ def _format_reporting_window(start: datetime, end: datetime, tz: tzinfo) -> str:
     return (
         f"Reporting window: {start.strftime(DATETIME_FMT)}"
         f" to {end.strftime(DATETIME_FMT)}"
-        f" ({format_timezone(tz)}, {_format_window_length(end - start)})"
+        f" ({format_timezone(tz)}, {_format_window_length(elapsed(start, end))})"
     )
 
 

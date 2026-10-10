@@ -155,7 +155,7 @@ def _query_first_server(
     Searches from *start_time* through now: a user created inside the
     reporting window cannot have started a server before being created, so
     this captures their true first start even if it occurred after the
-    window closed. A server started before *start_time* is not visible.
+    window closed. A snapshot taken before *start_time* is not visible.
 
     ``--hub`` scopes the search the same way it does for
     ``get-new-activity``, so on a multi-hub index the column reports a

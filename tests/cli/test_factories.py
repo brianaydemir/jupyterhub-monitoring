@@ -509,6 +509,16 @@ def test_the_echoed_length_reads_in_days_or_in_hours(
     assert capsys.readouterr().err.endswith(f"(America/Chicago, {expected})\n")
 
 
+def test_the_echoed_length_is_elapsed_time_across_dst(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A half day that loses an hour to spring-forward is eleven hours long."""
+    compute_report_time_range(
+        _window_args(report_start="2026-03-08 00:00", report_end="2026-03-08 12:00")
+    )
+    assert capsys.readouterr().err.endswith("(America/Chicago, 11:00 hours)\n")
+
+
 def test_the_echo_names_the_reports_own_zone(capsys: pytest.CaptureFixture[str]) -> None:
     """--timezone decides the bounds, so it labels them too."""
     args = _window_args(report_start="2026-07-01 00:00", report_end="2026-07-08 00:00")

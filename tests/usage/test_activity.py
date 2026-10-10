@@ -354,6 +354,21 @@ def test_the_summary_carries_the_length_of_its_own_window(
     assert summary.window_seconds == expected
 
 
+def test_the_window_length_is_elapsed_time_across_dst() -> None:
+    """Two local days around spring-forward are 47 hours, not 48.
+
+    The durations in the table are summed push intervals, so the length
+    they are read against, and the mean taken over it, measure time the
+    same way.
+    """
+    start = datetime(2026, 3, 7, tzinfo=CHICAGO)
+    end = datetime(2026, 3, 9, tzinfo=CHICAGO)
+    docs = [_doc(interval="1h")]
+    summary = summarize_activity(compute_activity(docs), docs, CHICAGO, start, end)
+    assert summary.window_seconds == 47 * 3600
+    assert summary.mean_concurrency_window == pytest.approx(1 / 47)
+
+
 def test_an_inverted_window_is_carried_as_no_length() -> None:
     """A summary must not hold a window its own figures deny.
 

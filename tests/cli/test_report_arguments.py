@@ -6,9 +6,8 @@ what it then checks, and that the shared groups follow the sources.
 
 The last sections instead build the two report commands' own parsers,
 which is where the ``include_*`` switches are set and where the reporting
-window each command shares is driven end to end. They are also where
-``get-new-activity``'s argument surface is covered at all, that command
-having no test module of its own.
+window each command shares is driven end to end. Each command's own test
+module covers its query and its stderr tally, not its argument surface.
 """
 
 # The last sections reach for each command's own parser builder and

@@ -144,16 +144,24 @@ def test_the_workbook_is_attached_only_when_it_was_written(
 def test_deliver_report_reports_a_failed_send(
     failure: Exception,
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A refused or timed-out send is an exit code, not a traceback."""
+    """A refused or timed-out send is an exit code, not a traceback.
+
+    The files were written before the send was attempted, so they are
+    not lost to it; the README promises as much under "Exit Codes".
+    """
 
     def _fail(host: str, port: int, timeout: float) -> Any:
         raise failure
 
     monkeypatch.setattr(email_utils.smtplib, "SMTP_SSL", _fail)
-    assert deliver_report(_targets(send_email=True), sample_reports.report()) == 1
+    written = tmp_path / "r.txt"
+    targets = _targets(text_file=written, send_email=True)
+    assert deliver_report(targets, sample_reports.report()) == 1
     assert "Error sending email" in capsys.readouterr().err
+    assert written.exists()
 
 
 def test_email_uses_ssl_unless_it_is_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
