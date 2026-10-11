@@ -1,8 +1,8 @@
 """Tests for :mod:`app.cli.factories`.
 
-The clients are replaced with recorders, because the factory's job is to
-map an ``argparse.Namespace`` onto constructor arguments, not to connect
-to anything.
+The clients are replaced with recorders,
+because the factory's job is to map an ``argparse.Namespace``
+onto constructor arguments, not to connect to anything.
 """
 
 import argparse
@@ -168,9 +168,9 @@ def test_a_jupyterhub_client_reads_its_key_from_a_file(
 #
 
 
-# A day-long window and a week-long one, both in the zone the report
-# commands default to, so the dates a subject names are read the way the
-# report reads them.
+# A day-long window and a week-long one,
+# both in the zone the report commands default to,
+# so the dates a subject names are read the way the report reads them.
 ONE_DAY = (datetime(2026, 9, 2, tzinfo=CHICAGO), datetime(2026, 9, 3, tzinfo=CHICAGO))
 ONE_WEEK = (datetime(2026, 8, 27, tzinfo=CHICAGO), datetime(2026, 9, 3, tzinfo=CHICAGO))
 
@@ -341,9 +341,9 @@ def test_a_duration_window_never_ends_in_the_future(
 ) -> None:
     """Why duration mode needs no future-end check of its own.
 
-    Without --time the window ends at the current moment, and with one it
-    steps back a day rather than reaching forwards, so the anchor cannot
-    outrun the run.
+    Without --time the window ends at the current moment,
+    and with one it steps back a day rather than reaching forwards,
+    so the anchor cannot outrun the run.
     """
     now = datetime(2026, 7, 8, 14, 30, tzinfo=CHICAGO)
     monkeypatch.setattr(time_utils, "datetime", FrozenClock(now))
@@ -358,8 +358,8 @@ def test_a_whole_days_range_covers_whole_local_days(
 ) -> None:
     """The window the get-new-users epilog advertises, resolved.
 
-    Without the flag these bounds resolve to 17:48 on each day, leaving a
-    partial day at either end.
+    Without the flag these bounds resolve to 17:48 on each day,
+    leaving a partial day at either end.
     """
     monkeypatch.setattr(
         time_utils, "datetime", FrozenClock(datetime(2026, 9, 3, 17, 48, tzinfo=CHICAGO))

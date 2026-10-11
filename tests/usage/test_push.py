@@ -1,7 +1,7 @@
 """Tests for :mod:`app.usage.push`."""
 
-# An explicit comparison to an empty collection is the assertion these
-# tests mean to make, and reads better here than a truthiness check.
+# An explicit comparison to an empty collection is the assertion
+# these tests mean to make, and reads better here than a truthiness check.
 # pylint: disable=use-implicit-booleaness-not-comparison
 # The stubs implement exactly the one method their protocol declares.
 # pylint: disable=too-few-public-methods
@@ -48,11 +48,12 @@ class _StubHub:
 class _StubElasticsearch:
     """Records bulk-uploaded documents, rejecting or failing some of them.
 
-    *reject* names document positions, counted from zero across the
-    whole run, that come back rejected the way a bulk item does.
-    *error_on* names requests, counted from zero, that fail outright
-    instead. The two are independent, because a rejected document and a
-    failed request are what the pipeline must tell apart.
+    *reject* names document positions, counted from zero across the whole run,
+    that come back rejected the way a bulk item does.
+    *error_on* names requests, counted from zero,
+    that fail outright instead.
+    The two are independent, because a rejected document and a failed request
+    are what the pipeline must tell apart.
     """
 
     def __init__(

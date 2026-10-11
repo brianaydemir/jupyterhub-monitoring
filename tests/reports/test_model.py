@@ -1,7 +1,7 @@
 """Tests for :mod:`app.reports.model`: cell display and table shape."""
 
-# An explicit comparison to an empty collection is the assertion these
-# tests mean to make, and reads better here than a truthiness check.
+# An explicit comparison to an empty collection is the assertion
+# these tests mean to make, and reads better here than a truthiness check.
 # pylint: disable=use-implicit-booleaness-not-comparison
 
 import pytest

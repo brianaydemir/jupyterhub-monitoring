@@ -1,15 +1,18 @@
 """Render report-domain models into plain text, HTML, CSV, and XLSX.
 
-Every format has exactly one entry point. Plain text and HTML return
-``str``, because a caller goes on to print or embed them; CSV and XLSX
-return ``bytes``, because they only ever reach a file or an email
-attachment, and their names say so.
+Every format has exactly one entry point.
+Plain text and HTML return ``str``,
+because a caller goes on to print or embed them;
+CSV and XLSX return ``bytes``,
+because they only ever reach a file or an email attachment,
+and their names say so.
 
 Text, CSV, and HTML show a cell as :func:`~app.reports.model.cell_text`
 renders it, though CSV escapes text a spreadsheet would otherwise open
-as a formula; see :func:`_csv_cell`. XLSX alone writes the underlying
-value, so that a workbook holds numbers to sort, sum, and chart rather
-than the text of them.
+as a formula; see :func:`_csv_cell`.
+XLSX alone writes the underlying value,
+so that a workbook holds numbers to sort, sum, and chart
+rather than the text of them.
 """
 
 import csv
@@ -40,25 +43,27 @@ from app.reports.model import (
 
 _ENV = Environment(loader=BaseLoader(), autoescape=True, trim_blocks=True, lstrip_blocks=True)
 
-# Footnote headings, shared by every renderer so the four output formats
-# label the same content identically.
+# Footnote headings, shared by every renderer
+# so the four output formats label the same content identically.
 _SECTION_NOTES_LABEL = "Notes"
 _REPORT_NOTES_LABEL = "Report notes"
 
 # Name of the leading XLSX sheet holding the report's narrative.
 _INFO_SHEET_NAME = "Report"
 
-# Excel number formats for the typed cells, and the unit a duration is
-# written in: Excel measures elapsed time in days, and "[h]:mm" is the
-# format that shows such a value as hours past 24 rather than wrapping.
+# Excel number formats for the typed cells,
+# and the unit a duration is written in:
+# Excel measures elapsed time in days, and "[h]:mm" is the format
+# that shows such a value as hours past 24 rather than wrapping.
 _SECONDS_PER_DAY = 24 * 60 * 60
 _DURATION_FORMAT = "[h]:mm"
 _PERCENT_FORMAT = "0%"
 _COUNT_FORMAT = "General"
 
-# The classes a rendered table's cells carry. The template selects the
-# dark-mode rules on them, and :func:`_cell_style` names the one an
-# alternating row gets, so both sides have to agree on the spelling.
+# The classes a rendered table's cells carry.
+# The template selects the dark-mode rules on them,
+# and :func:`_cell_style` names the one an alternating row gets,
+# so both sides have to agree on the spelling.
 _HEADER_CLASS = "th"
 _ROW_CLASS = "td"
 _ROW_ALT_CLASS = "td-alt"
@@ -79,8 +84,8 @@ class _TablePalette:
     border: str
 
 
-#: Written inline on every cell, because an email client may strip a
-#: stylesheet but keeps a ``style`` attribute.
+#: Written inline on every cell, because an email client may strip a stylesheet
+#: but keeps a ``style`` attribute.
 _LIGHT_PALETTE = _TablePalette(
     header_background="#a6c9e8",
     header_text="#000000",
@@ -90,8 +95,8 @@ _LIGHT_PALETTE = _TablePalette(
     border="#9ab3c8",
 )
 
-#: Written to the template's ``<style>`` block, since only a media query
-#: can ask which color scheme the reader is in.
+#: Written to the template's ``<style>`` block,
+#: since only a media query can ask which color scheme the reader is in.
 _DARK_PALETTE = _TablePalette(
     header_background="#1d4060",
     header_text="#d0e8f8",
@@ -194,8 +199,9 @@ def _display_rows(block: TableBlock) -> list[list[str]]:
 def _render_text_table(block: TableBlock) -> list[str]:
     """Render a table block as aligned plain-text lines.
 
-    ``colalign`` is omitted for a table with no rows, because tabulate
-    indexes it against the data rows and fails when there are none.
+    ``colalign`` is omitted for a table with no rows,
+    because tabulate indexes it against the data rows
+    and fails when there are none.
     """
     colalign = (
         tuple(
@@ -388,9 +394,9 @@ def render_html_fragment(report: Report) -> str:
 def render_html_document(report: Report) -> str:
     """Render a report as a standalone HTML document.
 
-    :func:`render_html_fragment` produces markup for an email body; a
-    file a browser opens directly also needs a doctype and a charset
-    declaration.
+    :func:`render_html_fragment` produces markup for an email body;
+    a file a browser opens directly
+    also needs a doctype and a charset declaration.
     """
     return _HTML_DOCUMENT_TEMPLATE.render(
         title=report.title,
@@ -401,10 +407,10 @@ def render_html_document(report: Report) -> str:
 def report_attachments(report: Report) -> list[ReportAttachment]:
     """Collect the report's attachments, de-duplicated by filename.
 
-    Each table block carrying an ``attachment_filename`` is rendered to
-    CSV. Pre-built ``ReportSection.attachments`` are collected too, though
-    no builder populates them yet. On a filename collision the last
-    attachment encountered wins.
+    Each table block carrying an ``attachment_filename`` is rendered to CSV.
+    Pre-built ``ReportSection.attachments`` are collected too,
+    though no builder populates them yet.
+    On a filename collision the last attachment encountered wins.
     """
     attachments: list[ReportAttachment] = []
     for section in report.sections:
@@ -426,19 +432,22 @@ def report_attachments(report: Report) -> list[ReportAttachment]:
 
 
 # The characters Excel and LibreOffice read as the start of a formula
-# when they open a CSV. A leading apostrophe is the conventional
-# neutralizer: the spreadsheet drops it and shows the rest as text.
+# when they open a CSV.
+# A leading apostrophe is the conventional neutralizer:
+# the spreadsheet drops it and shows the rest as text.
 _CSV_FORMULA_LEAD = ("=", "+", "-", "@", "\t", "\r")
 
 
 def _csv_cell(value: Cell) -> str:
     """Return a cell's CSV text, neutralizing a formula-like value.
 
-    Only text is escaped, for the reason :func:`_append_row` forces a
-    text cell to the text type: report cells carry text derived from
-    JupyterHub usernames and named-server names. A number is written as
-    the other text formats show it, so that a negative duration keeps
-    reading as ``-0:30`` rather than as an escaped string.
+    Only text is escaped, for the reason
+    :func:`_append_row` forces a text cell to the text type:
+    report cells carry text
+    derived from JupyterHub usernames and named-server names.
+    A number is written as the other text formats show it,
+    so that a negative duration keeps reading as ``-0:30``
+    rather than as an escaped string.
     """
     if isinstance(value, str):
         return f"'{value}" if value.startswith(_CSV_FORMULA_LEAD) else value
@@ -503,15 +512,15 @@ def render_xlsx_bytes(report: Report) -> bytes:
     """Render a report to an XLSX workbook, one sheet per table block.
 
     A leading "Report" sheet carries the title and each section's heading,
-    description, text blocks, and footnotes. Without it the workbook would
-    be the only output format recording neither the reporting window nor
-    the timezone the timestamps are in.
+    description, text blocks, and footnotes.
+    Without it the workbook would be the only output format recording
+    neither the reporting window nor the timezone the timestamps are in.
 
-    Each table sheet then repeats its own section's footnotes below the
-    table. The duplication is intended: a reader who clicks straight to a
-    data sheet never sees the "Report" sheet, which stays the narrative
-    overview and remains the only place a section holding no table, or
-    holding a text block, has to state its notes.
+    Each table sheet then repeats its own section's footnotes below the table.
+    The duplication is intended: a reader who clicks straight to a data sheet
+    never sees the "Report" sheet, which stays the narrative overview
+    and remains the only place a section holding no table,
+    or holding a text block, has to state its notes.
 
     Raises:
         ValueError: If openpyxl does not provide an initial worksheet.
@@ -522,8 +531,9 @@ def render_xlsx_bytes(report: Report) -> bytes:
         raise ValueError("Workbook did not create an initial worksheet")
     info_sheet.title = _INFO_SHEET_NAME
 
-    # Seeded with the info sheet, so a section of the same name is given a
-    # distinct sheet here rather than being renamed by openpyxl alone.
+    # Seeded with the info sheet,
+    # so a section of the same name is given a distinct sheet here
+    # rather than being renamed by openpyxl alone.
     used_sheet_names: set[str] = {_INFO_SHEET_NAME}
     table_count = 0
 
@@ -583,10 +593,11 @@ def _append_section_summary(worksheet: Worksheet, section: ReportSection) -> lis
 def _append_section_notes(worksheet: Worksheet, footnotes: Sequence[str]) -> None:
     """Repeat a section's footnotes beneath the table on its own sheet.
 
-    Every sheet of a multi-table section gets the same notes, since the
-    notes qualify the section rather than any one of its tables. The
-    blank row separates them from the data, so that a note neither reads
-    as a row of the table nor comes along with the table's range.
+    Every sheet of a multi-table section gets the same notes,
+    since the notes qualify the section rather than any one of its tables.
+    The blank row separates them from the data,
+    so that a note neither reads as a row of the table
+    nor comes along with the table's range.
     """
     if not footnotes:
         return
@@ -616,14 +627,14 @@ def _fixed_format(digits: int) -> str:
 def _xlsx_cell(value: Cell) -> tuple[str | float, str | None]:
     """Return a cell's workbook value and the number format it reads in.
 
-    A duration becomes the day fraction ``[h]:mm`` displays, and a
-    percentage the 0..1 fraction ``0%`` displays, so that a column of
-    them sorts and sums as the quantity it is rather than as text, in
-    which ``"10:00"`` precedes ``"2:00"``.
+    A duration becomes the day fraction ``[h]:mm`` displays,
+    and a percentage the 0..1 fraction ``0%`` displays,
+    so that a column of them sorts and sums as the quantity it is
+    rather than as text, in which ``"10:00"`` precedes ``"2:00"``.
 
     Returns:
-        The value, and the number format for a number or ``None`` for
-        text, which :func:`_append_row` writes as text instead.
+        The value, and the number format for a number or ``None`` for text,
+        which :func:`_append_row` writes as text instead.
     """
     if isinstance(value, str):
         return value, None
@@ -639,10 +650,11 @@ def _xlsx_cell(value: Cell) -> tuple[str | float, str | None]:
 def _append_row(worksheet: Worksheet, values: Sequence[Cell]) -> None:
     """Append a row, writing each cell as the kind of value it holds.
 
-    A text cell is forced to the text type, because openpyxl infers a
-    formula from a leading ``=`` and report cells carry text derived
-    from JupyterHub usernames. A number keeps its own type, which is
-    what the workbook is for, and no number can be read as a formula.
+    A text cell is forced to the text type,
+    because openpyxl infers a formula from a leading ``=``
+    and report cells carry text derived from JupyterHub usernames.
+    A number keeps its own type, which is what the workbook is for,
+    and no number can be read as a formula.
     """
     resolved = [_xlsx_cell(value) for value in values]
     worksheet.append([value for value, _ in resolved])

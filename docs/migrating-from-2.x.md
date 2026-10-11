@@ -30,8 +30,7 @@ New in 3.0.0:
 - `--anonymize`, for pseudonymized reports
 - optional Elasticsearch flags for `get-new-users`
 
-The reports' layout has also changed;
-generate one to see it.
+The reports' layout has also changed; generate one to see it.
 
 ## Changes to Figures
 

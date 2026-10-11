@@ -35,7 +35,7 @@ def test_the_same_uid_at_two_institutions_maps_independently() -> None:
 def test_a_pseudonym_does_not_change_between_runs() -> None:
     """Reports are compared over time, so a user's label is fixed.
 
-    Pinning one label catches a change to the hash, the alphabet, or the
-    width, and a switch to :func:`hash`, which varies per process.
+    Pinning one label catches a change to the hash, the alphabet, or the width,
+    and a switch to :func:`hash`, which varies per process.
     """
     assert build_pseudonyms([("x.edu", "a")]) == {("x.edu", "a"): "Lima Yankee Golf"}

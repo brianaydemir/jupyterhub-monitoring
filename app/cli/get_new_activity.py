@@ -29,22 +29,23 @@ from app.usage.activity import (
 )
 from app.usage.snapshots import build_query, select_hub
 
-# The data this report draws on. Shared by the parser and the validator
+# The data this report draws on.
+# Shared by the parser and the validator
 # so that the two cannot disagree about which arguments exist.
 _SOURCES: Final = (ELASTICSEARCH_SOURCE,)
 
-# The fixed part of the default email subject, which the run completes
-# with the reporting window. Shared with the parser, whose help for
-# ``--subject`` names it.
+# The fixed part of the default email subject,
+# which the run completes with the reporting window.
+# Shared with the parser, whose help for ``--subject`` names it.
 _SUBJECT_PREFIX: Final = "JupyterHub Activity Report"
 
 
 def _build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for this command.
 
-    There is no ``--date-format``: the ``Started`` column identifies a
-    session, so a bare date would render a user's separate same-day runs
-    of one server as rows differing only in a duration.
+    There is no ``--date-format``: the ``Started`` column identifies a session,
+    so a bare date would render a user's separate same-day runs of one server
+    as rows differing only in a duration.
     """
     parser = argparse.ArgumentParser(
         description="Report active server time per JupyterHub user from Elasticsearch",
@@ -110,8 +111,8 @@ def _format_document_tally(tally: DocumentTally) -> str:
 def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
-    The document tally leads the report, and also goes to stderr, where
-    a scheduled run's log keeps it apart from the report on stdout.
+    The document tally leads the report, and also goes to stderr,
+    where a scheduled run's log keeps it apart from the report on stdout.
 
     Raises:
         DataShapeError: If the reporting window is not timezone-aware.

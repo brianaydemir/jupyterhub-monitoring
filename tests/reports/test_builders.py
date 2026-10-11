@@ -1,7 +1,7 @@
 """Tests for :mod:`app.reports.builders`."""
 
-# One module per module under test is the layout the suite keeps, and
-# builders holds every report table, so this one runs long.
+# One module per module under test is the layout the suite keeps,
+# and builders holds every report table, so this one runs long.
 # pylint: disable=too-many-lines
 
 from datetime import UTC, datetime
@@ -36,14 +36,15 @@ CHICAGO = ZoneInfo("America/Chicago")
 START = datetime(2026, 7, 1, tzinfo=CHICAGO)
 END = datetime(2026, 7, 8, tzinfo=CHICAGO)
 
-# Two identifiers at one institution whose pseudonyms collide. Found by
-# search over the 26 ** 3 label space; see build_pseudonyms' docstring for
-# how likely that is.
+# Two identifiers at one institution whose pseudonyms collide.
+# Found by search over the 26 ** 3 label space;
+# see build_pseudonyms' docstring for how likely that is.
 COLLIDING_UIDS = ("u138", "u223")
 
-# Two identifiers at one institution whose pseudonyms sort the opposite
-# way round from the raw uids, so a table ordered on the raw value shows
-# their pseudonyms in descending order.
+# Two identifiers at one institution
+# whose pseudonyms sort the opposite way round from the raw uids,
+# so a table ordered on the raw value shows their pseudonyms
+# in descending order.
 INVERTING_UIDS = ("alice", "bob")
 
 # The footnote every section showing a duration carries.
@@ -227,8 +228,8 @@ def test_the_new_users_tables_count_their_rows() -> None:
 def test_same_day_starts_are_counted_in_the_report_timezone() -> None:
     """The count agrees with the two dates the table puts side by side.
 
-    Read in UTC these two instants fall on different days, so a count
-    taken there would contradict a table showing one date twice.
+    Read in UTC these two instants fall on different days,
+    so a count taken there would contradict a table showing one date twice.
     """
     users = [_user("a@x.edu", "2026-07-01T20:00:00Z")]
     first_server = {"a@x.edu": _epoch("2026-07-02T02:00:00Z")}
@@ -317,8 +318,8 @@ def test_a_repeated_username_does_not_force_the_login_method_column() -> None:
 def test_new_users_report_marks_a_name_carrying_no_institution() -> None:
     """A blank cell would read as data the report failed to fill in.
 
-    The name's login method is absent for the same reason and is marked
-    the same way; the recognized name beside it is untouched.
+    The name's login method is absent for the same reason
+    and is marked the same way; the recognized name beside it is untouched.
     """
     table = _users_table(
         _users_report(
@@ -340,9 +341,9 @@ def test_new_users_report_marks_a_name_carrying_no_institution() -> None:
 def test_new_users_report_sorts_an_unrecognized_name_last(detailed_usernames: bool) -> None:
     """It is the least informative row, and the two orderings agree on that.
 
-    The table orders on the parse priority when the ``Login method``
-    column is shown and on the domain's trailing rank when it is not; a
-    name holding neither sorts after even ORCID either way.
+    The table orders on the parse priority when the ``Login method`` column
+    is shown and on the domain's trailing rank when it is not;
+    a name holding neither sorts after even ORCID either way.
     """
     users = [
         _user("service-account", "2026-07-02T10:00:00Z"),
@@ -372,8 +373,9 @@ def test_anonymize_replaces_ids_but_keeps_institutions() -> None:
 def test_anonymize_shows_login_method_when_pseudonyms_collide() -> None:
     """Ambiguity is judged on what the reader sees, not the raw identifiers.
 
-    These two users have distinct raw identifiers, so a check against the
-    raw pairs would hide the column while the displayed rows are identical.
+    These two users have distinct raw identifiers,
+    so a check against the raw pairs would hide the column
+    while the displayed rows are identical.
     """
     first, second = COLLIDING_UIDS
     table = _users_table(
@@ -402,8 +404,8 @@ def test_an_unrecognized_names_pseudonym_is_keyed_on_its_empty_domain() -> None:
 
     Keying on the marker instead would relabel every unrecognized name
     and break the cross-run stability the pseudonyms exist to provide,
-    so the label is pinned here rather than recomputed from the code
-    under test.
+    so the label is pinned here
+    rather than recomputed from the code under test.
     """
     table = _users_table(
         _users_report([_user("service-account", "2026-07-02T10:00:00Z")], anonymize=True)
@@ -593,8 +595,8 @@ def test_usage_opens_with_the_length_of_the_window(
 ) -> None:
     """Absolute quantities need the scale they were measured over.
 
-    The length is formatted like every other duration in the table, and
-    a partial minute is truncated rather than rounded.
+    The length is formatted like every other duration in the table,
+    and a partial minute is truncated rather than rounded.
     """
     summary = ActivitySummary(window_seconds=window_seconds)
     rows = _table(_activity_report([], summary), "Usage").rows
@@ -614,9 +616,9 @@ def test_a_window_with_no_length_reads_as_no_time(window_seconds: float) -> None
 def test_collection_description_states_the_window() -> None:
     """The first section states the window's bounds.
 
-    Its length is left to the ``Reporting window`` row, whose section
-    notes the unit it is read in. The session table's own sentence is a
-    count of the sessions it lists.
+    Its length is left to the ``Reporting window`` row,
+    whose section notes the unit it is read in.
+    The session table's own sentence is a count of the sessions it lists.
     """
     report = _activity_report(
         [_session("a@x.edu")], ActivitySummary(window_seconds=7 * 24 * 3600)
@@ -671,8 +673,8 @@ def test_summary_names_the_busiest_day_and_its_total_in_two_rows() -> None:
 def test_both_concurrency_means_are_reported() -> None:
     """The two means answer different questions, so both are shown.
 
-    The window mean says whether the hub was used at all, so it sits in
-    ``Usage``; the per-push mean describes the hub while in use.
+    The window mean says whether the hub was used at all,
+    so it sits in ``Usage``; the per-push mean describes the hub while in use.
     """
     summary = ActivitySummary(mean_concurrency_active=5.5, mean_concurrency_window=1.11)
     report = _activity_report([], summary)
@@ -685,8 +687,8 @@ def test_both_concurrency_means_are_reported() -> None:
 def test_the_window_mean_is_not_rounded_away_on_an_idle_window() -> None:
     """One decimal renders one busy hour in a day as "0.0", which reads as a bug.
 
-    A mostly idle window is the case this figure exists for, so the
-    column keeps two decimals.
+    A mostly idle window is the case this figure exists for,
+    so the column keeps two decimals.
     """
     summary = ActivitySummary(mean_concurrency_window=1 / 24)
     values = _values(_activity_report([], summary), "Usage")
@@ -735,8 +737,8 @@ def test_one_hub_or_none_adds_no_footnote(hubs: set[str]) -> None:
 def test_every_section_showing_a_duration_states_its_unit() -> None:
     """The unit is a note on the table, not a suffix on one header.
 
-    A section showing no duration gains no such note, since it would
-    explain nothing.
+    A section showing no duration gains no such note,
+    since it would explain nothing.
     """
     report = _activity_report(
         [
@@ -937,10 +939,10 @@ def test_same_day_sessions_of_one_server_render_as_distinguishable_rows(
 ) -> None:
     """``Started`` carries the time of day, which is what separates them.
 
-    The ``Server`` column cannot help here: both rows name the one
-    server. ``get-new-activity`` therefore takes no ``--date-format``,
-    since its ``date`` choice would leave these two rows differing only
-    in a duration.
+    The ``Server`` column cannot help here: both rows name the one server.
+    ``get-new-activity`` therefore takes no ``--date-format``,
+    since its ``date`` choice would leave these two rows
+    differing only in a duration.
     """
     sessions = [
         _session("a@x.edu", started="2026-07-02T14:00:00Z", seconds=1800, server=server),
@@ -1070,8 +1072,8 @@ def test_the_per_session_tables_share_one_server_column_decision() -> None:
 def test_the_activity_tables_mark_a_name_carrying_no_institution() -> None:
     """One ``_UserDisplay`` feeds both tables, so both show the marker.
 
-    The absent login method is marked the same way, and the recognized
-    user beside it renders exactly as before.
+    The absent login method is marked the same way,
+    and the recognized user beside it renders exactly as before.
     """
     sessions = [
         _session("service-account", seconds=600),
@@ -1092,9 +1094,9 @@ def test_the_activity_tables_mark_a_name_carrying_no_institution() -> None:
 def test_unrecognized_names_sort_last_in_both_orderings(detailed_usernames: bool) -> None:
     """The identity key's two branches agree on where such a name belongs.
 
-    With the ``Login method`` column the key is the parse priority and
-    without it the domain's trailing rank. All three users hold the same
-    total, so that key alone decides.
+    With the ``Login method`` column the key is the parse priority
+    and without it the domain's trailing rank.
+    All three users hold the same total, so that key alone decides.
     """
     sessions = [
         _session("service-account", seconds=600),
@@ -1130,8 +1132,8 @@ def test_the_two_user_tables_list_their_users_in_one_order() -> None:
 def test_a_users_own_sessions_keep_their_start_order() -> None:
     """Within a user: start time, and the server name on a tie.
 
-    The named servers put a ``Server`` column in this table, so the
-    identity and duration columns sit one place further right.
+    The named servers put a ``Server`` column in this table,
+    so the identity and duration columns sit one place further right.
     """
     sessions = [
         _session("z@x.edu", started="2026-07-02T09:00:00Z", seconds=7200),
@@ -1151,9 +1153,9 @@ def test_a_users_own_sessions_keep_their_start_order() -> None:
 def test_activity_report_attaches_its_user_tables() -> None:
     """The ``Metric``/``Value`` and per-day tables are not attached separately.
 
-    The user tables carry distinct filenames, since
-    :func:`~app.reports.renderers.report_attachments` de-duplicates by
-    filename and would drop one of them.
+    The user tables carry distinct filenames,
+    since :func:`~app.reports.renderers.report_attachments`
+    de-duplicates by filename and would drop one of them.
     """
     report = _activity_report(
         [_session("a@x.edu", seconds=60)],

@@ -25,10 +25,11 @@ class ParsedName:
 def trailing_domain_key(domain: str) -> tuple[int, int]:
     """Return a key that pushes configured trailing domains to the end.
 
-    A name carrying no domain sorts after even those, which is where
-    :attr:`ParsedName.priority` already puts it: an unrecognized name
-    takes the highest priority. Ordering on either value therefore
-    leaves such a name in the same place, at the end.
+    A name carrying no domain sorts after even those,
+    which is where :attr:`ParsedName.priority` already puts it:
+    an unrecognized name takes the highest priority.
+    Ordering on either value therefore leaves such a name in the same place,
+    at the end.
     """
     if not domain:
         return (2, 0)
@@ -47,11 +48,13 @@ def parse_name(name: str) -> ParsedName:
       - ``email:{id}@{domain}``    — explicit email (priority 2)
       - ``orcid:{id}``             — ORCID (priority 3)
 
-    The prefixed forms are matched first, so a bare ``{id}@{domain}``
-    name is only assumed once the others have been ruled out.
+    The prefixed forms are matched first,
+    so a bare ``{id}@{domain}`` name is only assumed
+    once the others have been ruled out.
 
     Returns:
-        The parsed components. An unrecognized name yields priority 4,
+        The parsed components.
+        An unrecognized name yields priority 4,
         an empty *domain* and *login_method*, and the whole name as *uid*.
     """
     if m := _EMAIL_RE.match(name):
@@ -60,8 +63,9 @@ def parse_name(name: str) -> ParsedName:
         return ParsedName(
             priority=1, domain=m.group(2), uid=m.group(1), login_method="legacy eppn"
         )
-    # ORCID is matched before the bare ePPN form, whose pattern would
-    # otherwise claim any ORCID value that happens to contain an "@".
+    # ORCID is matched before the bare ePPN form,
+    # whose pattern would otherwise claim any ORCID value
+    # that happens to contain an "@".
     if m := _ORCID_RE.match(name):
         return ParsedName(priority=3, domain="orcid.org", uid=m.group(1), login_method="ORCID")
     if m := _EPPN_RE.match(name):

@@ -35,26 +35,26 @@ class JupyterHubClient:
     ) -> Generator[dict[str, Any]]:
         """Get the list of users from JupyterHub using offset-based pagination.
 
-        *page_size* is how many users each request asks for, not a cap
-        on how many are yielded: the walk pages through every user. It
-        ends at an empty page rather than a short one, because JupyterHub
-        silently clamps the size it was asked for to its own
-        ``api_page_max_limit``, so a short page may be that cap rather
-        than the end of the list. A hub that ignores *offset* would
-        otherwise page forever, so a repeat of the previous page also
-        ends it.
+        *page_size* is how many users each request asks for,
+        not a cap on how many are yielded: the walk pages through every user.
+        It ends at an empty page rather than a short one,
+        because JupyterHub silently clamps the size it was asked for
+        to its own ``api_page_max_limit``,
+        so a short page may be that cap rather than the end of the list.
+        A hub that ignores *offset* would otherwise page forever,
+        so a repeat of the previous page also ends it.
 
         *state* is passed through to the API as a server-state filter
-        (e.g. ``"active"``); no caller uses it, because
-        :meth:`list_servers` needs users whose servers are still spawning
-        as well as those already running. A single session spans the walk,
-        so paging reuses one connection.
+        (e.g. ``"active"``); no caller uses it,
+        because :meth:`list_servers` needs users
+        whose servers are still spawning as well as those already running.
+        A single session spans the walk, so paging reuses one connection.
 
-        Because this is a generator, the request is not made until it is
-        first iterated, and failures surface there. It is returned as a
-        generator rather than a plain iterator so that a caller that
-        stops early, such as :meth:`list_servers` under a limit, can
-        close it and end the paging session at once.
+        Because this is a generator, the request is not made
+        until it is first iterated, and failures surface there.
+        It is returned as a generator rather than a plain iterator
+        so that a caller that stops early, such as :meth:`list_servers`
+        under a limit, can close it and end the paging session at once.
 
         Raises:
             ExternalServiceError: If an API request fails.
@@ -103,15 +103,17 @@ class JupyterHubClient:
 
         Retrieves users and extracts their servers,
         flattening nested dictionaries into dotted-key paths
-        (:func:`~app.core.dict_utils.flatten_dict`). An empty nested
-        dictionary contributes no key, so a server whose ``user_options``
-        is ``{}`` is indistinguishable from one that has none.
+        (:func:`~app.core.dict_utils.flatten_dict`).
+        An empty nested dictionary contributes no key,
+        so a server whose ``user_options`` is ``{}``
+        is indistinguishable from one that has none.
 
-        *limit* caps how many servers are returned. Because
-        :meth:`list_users` is lazy, the cap also ends the walk: the pages
-        after the one that completes it are never requested, so a small
-        *limit* costs a few API calls rather than one per hundred
-        accounts on the hub. A *limit* of zero or less returns nothing
+        *limit* caps how many servers are returned.
+        Because :meth:`list_users` is lazy, the cap also ends the walk:
+        the pages after the one that completes it are never requested,
+        so a small *limit* costs a few API calls
+        rather than one per hundred accounts on the hub.
+        A *limit* of zero or less returns nothing
         and contacts the API not at all.
 
         Raises:
@@ -122,8 +124,9 @@ class JupyterHubClient:
 
         result: list[dict[str, Any]] = []
 
-        # Closing the generator ends its paging session as soon as the
-        # cap is met, instead of leaving it to garbage collection.
+        # Closing the generator ends its paging session
+        # as soon as the cap is met,
+        # instead of leaving it to garbage collection.
         with closing(self.list_users()) as users:
             for user in users:
                 servers = user.get("servers", {})

@@ -1,10 +1,12 @@
 """Tests for :mod:`app.cli.get_new_users`.
 
-Selecting the users and dating their servers is :mod:`app.usage.new_users`'
-work, covered by ``tests/usage/test_new_users.py``. What is left here is
-the command's own Elasticsearch lookup, whose window is not the reporting
-window and which ``--hub`` scopes, when that lookup is made, and its stderr
-tally of the user list the hub answered with, which the report states again.
+Selecting the users and dating their servers
+is :mod:`app.usage.new_users`' work,
+covered by ``tests/usage/test_new_users.py``.
+What is left here is the command's own Elasticsearch lookup,
+whose window is not the reporting window and which ``--hub`` scopes,
+when that lookup is made, and its stderr tally of the user list
+the hub answered with, which the report states again.
 """
 
 # This module exercises the command's internal helpers directly.
@@ -48,9 +50,9 @@ _EMAIL_ARGV = [
 
 START = datetime(2026, 7, 1, tzinfo=timezone.utc)
 
-# The explicit reporting window the tally tests run against, in the
-# default timezone, so that the report they compare against is built from
-# the same bounds the command resolves rather than from the clock.
+# The explicit reporting window the tally tests run against,
+# in the default timezone, so that the report they compare against is built
+# from the same bounds the command resolves rather than from the clock.
 CHICAGO = ZoneInfo("America/Chicago")
 WINDOW_START = datetime(2026, 8, 1, tzinfo=CHICAGO)
 WINDOW_END = datetime(2026, 9, 1, tzinfo=CHICAGO)
@@ -89,8 +91,8 @@ def test_the_lookup_runs_from_the_window_start_through_now(
 ) -> None:
     """A new user cannot have started a server before being created.
 
-    The search therefore extends past the end of the reporting window, so
-    a server first started after the window closed is still reported.
+    The search therefore extends past the end of the reporting window,
+    so a server first started after the window closed is still reported.
     """
     before = int(datetime.now(timezone.utc).timestamp())
     _, client = _lookup(monkeypatch, [])
@@ -218,9 +220,9 @@ def test_the_tally_counts_only_the_users_created_in_the_window(
 ) -> None:
     """The second number is the report's own selection, not the list's size.
 
-    The report on stdout is compared against one built from the same
-    users and their tally, so the tally the report states is the one
-    stderr does.
+    The report on stdout is compared against one
+    built from the same users and their tally,
+    so the tally the report states is the one stderr does.
     """
     users: list[dict[str, Any]] = [
         {"name": "a@x.edu", "created": "2026-08-05T10:00:00Z"},
@@ -309,9 +311,9 @@ def _emailed_subject(
 ) -> str:
     """Run the command over that window and return the subject it sends.
 
-    The delivery step is replaced rather than the SMTP transport, so the
-    assertion reaches the subject the command composed, not the wording
-    of a header.
+    The delivery step is replaced rather than the SMTP transport,
+    so the assertion reaches the subject the command composed,
+    not the wording of a header.
     """
     captured: list[OutputTargets] = []
 

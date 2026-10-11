@@ -1,12 +1,11 @@
 # Monitoring and Reporting on JupyterHub Usage
 
-A CLI toolkit for monitoring a
-[JupyterHub](https://jupyterhub.readthedocs.io/) instance
+A CLI toolkit
+for monitoring a [JupyterHub](https://jupyterhub.readthedocs.io/) instance
 and reporting on its usage.
-It snapshots the live server list into
-[Elasticsearch](https://www.elastic.co/elasticsearch),
-reports on the accumulated history,
-and can deliver those reports by email.
+It snapshots the live server list
+into [Elasticsearch](https://www.elastic.co/elasticsearch),
+reports on the accumulated history, and can deliver those reports by email.
 
 ## Commands
 
@@ -18,8 +17,7 @@ and can deliver those reports by email.
 | `create-es-api-key`, `list-es-api-keys`, `delete-es-api-key` | Manage Elasticsearch API keys                 |
 | `get-es-docs`                                                | Print documents from an Elasticsearch index   |
 
-Run `push-servers` on a schedule,
-such as from cron or a Kubernetes CronJob,
+Run `push-servers` on a schedule, such as from cron or a Kubernetes CronJob,
 with `--interval` set to that schedule's period.
 Every command documents its options under `--help`.
 
@@ -78,4 +76,5 @@ or when `--send-email` could not deliver the report.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+Apache License 2.0.
+See [LICENSE](LICENSE).

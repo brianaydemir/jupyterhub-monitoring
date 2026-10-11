@@ -1,8 +1,8 @@
 """Typed factories for the empty collections used as dataclass defaults.
 
-These wrappers exist because pyright's strict mode reports a bare
-``default_factory=list`` (or ``set`` / ``dict``) as a partially unknown
-type; do not inline them.
+These wrappers exist because pyright's strict mode reports
+a bare ``default_factory=list`` (or ``set`` / ``dict``)
+as a partially unknown type; do not inline them.
 Each call returns a fresh object,
 so every instance still gets a default of its own.
 

@@ -1,10 +1,10 @@
 """Tests for :mod:`app.cli.arguments`.
 
 The helpers only declare arguments, so the tests parse with a real parser
-and assert on what came back. That a flag exists, or is mandatory, is
-argparse's doing and is not tested; what is covered is the conversion of
-values to the types later code relies on, the one default that matters
-to a user, and how a recipient is read.
+and assert on what came back.
+That a flag exists, or is mandatory, is argparse's doing and is not tested;
+what is covered is the conversion of values to the types later code relies on,
+the one default that matters to a user, and how a recipient is read.
 """
 
 import argparse
@@ -140,10 +140,10 @@ def test_recipients_can_be_repeated() -> None:
 def test_a_recipient_may_be_written_as_a_to_header_writes_one(value: str) -> None:
     """The value reaches the namespace unchanged; app.reports renders it.
 
-    The last two hold a group's punctuation inside a quoted display
-    name, where it is ordinary text. They are accepted because the
-    group check parses the value rather than scanning it for a ``:``
-    or a ``;``.
+    The last two hold a group's punctuation inside a quoted display name,
+    where it is ordinary text.
+    They are accepted because the group check parses the value
+    rather than scanning it for a ``:`` or a ``;``.
     """
     parser = _parser()
     add_email_arguments(parser, subject_prefix="Subject")
@@ -170,8 +170,8 @@ def test_surrounding_whitespace_is_dropped() -> None:
 def test_one_occurrence_may_name_several_recipients(value: str) -> None:
     """A list is one entry, unsplit; app.reports parses it out again.
 
-    The last case is why the entry is not split here: the comma inside
-    the quoted display name separates nothing.
+    The last case is why the entry is not split here:
+    the comma inside the quoted display name separates nothing.
     """
     parser = _parser()
     add_email_arguments(parser, subject_prefix="Subject")
@@ -189,8 +189,8 @@ def test_one_occurrence_may_name_several_recipients(value: str) -> None:
 def test_group_syntax_is_refused(value: str, capsys: pytest.CaptureFixture[str]) -> None:
     """A group's name has nowhere to go, so the plain list is required.
 
-    ``getaddresses`` reports a group as the mailboxes it holds and says
-    nothing about its name, so accepting one would drop that name
+    ``getaddresses`` reports a group as the mailboxes it holds
+    and says nothing about its name, so accepting one would drop that name
     without saying so.
     """
     parser = _parser()
@@ -223,11 +223,11 @@ def test_a_recipient_without_a_readable_address_is_refused(
 
     ``Ops Team`` would otherwise be truncated to the recipient ``Ops``,
     and a bare local name such as ``root`` is refused along with it.
-    Every mailbox in a list has to be readable, so ``Ops Team, ...``
-    fails on its first one; a quoted ``"a@host, b@host"`` is a single
-    address holding a comma rather than two mailboxes; and a group
-    naming no address is unreadable rather than refused as a group,
-    since the address checks run first.
+    Every mailbox in a list has to be readable,
+    so ``Ops Team, ...`` fails on its first one;
+    a quoted ``"a@host, b@host"`` is a single address holding a comma
+    rather than two mailboxes; and a group naming no address is unreadable
+    rather than refused as a group, since the address checks run first.
     """
     parser = _parser()
     add_email_arguments(parser, subject_prefix="Subject")

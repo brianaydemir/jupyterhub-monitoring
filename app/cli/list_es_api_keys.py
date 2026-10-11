@@ -16,8 +16,8 @@ from app.core.time_utils import get_now_ms
 def _ms_to_datetime(ms: int | None, *, missing: str = "Never") -> str:
     """Convert a millisecond epoch timestamp to a UTC string.
 
-    *missing* is what to print for an absent timestamp: "Never" reads
-    correctly for an expiry but not for a creation date.
+    *missing* is what to print for an absent timestamp:
+    "Never" reads correctly for an expiry but not for a creation date.
     """
     if ms is None:
         return missing

@@ -1,7 +1,7 @@
 """Tests for :mod:`app.clients.jupyterhub_client`, with a stubbed session."""
 
-# An explicit comparison to an empty collection is the assertion these
-# tests mean to make, and reads better here than a truthiness check.
+# An explicit comparison to an empty collection is the assertion
+# these tests mean to make, and reads better here than a truthiness check.
 # pylint: disable=use-implicit-booleaness-not-comparison
 
 from typing import Any
@@ -85,8 +85,8 @@ def test_list_users_keeps_walking_when_the_hub_caps_the_page_size(
     """A page shorter than asked for may be the hub's cap, not the end.
 
     JupyterHub silently clamps ``limit`` to its ``api_page_max_limit``,
-    so a walk that stopped at the first short page would truncate the
-    list at that cap without saying so.
+    so a walk that stopped at the first short page would truncate the list
+    at that cap without saying so.
     """
     session = _install(
         monkeypatch,
@@ -152,8 +152,8 @@ def test_list_users_verifies_tls_by_default(monkeypatch: pytest.MonkeyPatch) -> 
 def test_list_users_reports_a_request_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """A transport error surfaces in the application's own vocabulary.
 
-    Naming the operation here is what lets a command print a specific
-    message without translating the failure at its own boundary.
+    Naming the operation here is what lets a command print a specific message
+    without translating the failure at its own boundary.
     """
     _install(
         monkeypatch,

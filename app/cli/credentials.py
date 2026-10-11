@@ -13,8 +13,8 @@ def prompt_credentials(
 ) -> tuple[str, str] | None:
     """Prompt for username and password interactively.
 
-    Returns *None* if the user cancels (Ctrl-C / EOF) or if either value is
-    empty after entry.
+    Returns *None* if the user cancels (Ctrl-C / EOF)
+    or if either value is empty after entry.
     """
     if username_arg:
         username = username_arg
@@ -41,13 +41,14 @@ def prompt_credentials(
 def read_api_key(file: Path | None, env_var: str) -> str:
     """Read an API key from a file, falling back to an environment variable.
 
-    Both sources are stripped: a key mounted from a Kubernetes secret or
-    passed through ``--env-file`` usually carries a trailing newline.
+    Both sources are stripped: a key mounted from a Kubernetes secret
+    or passed through ``--env-file`` usually carries a trailing newline.
 
-    Argument validation only checks that *file* exists, so a path that
-    exists but cannot be read arrives here. That is an expected,
-    user-facing failure, not an unexpected one, so it is reported as an
-    :class:`AppError` rather than left to escape as an ``OSError``.
+    Argument validation only checks that *file* exists,
+    so a path that exists but cannot be read arrives here.
+    That is an expected, user-facing failure, not an unexpected one,
+    so it is reported as an :class:`AppError`
+    rather than left to escape as an ``OSError``.
 
     Raises:
         AppError: If *file* cannot be read.

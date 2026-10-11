@@ -1,7 +1,7 @@
 """Tests for :mod:`app.clients.elasticsearch_client`, with a stubbed transport."""
 
-# An explicit comparison to an empty collection is the assertion these
-# tests mean to make, and reads better here than a truthiness check.
+# An explicit comparison to an empty collection is the assertion
+# these tests mean to make, and reads better here than a truthiness check.
 # pylint: disable=use-implicit-booleaness-not-comparison
 
 from collections.abc import Callable, Generator
@@ -14,15 +14,15 @@ from app.clients.elasticsearch_client import ElasticsearchClient
 from app.core.errors import ExternalServiceError
 
 
-# One attribute per call this stub records, and it stands in for a
-# whole client.
+# One attribute per call this stub records,
+# and it stands in for a whole client.
 # pylint: disable-next=too-many-instance-attributes
 class _StubTransport:
     """Stands in for the official Elasticsearch client.
 
-    Serves ``search``/``scroll`` from a queue of prepared pages and records
-    every ``clear_scroll`` call, so the tests can assert that a scroll
-    context is always released.
+    Serves ``search``/``scroll`` from a queue of prepared pages
+    and records every ``clear_scroll`` call,
+    so the tests can assert that a scroll context is always released.
     """
 
     def __init__(
@@ -138,8 +138,8 @@ class _FailingSecurity:
 class _FailingTransport:
     """Fails every request with one prepared Elasticsearch error.
 
-    Any *pages* are served first, so a test can let the opening search
-    succeed and fail the scroll request that follows it.
+    Any *pages* are served first, so a test can let the opening search succeed
+    and fail the scroll request that follows it.
     """
 
     def __init__(
@@ -238,8 +238,9 @@ def test_query_with_a_non_positive_limit_yields_nothing(limit: int) -> None:
 def test_query_releases_the_scroll_when_a_page_omits_its_id() -> None:
     """Elasticsearch may reuse the id and omit it from a scroll response.
 
-    Overwriting the live id with *None* would both break the next scroll
-    request and skip the cleanup that releases the context.
+    Overwriting the live id with *None*
+    would both break the next scroll request
+    and skip the cleanup that releases the context.
     """
     client, transport = _client([_page(["a"]), _page(["b"], scroll_id=None)])
     assert [d["id"] for d in client.query(index="i")] == ["a", "b"]
@@ -311,8 +312,8 @@ def test_upload_documents_omits_an_absent_document_id() -> None:
 def test_upload_documents_reports_a_rejected_document_without_raising() -> None:
     """``push-servers`` counts a rejection, so it must not lose the batch to one.
 
-    This is the whole reason the method returns per-item results rather
-    than a single verdict for the request.
+    This is the whole reason the method returns per-item results
+    rather than a single verdict for the request.
     """
     rejection = {"status": 400, "error": {"type": "mapper_parsing_exception"}}
     client, _ = _client(

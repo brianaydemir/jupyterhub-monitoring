@@ -1,17 +1,18 @@
 """Tests for :mod:`app.cli.report_arguments`.
 
-The module's job is to keep a report command's argument groups and its
-validation in step, so the tests check the pairing: what each source adds,
-what it then checks, and that the shared groups follow the sources.
+The module's job
+is to keep a report command's argument groups and its validation in step,
+so the tests check the pairing: what each source adds, what it then checks,
+and that the shared groups follow the sources.
 
 The last sections instead build the two report commands' own parsers,
-which is where the ``include_*`` switches are set and where the reporting
-window each command shares is driven end to end. Each command's own test
-module covers its query and its stderr tally, not its argument surface.
+which is where the ``include_*`` switches are set
+and where the reporting window each command shares is driven end to end.
+Each command's own test module covers its query and its stderr tally,
+not its argument surface.
 """
 
-# The last sections reach for each command's own parser builder and
-# validator.
+# The last sections reach for each command's own parser builder and validator.
 # pyright: reportPrivateUsage=false
 
 import argparse
@@ -233,8 +234,8 @@ def test_the_activity_report_takes_no_date_format(
 ) -> None:
     """Its ``Started`` column names a session, which a bare date does not.
 
-    Two same-day runs of one user's one server would otherwise render as
-    rows differing only in a duration.
+    Two same-day runs of one user's one server would otherwise render
+    as rows differing only in a duration.
     """
     parser = build_activity_parser()
     assert not hasattr(parser.parse_args(ACTIVITY_ARGV), "date_format")

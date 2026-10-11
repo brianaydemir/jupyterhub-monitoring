@@ -107,8 +107,8 @@ def test_compute_time_range_spans_the_requested_duration_across_dst(
 def test_elapsed_measures_real_time_across_dst(day: datetime, hours: int) -> None:
     """Subtracting the bounds directly would read every one of these as a day.
 
-    Two datetimes sharing a ``tzinfo`` subtract by wall clock, which is
-    what the report's window length must not do.
+    Two datetimes sharing a ``tzinfo`` subtract by wall clock,
+    which is what the report's window length must not do.
     """
     assert elapsed(day, day + timedelta(days=1)) == timedelta(hours=hours)
 
@@ -190,9 +190,9 @@ def test_snap_stops_at_the_last_midnight_that_has_passed(
 ) -> None:
     """A window ending now closes with the last day that finished.
 
-    Reaching forwards to tomorrow's midnight would claim a day the run
-    is still in the middle of, and would trip the future-end check in
-    :mod:`app.cli.validation`.
+    Reaching forwards to tomorrow's midnight would claim a day
+    the run is still in the middle of,
+    and would trip the future-end check in :mod:`app.cli.validation`.
     """
     now = datetime(2026, 9, 3, 17, 48, tzinfo=CHICAGO)
     _, end = _snap_at(monkeypatch, now, datetime(2026, 9, 1, 8, 0, tzinfo=CHICAGO), now)

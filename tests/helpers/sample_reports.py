@@ -47,8 +47,8 @@ def report(
 def report_with_text_block() -> Report:
     """Build a report exercising the text-block and report-footnote paths.
 
-    No builder emits either today; they are extension points, so the
-    renderers' handling of them is only covered here.
+    No builder emits either today; they are extension points,
+    so the renderers' handling of them is only covered here.
     """
     return report(
         sections=[

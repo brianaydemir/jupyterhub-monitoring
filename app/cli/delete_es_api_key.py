@@ -89,8 +89,8 @@ def _run(args: argparse.Namespace) -> int:
 def _error_detail(detail: object) -> str:
     """Summarize one entry of an ``error_details`` response array.
 
-    Elasticsearch reports these as nested cause objects; the type and
-    reason are what identifies the failure.
+    Elasticsearch reports these as nested cause objects;
+    the type and reason are what identifies the failure.
     """
     if not isinstance(detail, dict):
         return str(detail)

@@ -1,6 +1,7 @@
 """Tests for :mod:`app.cli.get_es_docs`."""
 
-# This module exercises the command's parser, validator, and runner directly.
+# This module exercises the command's parser, validator, and runner
+# directly.
 # pyright: reportPrivateUsage=false
 
 import argparse

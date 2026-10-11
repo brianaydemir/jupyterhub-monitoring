@@ -20,10 +20,10 @@ from app.reports.renderers import (
 class OutputTargets:
     """Where a report goes, besides stdout.
 
-    A path is ``None`` when its flag was not given. *email* carries the
-    settings for ``--send-email`` and is ``None`` when the report is not
-    being emailed, so the destination and its configuration cannot
-    disagree.
+    A path is ``None`` when its flag was not given.
+    *email* carries the settings for ``--send-email`` and is ``None``
+    when the report is not being emailed,
+    so the destination and its configuration cannot disagree.
     """
 
     text_file: Path | None
@@ -37,8 +37,9 @@ def deliver_report(targets: OutputTargets, report: Report) -> int:
     """Deliver a report to stdout and every configured destination.
 
     Returns:
-        0 on success, or 1 if sending email failed. File output failures
-        propagate instead, since there is nothing sensible to fall back to.
+        0 on success, or 1 if sending email failed.
+        File output failures propagate instead,
+        since there is nothing sensible to fall back to.
 
     Raises:
         OSError: If an output file cannot be written.
@@ -83,8 +84,8 @@ def _email_attachments(
 ) -> list[ReportAttachment]:
     """Collect the attachments to send, adding the workbook if one was built.
 
-    The workbook is attached only when ``--xlsx-file`` also wrote it, so
-    the email carries exactly the artifacts the run produced.
+    The workbook is attached only when ``--xlsx-file`` also wrote it,
+    so the email carries exactly the artifacts the run produced.
     """
     attachments = report_attachments(report)
     if xlsx_file is not None and xlsx_payload is not None:

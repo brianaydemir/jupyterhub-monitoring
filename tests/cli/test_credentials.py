@@ -13,10 +13,10 @@ from app.core.errors import AppError, DataShapeError
 def test_an_unreadable_api_key_file_is_an_expected_failure(tmp_path: Path) -> None:
     """Argument validation only checks that the path exists.
 
-    Pointing ``--es-api-key`` at a secret's mount directory rather than
-    at the file inside it therefore gets this far. Letting the ``OSError``
-    escape would have ``run_command`` report a fixable mistake as an
-    unexpected error.
+    Pointing ``--es-api-key`` at a secret's mount directory
+    rather than at the file inside it therefore gets this far.
+    Letting the ``OSError`` escape
+    would have ``run_command`` report a fixable mistake as an unexpected error.
     """
     with pytest.raises(AppError) as failure:
         read_api_key(tmp_path, "ELASTICSEARCH_API_KEY")

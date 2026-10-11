@@ -1,16 +1,18 @@
 """Active server time, computed from server-snapshot documents.
 
-A session is a user, one of that user's named servers, and that
-server's start time. Activity is accumulated by summing each snapshot's
-``meta.interval``, so every figure in a report is only as fine-grained
-as the push cadence that produced the documents.
+A session is a user, one of that user's named servers,
+and that server's start time.
+Activity is accumulated by summing each snapshot's ``meta.interval``,
+so every figure in a report is only as fine-grained as the push cadence
+that produced the documents.
 
-:class:`SessionActivity`, :class:`UserActivity`, and
-:class:`ActivitySummary` are defined here, beside the code that produces
-them; the report builders only consume them.
-:class:`DocumentTally` says how many documents a run saw and why any of
-them could not be counted, which is what tells an idle hub apart from a
-pipeline that fed the report nothing it could read.
+:class:`SessionActivity`, :class:`UserActivity`, and :class:`ActivitySummary`
+are defined here, beside the code that produces them;
+the report builders only consume them.
+:class:`DocumentTally` says how many documents a run saw
+and why any of them could not be counted,
+which is what tells an idle hub apart from a pipeline
+that fed the report nothing it could read.
 """
 
 import re
@@ -31,11 +33,12 @@ from app.usage.snapshots import snapshot_hub, snapshot_seconds
 class SessionActivity:
     """Active server time for a single user session.
 
-    A session is identified by a user, one of their named servers, and
-    that server's ``server.started`` timestamp. *server_name* is the
-    JupyterHub server name, empty for the default server, or ``None``
-    when the documents name none; *started* is the raw ISO 8601 string,
-    or ``None`` on snapshots taken while the server was still spawning.
+    A session is identified by a user, one of their named servers,
+    and that server's ``server.started`` timestamp.
+    *server_name* is the JupyterHub server name, empty for the default server,
+    or ``None`` when the documents name none;
+    *started* is the raw ISO 8601 string, or ``None`` on snapshots taken
+    while the server was still spawning.
     """
 
     user: str
@@ -49,10 +52,11 @@ class SessionActivity:
 class UserActivity:
     """Active server time for a single user, summed over their sessions.
 
-    *sessions* counts every session the user holds, the spawn-only ones
-    that carry no ``started`` included, so it agrees with the number of
-    rows the report's two per-session views, of servers still starting
-    and of servers that started, show for that user together.
+    *sessions* counts every session the user holds,
+    the spawn-only ones that carry no ``started`` included,
+    so it agrees with the number of rows the report's two per-session views,
+    of servers still starting and of servers that started,
+    show for that user together.
     """
 
     user: str
@@ -61,8 +65,7 @@ class UserActivity:
     gpu_seconds: float
 
 
-# A local counterpart to the factories in
-# :mod:`app.core.dataclass_defaults`,
+# A local counterpart to the factories in :mod:`app.core.dataclass_defaults`,
 # whose generic factories do not cover this field's type;
 # see it for why these wrappers exist.
 def _day_seconds() -> dict[str, float]:
@@ -74,29 +77,32 @@ def _day_seconds() -> dict[str, float]:
 class ActivitySummary:  # pylint: disable=too-many-instance-attributes
     """Aggregate usage statistics for a JupyterHub activity report.
 
-    All durations are raw seconds; formatting is applied by the report
-    builder. *per_day_seconds* maps ``"YYYY-MM-DD"`` to the active
-    server-time observed on that day, and holds every calendar day of
-    the reporting window, so a day that saw no activity carries zero
+    All durations are raw seconds; formatting is applied by the report builder.
+    *per_day_seconds* maps ``"YYYY-MM-DD"`` to the active server-time
+    observed on that day, and holds every calendar day of the reporting window,
+    so a day that saw no activity carries zero
     rather than dropping out of an otherwise contiguous series.
 
-    *window_seconds* is the reporting window's own length, which the
-    report states so that its totals have a denominator to be read
-    against. A window of no length, or an inverted one, is carried as
-    zero, which is what *mean_concurrency_window* makes of it too, so
-    the two figures derived from the window cannot disagree.
+    *window_seconds* is the reporting window's own length,
+    which the report states
+    so that its totals have a denominator to be read against.
+    A window of no length, or an inverted one, is carried as zero,
+    which is what *mean_concurrency_window* makes of it too,
+    so the two figures derived from the window cannot disagree.
 
     The two concurrency means answer different questions.
-    *mean_concurrency_active* is averaged over the pushes that had at
-    least one active server, so it describes the hub while it is in use;
-    *mean_concurrency_window* spreads the total active time over the
-    whole reporting window, idle stretches included, which is what makes
-    it comparable between windows.
+    *mean_concurrency_active* is averaged over the pushes
+    that had at least one active server,
+    so it describes the hub while it is in use;
+    *mean_concurrency_window* spreads the total active time
+    over the whole reporting window, idle stretches included,
+    which is what makes it comparable between windows.
 
-    *hubs* holds the distinct ``meta.hub`` values the summarized
-    documents carried, which is what lets a report say that its figures
-    combine several hubs; the peak and *mean_concurrency_active* figures
-    are per hub push, so they alone do not.
+    *hubs* holds the distinct ``meta.hub`` values
+    the summarized documents carried,
+    which is what lets a report say that its figures combine several hubs;
+    the peak and *mean_concurrency_active* figures are per hub push,
+    so they alone do not.
     """
 
     window_seconds: float = 0.0
@@ -122,10 +128,11 @@ class ActivitySummary:  # pylint: disable=too-many-instance-attributes
 class SkipReason(Enum):
     """Why a snapshot could not be counted.
 
-    Each value is the phrase a caller names the reason by, and the
-    members are declared in the order :func:`_classify_document` checks
-    them, so a caller can list the reasons it saw without spelling
-    either the wording or the order itself.
+    Each value is the phrase a caller names the reason by,
+    and the members are declared in the order
+    :func:`_classify_document` checks them,
+    so a caller can list the reasons it saw
+    without spelling either the wording or the order itself.
     """
 
     NO_USER = "no user.name"
@@ -134,8 +141,8 @@ class SkipReason(Enum):
     NON_POSITIVE_INTERVAL = "non-positive meta.interval"
 
 
-# A second local counterpart to the factories in
-# :mod:`app.core.dataclass_defaults`; see :func:`_day_seconds`.
+# A second local counterpart to the factories
+# in :mod:`app.core.dataclass_defaults`; see :func:`_day_seconds`.
 def _skip_counts() -> dict[SkipReason, int]:
     """Return an empty typed reason-to-count mapping for dataclass defaults."""
     return {}
@@ -145,12 +152,13 @@ def _skip_counts() -> dict[SkipReason, int]:
 class DocumentTally:
     """How many snapshots a run retrieved, counted, and skipped.
 
-    *skipped* holds only the reasons that actually occurred, and
-    *counted* plus its values always sum to *retrieved*. None of the
-    report's activity figures is derived from any of this: it exists so
-    that a run can say what shape of data it saw, since a zero report
-    reads the same whether the hub was idle, the query named the wrong
-    index or hub, or every document retrieved was unreadable.
+    *skipped* holds only the reasons that actually occurred,
+    and *counted* plus its values always sum to *retrieved*.
+    None of the report's activity figures is derived from any of this:
+    it exists so that a run can say what shape of data it saw,
+    since a zero report reads the same
+    whether the hub was idle, the query named the wrong index or hub,
+    or every document retrieved was unreadable.
     """
 
     retrieved: int = 0
@@ -158,22 +166,24 @@ class DocumentTally:
     skipped: dict[SkipReason, int] = field(default_factory=_skip_counts)
 
 
-# Matches the word "gpu" or "gpus" (case-insensitive) delimited by the
-# start or end of the string or by any non-alphabetic character.
+# Matches the word "gpu" or "gpus" (case-insensitive)
+# delimited by the start or end of the string
+# or by any non-alphabetic character.
 _GPU_RE = re.compile(r"(?<![a-zA-Z])gpus?(?![a-zA-Z])", re.IGNORECASE)
 
 # Spellings a spawner form uses for an option that is switched off.
 _DISABLED_OPTION_VALUES = frozenset({"", "0", "false", "no", "none", "off"})
 
-# The format ``per_day_seconds`` is keyed by. The bucketing and the
-# zero-fill share it, so the two cannot disagree about a day's key.
+# The format ``per_day_seconds`` is keyed by.
+# The bucketing and the zero-fill share it,
+# so the two cannot disagree about a day's key.
 _DAY_FMT = "%Y-%m-%d"
 
 # A session: a user, one of their named servers, and that server's start.
 _SessionKey = tuple[str, str | None, str | None]
 
-# One hub's one push: the hub that wrote the documents, or ``None`` when
-# they name none, and the snapshot time it stamped every one of them with.
+# One hub's one push: the hub that wrote the documents, or ``None``
+# when they name none, and the snapshot time it stamped every one of them with.
 _PushKey = tuple[str | None, int]
 
 
@@ -188,9 +198,9 @@ def _value_names_gpu(value: Any) -> bool:
     """Return whether a ``user_options`` value names a GPU resource.
 
     A string counts when it contains the word anywhere, per ``_GPU_RE``,
-    so ``cpu_and_gpu`` counts but ``nogpu`` does not. A list is checked
-    element-wise, which is what lets a multi-select's ``["gpu", "large"]``
-    count.
+    so ``cpu_and_gpu`` counts but ``nogpu`` does not.
+    A list is checked element-wise,
+    which is what lets a multi-select's ``["gpu", "large"]`` count.
     """
     if isinstance(value, str):
         return _GPU_RE.search(value) is not None
@@ -202,15 +212,17 @@ def _value_names_gpu(value: Any) -> bool:
 def _document_uses_gpu(doc: dict[str, Any]) -> bool:
     """Return whether a server document requested a GPU.
 
-    A ``server.user_options`` entry counts when its value names the
-    word, per :func:`_value_names_gpu`, or when its *key* names one and
-    the value reads as switched on. Requiring a switched-on value for a
-    key match is what keeps a spawner form's unchecked ``gpu: false``
-    box from billing the session as GPU time.
+    A ``server.user_options`` entry counts when its value names the word,
+    per :func:`_value_names_gpu`,
+    or when its *key* names one and the value reads as switched on.
+    Requiring a switched-on value for a key match
+    is what keeps a spawner form's unchecked ``gpu: false`` box
+    from billing the session as GPU time.
 
     Both rules depend on the options arriving as flattened dotted keys,
-    which is what ``push-servers`` writes: a value that is itself a
-    mapping is not searched, so a GPU entry nested inside one is missed.
+    which is what ``push-servers`` writes:
+    a value that is itself a mapping is not searched,
+    so a GPU entry nested inside one is missed.
     """
     for key, value in doc.items():
         if key != "server.user_options" and not key.startswith("server.user_options."):
@@ -225,16 +237,17 @@ def _document_uses_gpu(doc: dict[str, Any]) -> bool:
 def _classify_document(doc: dict[str, Any]) -> tuple[str, float] | SkipReason:
     """Return ``(user, seconds)`` for a countable snapshot, else why not.
 
-    The rule lives here alone, so the tally :func:`tally_documents`
-    reports and the contributions the metrics sum cannot disagree about
-    which documents count.
+    The rule lives here alone, so the tally :func:`tally_documents` reports
+    and the contributions the metrics sum
+    cannot disagree about which documents count.
 
-    A zero or negative ``meta.interval`` parses, so the sign is checked
-    here or nowhere. ``push-servers`` refuses to write one, but any
-    other writer with access to the index may, and counting it would
-    subtract that interval from every figure it reaches, or manufacture
-    a session that inflates the session count and deflates the mean
-    session length while contributing no time at all.
+    A zero or negative ``meta.interval`` parses,
+    so the sign is checked here or nowhere.
+    ``push-servers`` refuses to write one,
+    but any other writer with access to the index may,
+    and counting it would subtract that interval from every figure it reaches,
+    or manufacture a session that inflates the session count
+    and deflates the mean session length while contributing no time at all.
     """
     user = doc.get("user.name")
     if not isinstance(user, str) or not user:
@@ -258,9 +271,9 @@ def _classify_document(doc: dict[str, Any]) -> tuple[str, float] | SkipReason:
 def _document_contribution(doc: dict[str, Any]) -> tuple[str, float] | None:
     """Return ``(user, seconds)`` for a countable snapshot, else ``None``.
 
-    Every activity metric applies this one rule, from
-    :func:`_classify_document`, so all of them are derived from the same
-    document set.
+    Every activity metric applies this one rule,
+    from :func:`_classify_document`,
+    so all of them are derived from the same document set.
     """
     outcome = _classify_document(doc)
     return None if isinstance(outcome, SkipReason) else outcome
@@ -271,14 +284,15 @@ def compute_activity(
 ) -> list[SessionActivity]:
     """Sum active server time per session from Elasticsearch documents.
 
-    A session is keyed by ``user.name``, ``server.name``, and
-    ``server.started``, so concurrent named servers and separate runs are
-    tallied independently. Snapshots taken while a server is still
-    spawning carry no ``server.started``, so a user's spawn attempts on
-    one named server share a single session. A session counts as GPU
-    when any of its snapshots requested one, and documents that
-    :func:`_document_contribution` rejects contribute nothing;
-    :func:`tally_documents` is what counts those.
+    A session is keyed by ``user.name``, ``server.name``,
+    and ``server.started``,
+    so concurrent named servers and separate runs are tallied independently.
+    Snapshots taken while a server is still spawning
+    carry no ``server.started``,
+    so a user's spawn attempts on one named server share a single session.
+    A session counts as GPU when any of its snapshots requested one,
+    and documents that :func:`_document_contribution` rejects
+    contribute nothing; :func:`tally_documents` is what counts those.
     """
     seconds: dict[_SessionKey, float] = {}
     gpu: dict[_SessionKey, bool] = {}
@@ -315,8 +329,9 @@ def compute_activity(
 def tally_documents(documents: Iterable[dict[str, Any]]) -> DocumentTally:
     """Count the documents retrieved, the countable ones, and the rest.
 
-    The skips are counted by reason, which is what tells an idle window
-    apart from a run whose documents were all discarded.
+    The skips are counted by reason,
+    which is what tells an idle window apart from a run
+    whose documents were all discarded.
     """
     retrieved = 0
     counted = 0
@@ -336,10 +351,11 @@ def tally_documents(documents: Iterable[dict[str, Any]]) -> DocumentTally:
 def aggregate_user_activity(sessions: Iterable[SessionActivity]) -> list[UserActivity]:
     """Sum each user's sessions into a single row per user.
 
-    Users come back in the order they first appear in *sessions*, since
-    the order a report shows them in is the report's own decision. The
-    summary's per-user statistics read this same function, so a report's
-    per-user table and its ``Max time (one user)`` cannot disagree.
+    Users come back in the order they first appear in *sessions*,
+    since the order a report shows them in is the report's own decision.
+    The summary's per-user statistics read this same function,
+    so a report's per-user table and its ``Max time (one user)``
+    cannot disagree.
     """
     counts: dict[str, int] = {}
     seconds: dict[str, float] = {}
@@ -365,21 +381,22 @@ def aggregate_user_activity(sessions: Iterable[SessionActivity]) -> list[UserAct
 def _concurrency_stats(documents: list[dict[str, Any]]) -> tuple[int, float]:
     """Return peak and mean concurrent server counts, per hub push.
 
-    Concurrency is the number of countable documents sharing a
-    ``(meta.hub, meta.snapshot-time)`` pair, which is one per active
-    server because ``push-servers`` writes one document per server per
-    push and stamps every one of them with that push's single snapshot
-    time. Grouping on the pair rather than on the time alone is what
-    makes the figures deterministic on a multi-hub index: two hubs whose
-    pushes happen to land on the same second stay apart, instead of
-    merging into one group whenever their schedules coincide.
+    Concurrency is the number of countable documents
+    sharing a ``(meta.hub, meta.snapshot-time)`` pair,
+    which is one per active server
+    because ``push-servers`` writes one document per server per push
+    and stamps every one of them with that push's single snapshot time.
+    Grouping on the pair rather than on the time alone
+    is what makes the figures deterministic on a multi-hub index:
+    two hubs whose pushes happen to land on the same second stay apart,
+    instead of merging into one group whenever their schedules coincide.
 
     Both figures are therefore per hub push rather than cluster-wide:
-    peak is the largest single push, and the mean is taken over the
-    pushes that had at least one active server, since the query returns
-    no documents for an idle one. That mean is the summary's
-    *mean_concurrency_active*; the window-wide counterpart is
-    :func:`_mean_concurrency_window`.
+    peak is the largest single push,
+    and the mean is taken over the pushes that had at least one active server,
+    since the query returns no documents for an idle one.
+    That mean is the summary's *mean_concurrency_active*;
+    the window-wide counterpart is :func:`_mean_concurrency_window`.
     """
     counts: Counter[_PushKey] = Counter()
     for doc in documents:
@@ -396,9 +413,9 @@ def _mean_concurrency_window(total_seconds: float, window: timedelta) -> float:
     """Return the active server time spread over the whole *window*.
 
     Unlike the per-push mean, this counts the window's idle stretches,
-    which is what makes it comparable between reporting windows. A
-    window of no length reports zero rather than dividing by it; the
-    commands reject such a window, but a caller need not.
+    which is what makes it comparable between reporting windows.
+    A window of no length reports zero rather than dividing by it;
+    the commands reject such a window, but a caller need not.
     """
     window_seconds = window.total_seconds()
     if window_seconds <= 0:
@@ -409,10 +426,11 @@ def _mean_concurrency_window(total_seconds: float, window: timedelta) -> float:
 def _observed_hubs(documents: list[dict[str, Any]]) -> set[str]:
     """Return the distinct hubs the countable documents name.
 
-    Documents naming no hub contribute nothing, so a single-hub index
-    that never sets ``meta.hub`` reports an empty set rather than an
-    unnamed hub. Only countable documents are considered, matching the
-    document set every other figure is derived from.
+    Documents naming no hub contribute nothing,
+    so a single-hub index that never sets ``meta.hub`` reports an empty set
+    rather than an unnamed hub.
+    Only countable documents are considered,
+    matching the document set every other figure is derived from.
     """
     hubs: set[str] = set()
     for doc in documents:
@@ -427,15 +445,16 @@ def _observed_hubs(documents: list[dict[str, Any]]) -> set[str]:
 def _window_days(start_time: datetime, end_time: datetime, tz: tzinfo) -> list[str]:
     """Return a day key for every calendar day in *tz* the window holds.
 
-    The window is half-open, so its last day is the one holding its last
-    instant, not the one holding *end_time*: a window ending exactly on
-    local midnight stops short of that day, and a row for it would be a
-    day the report could not have observed. A window of no length holds
-    no instant at all, and an inverted one no day, so both yield nothing,
+    The window is half-open, so its last day
+    is the one holding its last instant, not the one holding *end_time*:
+    a window ending exactly on local midnight stops short of that day,
+    and a row for it would be a day the report could not have observed.
+    A window of no length holds no instant at all, and an inverted one no day,
+    so both yield nothing,
     which is what the other window-derived figures make of them too.
 
-    Days are stepped through as calendar dates rather than by adding 24
-    hours, so a DST transition neither skips nor repeats one.
+    Days are stepped through as calendar dates rather than by adding 24 hours,
+    so a DST transition neither skips nor repeats one.
     """
     if end_time <= start_time:
         return []
@@ -456,17 +475,18 @@ def _per_day_seconds(
 ) -> dict[str, float]:
     """Bucket active server-time by calendar day in the report timezone.
 
-    Every day of the reporting window is present, per
-    :func:`_window_days`, so the series a report renders is contiguous
-    and a quiet day reads as zero instead of vanishing between the days
-    around it.
+    Every day of the reporting window is present, per :func:`_window_days`,
+    so the series a report renders is contiguous
+    and a quiet day reads as zero instead of vanishing
+    between the days around it.
 
-    A snapshot's ``meta.interval`` covers the period *preceding* it, but
-    is credited to the day the snapshot falls on, so activity in the last
-    interval before local midnight is counted against the following day.
-    A snapshot outside the window still gets a day of its own: the
-    report's query returns no such document, but a direct caller may
-    supply one, and dropping it would hide it.
+    A snapshot's ``meta.interval`` covers the period *preceding* it,
+    but is credited to the day the snapshot falls on,
+    so activity in the last interval before local midnight
+    is counted against the following day.
+    A snapshot outside the window still gets a day of its own:
+    the report's query returns no such document,
+    but a direct caller may supply one, and dropping it would hide it.
     """
     per_day: dict[str, float] = dict.fromkeys(_window_days(start_time, end_time, tz), 0.0)
     for doc in documents:
@@ -491,19 +511,21 @@ def summarize_activity(
     """Compute aggregate usage statistics for the activity report.
 
     Per-user, GPU, and session statistics are derived from *sessions*,
-    the per-user ones through :func:`aggregate_user_activity`, so the
-    summary agrees with a report's own per-user table; the per-push
-    concurrency figures, per-day activity, and the hubs observed require
-    the raw snapshot *documents*.
+    the per-user ones through :func:`aggregate_user_activity`,
+    so the summary agrees with a report's own per-user table;
+    the per-push concurrency figures, per-day activity, and the hubs observed
+    require the raw snapshot *documents*.
 
     The reporting window arrives as its bounds rather than as its length,
-    since the calendar days ``per_day_seconds`` covers cannot be
-    recovered from a length alone. The length the summary carries,
-    floored at zero, and the figures measured against the window as a
-    whole are derived from that same pair, so no two of them can describe
-    different windows. Both bounds are read in *tz*, so a naive one is
-    read against the host's clock; the command rejects such a bound
-    before it reaches here.
+    since the calendar days ``per_day_seconds`` covers cannot be recovered
+    from a length alone.
+    The length the summary carries, floored at zero,
+    and the figures measured against the window as a whole
+    are derived from that same pair,
+    so no two of them can describe different windows.
+    Both bounds are read in *tz*,
+    so a naive one is read against the host's clock;
+    the command rejects such a bound before it reaches here.
     """
     window = elapsed(start_time, end_time)
     users = aggregate_user_activity(sessions)

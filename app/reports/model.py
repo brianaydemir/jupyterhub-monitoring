@@ -1,9 +1,9 @@
 """Rendering models for reports, used by renderers and delivery helpers.
 
-A table cell carries the value it means rather than the text of it, so
-that the workbook can hold a number Excel sorts, sums, and charts.
-:func:`cell_text` is the one place a cell becomes the string the text,
-CSV, and HTML renderers show, so those three cannot drift apart.
+A table cell carries the value it means rather than the text of it,
+so that the workbook can hold a number Excel sorts, sums, and charts.
+:func:`cell_text` is the one place a cell becomes the string
+the text, CSV, and HTML renderers show, so those three cannot drift apart.
 """
 
 from dataclasses import dataclass, field
@@ -20,14 +20,15 @@ class Duration:
     def display(self) -> str:
         """Return the duration as hours and minutes.
 
-        Hours are neither zero-padded nor capped at 24 (``"5:00"``,
-        ``"123:45"``), and minutes are truncated rather than rounded.
-        Because each value is truncated independently, the displayed GPU
-        and CPU times need not add up to the displayed total.
+        Hours are neither zero-padded nor capped at 24
+        (``"5:00"``, ``"123:45"``), and minutes are truncated
+        rather than rounded.
+        Because each value is truncated independently,
+        the displayed GPU and CPU times need not add up to the displayed total.
 
-        A negative span reads by sign and magnitude (``"-0:30"``, not
-        ``"-1:30"``), and keeps its sign even below a minute
-        (``"-0:00"``).
+        A negative span reads by sign and magnitude
+        (``"-0:30"``, not ``"-1:30"``),
+        and keeps its sign even below a minute (``"-0:00"``).
         """
         total_minutes = int(abs(self.seconds)) // 60
         hours, minutes = divmod(total_minutes, 60)
@@ -39,8 +40,8 @@ class Duration:
 class Percent:
     """A proportion, held as a 0..1 fraction and shown as a percentage.
 
-    The fraction rather than the whole number is what the workbook
-    wants: Excel's percent formats scale a 0..1 value themselves.
+    The fraction rather than the whole number is what the workbook wants:
+    Excel's percent formats scale a 0..1 value themselves.
     """
 
     fraction: float
@@ -55,8 +56,8 @@ class Fixed:
     """A number shown to a fixed number of decimal places.
 
     The places travel with the value because they vary by row:
-    ``Mean sessions per user`` reads to one place and the two
-    concurrency means to two, which a bare ``float`` could not say.
+    ``Mean sessions per user`` reads to one place
+    and the two concurrency means to two, which a bare ``float`` could not say.
     """
 
     value: float
@@ -76,9 +77,10 @@ class Fixed:
         return f"{self.value:.{self.digits}f}"
 
 
-#: A value a table cell holds. Text stays text, and a quantity keeps the
-#: type that says what it is, so that the XLSX renderer can write a real
-#: number where the other formats write :func:`cell_text`'s string.
+#: A value a table cell holds.
+#: Text stays text, and a quantity keeps the type that says what it is,
+#: so that the XLSX renderer can write a real number
+#: where the other formats write :func:`cell_text`'s string.
 Cell = str | int | Duration | Percent | Fixed
 
 
@@ -91,8 +93,7 @@ def cell_text(value: Cell) -> str:
     return value.display()
 
 
-# A local counterpart to the factories in
-# :mod:`app.core.dataclass_defaults`,
+# A local counterpart to the factories in :mod:`app.core.dataclass_defaults`,
 # which cannot hold this one without importing this module;
 # see it for why these wrappers exist.
 def _attachment_list() -> list["ReportAttachment"]:
@@ -113,9 +114,9 @@ class ReportAttachment:
 class TextBlock:
     """A free-form text block inside a report section.
 
-    An extension point: no builder emits one yet, so every renderer's
-    text-block branch is currently unexercised. Renderers must keep
-    handling it for :data:`SectionBlock` to stay honest.
+    An extension point: no builder emits one yet,
+    so every renderer's text-block branch is currently unexercised.
+    Renderers must keep handling it for :data:`SectionBlock` to stay honest.
     """
 
     text: str
@@ -125,10 +126,11 @@ class TextBlock:
 class TableBlock:
     """A tabular block inside a report section.
 
-    *right_align_columns* is stated rather than inferred from the cells'
-    types: a ``Metric``/``Value`` table right-aligns one column whose
-    cells are numbers and text by turns, so the alignment is the table's
-    choice and not a property of any one value in it.
+    *right_align_columns* is stated rather than inferred from the cells' types:
+    a ``Metric``/``Value`` table right-aligns one column
+    whose cells are numbers and text by turns,
+    so the alignment is the table's choice
+    and not a property of any one value in it.
     """
 
     headers: list[str]
@@ -167,9 +169,9 @@ class ReportSection:
     description: str
     blocks: list[SectionBlock]
     footnotes: list[str] = field(default_factory=empty_string_list)
-    #: Pre-built attachments to send alongside the section. An extension
-    #: point for payloads a renderer cannot derive from a table block; no
-    #: builder populates it yet.
+    #: Pre-built attachments to send alongside the section.
+    #: An extension point for payloads a renderer cannot derive
+    #: from a table block; no builder populates it yet.
     attachments: list[ReportAttachment] = field(default_factory=_attachment_list)
 
     def __post_init__(self) -> None:
@@ -188,8 +190,8 @@ class Report:
 
     title: str
     sections: list[ReportSection]
-    #: Report-wide footnotes, rendered after the last section. An
-    #: extension point; builders currently attach footnotes per section.
+    #: Report-wide footnotes, rendered after the last section.
+    #: An extension point; builders currently attach footnotes per section.
     footnotes: list[str] = field(default_factory=empty_string_list)
 
     def __post_init__(self) -> None:

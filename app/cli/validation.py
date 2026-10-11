@@ -1,7 +1,7 @@
 """Post-parse validation of a command's arguments.
 
-Every helper here reports a problem through ``parser.error``, which
-prints usage and exits 2; none of them returns a value.
+Every helper here reports a problem through ``parser.error``,
+which prints usage and exits 2; none of them returns a value.
 """
 
 import argparse
@@ -17,10 +17,12 @@ from app.core.time_utils import (
     snap_to_whole_days,
 )
 
-# How far past the present a resolved ``--report-end`` may fall before it
-# is rejected. ``--report-end "now"`` is resolved here and again in
-# :func:`app.cli.factories.compute_report_time_range`, a moment apart, so
-# it needs some slack; a minute is also the finest unit the reports show.
+# How far past the present a resolved ``--report-end`` may fall
+# before it is rejected.
+# ``--report-end "now"`` is resolved here
+# and again in :func:`app.cli.factories.compute_report_time_range`,
+# a moment apart, so it needs some slack;
+# a minute is also the finest unit the reports show.
 _FUTURE_END_TOLERANCE = timedelta(minutes=1)
 
 
@@ -66,10 +68,11 @@ def validate_es_arguments(
     - No credential is available from any source.
     - The ``--es-api-key`` file does not exist (when provided).
 
-    Only an explicitly passed ``--es-api-key`` conflicts with
-    ``--es-username``. ``ELASTICSEARCH_API_KEY`` does not, because it is
-    typically injected into the environment by a container or secret
-    mount, where it would otherwise make ``--es-username`` unusable;
+    Only an explicitly passed ``--es-api-key``
+    conflicts with ``--es-username``.
+    ``ELASTICSEARCH_API_KEY`` does not, because it is typically injected
+    into the environment by a container or secret mount,
+    where it would otherwise make ``--es-username`` unusable;
     an explicit ``--es-username`` takes precedence over it.
     """
     if args.es_ca_cert is not None and not args.es_ca_cert.exists():
@@ -93,8 +96,9 @@ def reject_es_flags_without_endpoint(
 ) -> None:
     """Reject an Elasticsearch flag given without ``--es-endpoint``.
 
-    For a command whose Elasticsearch group is optional, every other flag
-    in the group does nothing without an endpoint to connect to.
+    For a command whose Elasticsearch group is optional,
+    every other flag in the group does nothing
+    without an endpoint to connect to.
     """
     if args.es_endpoint is not None:
         return
@@ -114,11 +118,12 @@ def validate_query_arguments(
 ) -> None:
     """Validate the reporting window and ``--timezone``.
 
-    Exactly one window mode must be selected: ``--duration`` (optionally
-    anchored with ``--time``), or the ``--report-start`` / ``--report-end``
-    pair (optionally widened with ``--whole-days``). Each mode rejects the
-    other's modifier, so a flag that would do nothing is an error rather
-    than a silent no-op.
+    Exactly one window mode must be selected:
+    ``--duration`` (optionally anchored with ``--time``),
+    or the ``--report-start`` / ``--report-end`` pair
+    (optionally widened with ``--whole-days``).
+    Each mode rejects the other's modifier,
+    so a flag that would do nothing is an error rather than a silent no-op.
     """
     try:
         tz = parse_timezone(args.timezone)
@@ -157,10 +162,11 @@ def _validate_report_range(
     An end in the future is rejected, because no data can exist for it;
     a future start is then caught by the ordering check.
 
-    ``--whole-days`` is applied before the final checks, so that they
-    judge the window the report will actually cover. The ordering check
-    runs again after it, because a start and an end within one unfinished
-    day snap to the same midnight.
+    ``--whole-days`` is applied before the final checks,
+    so that they judge the window the report will actually cover.
+    The ordering check runs again after it,
+    because a start and an end within one unfinished day
+    snap to the same midnight.
     """
     if args.report_start is None or args.report_end is None:
         parser.error("--report-start and --report-end must be used together")
@@ -207,8 +213,8 @@ def validate_email_arguments(
 ) -> None:
     """Validate the email arguments against ``--send-email``.
 
-    With it, the connection arguments are required. Without it, nothing
-    reads any email argument, so giving one is an error.
+    With it, the connection arguments are required.
+    Without it, nothing reads any email argument, so giving one is an error.
     """
     required = [
         ("--sender-email", "sender_email"),
@@ -235,9 +241,9 @@ def validate_es_admin_arguments(
 ) -> None:
     """Validate the arguments the Elasticsearch admin commands share.
 
-    The validation counterpart to
-    :func:`app.cli.arguments.configure_es_admin_parser`. It only
-    delegates for now, but gives a rule for the admin commands alone one
-    place to live.
+    The validation counterpart
+    to :func:`app.cli.arguments.configure_es_admin_parser`.
+    It only delegates for now, but gives a rule for the admin commands alone
+    one place to live.
     """
     validate_es_arguments(args, parser)

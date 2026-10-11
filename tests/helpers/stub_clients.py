@@ -1,9 +1,10 @@
 """Stand-ins for the Elasticsearch client, for the command tests.
 
-A command opens its client as a context manager and calls one method on
-it, so a stand-in only has to answer that call. The commands are tested
-without connecting to anything, which is why each one's
-``make_es_client`` is replaced by :func:`install_client`.
+A command opens its client as a context manager and calls one method on it,
+so a stand-in only has to answer that call.
+The commands are tested without connecting to anything,
+which is why each one's ``make_es_client``
+is replaced by :func:`install_client`.
 """
 
 # A stub client answers one call, so it has just one public method.

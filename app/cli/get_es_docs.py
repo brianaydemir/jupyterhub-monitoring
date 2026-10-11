@@ -65,8 +65,8 @@ def _run(args: argparse.Namespace) -> int:
     Raises:
         ExternalServiceError: If query execution fails.
     """
-    # unmapped_type keeps the sort from failing on an index that has no
-    # meta.snapshot-time field at all.
+    # unmapped_type keeps the sort from failing on an index
+    # that has no meta.snapshot-time field at all.
     newest_first = {"meta.snapshot-time": {"order": "desc", "unmapped_type": "long"}}
     sort = [newest_first] if args.limit is not None else None
     with make_es_client(args) as client:

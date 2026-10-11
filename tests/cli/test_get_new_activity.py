@@ -1,11 +1,13 @@
 """Tests for :mod:`app.cli.get_new_activity`.
 
-Accounting for the activity and assembling the report belong to
-:mod:`app.usage.activity` and :mod:`app.reports.builders`, and are covered
-through those. What is left here is the query the command sends, how it
-wires the window and its output flags into those modules, and its own
-stderr diagnostic: the wording it gives each shape of document set, and
-the fact that it stays off stdout, where the report states it again.
+Accounting for the activity and assembling the report
+belong to :mod:`app.usage.activity` and :mod:`app.reports.builders`,
+and are covered through those.
+What is left here is the query the command sends,
+how it wires the window and its output flags into those modules,
+and its own stderr diagnostic:
+the wording it gives each shape of document set,
+and the fact that it stays off stdout, where the report states it again.
 """
 
 # This module exercises the command's internal helpers directly.
@@ -46,9 +48,9 @@ _EMAIL_ARGV = [
     "465",
 ]
 
-# The explicit reporting window the run tests resolve, in the default
-# timezone, so that a report built from the same bounds can be compared
-# against the one the command prints.
+# The explicit reporting window the run tests resolve,
+# in the default timezone, so that a report built from the same bounds
+# can be compared against the one the command prints.
 CHICAGO = ZoneInfo("America/Chicago")
 WINDOW_START = datetime(2026, 8, 1, tzinfo=CHICAGO)
 WINDOW_END = datetime(2026, 9, 1, tzinfo=CHICAGO)
@@ -98,9 +100,9 @@ def _emailed_subject(
 ) -> str:
     """Run the command over that window and return the subject it sends.
 
-    The delivery step is replaced rather than the SMTP transport, so the
-    assertion reaches the subject the command composed, not the wording
-    of a header.
+    The delivery step is replaced rather than the SMTP transport,
+    so the assertion reaches the subject the command composed,
+    not the wording of a header.
     """
     captured: list[OutputTargets] = []
 
@@ -136,8 +138,9 @@ def test_the_query_covers_the_reporting_window_and_the_hub(
 ) -> None:
     """The documents counted are the ones the window and --hub select.
 
-    The query's hub term can also return a hub whose name merely contains
-    the one asked for, so the command keeps the exact match alone.
+    The query's hub term can also return a hub
+    whose name merely contains the one asked for,
+    so the command keeps the exact match alone.
     """
     document = {"user.name": "a@x.edu", "meta.interval": "5m"}
     client = QueryStubClient(
@@ -182,11 +185,12 @@ def test_the_report_on_stdout_is_the_builders_over_the_resolved_window(
 ) -> None:
     """The window, summary, tally, and output flags all reach the builders.
 
-    The report is compared against one built from the same documents, so
-    a flag reaching the wrong parameter, or a timestamp format other than
-    the one this command fixes, would show up as a different report. One
-    document is skipped, so a tally other than the documents' own would
-    too.
+    The report is compared against one built from the same documents,
+    so a flag reaching the wrong parameter,
+    or a timestamp format other than the one this command fixes,
+    would show up as a different report.
+    One document is skipped, so a tally other than the documents' own
+    would too.
     """
     documents = [_document("a@x.edu"), _document("b@x.edu"), {"user.name": "c@x.edu"}]
     assert _report_on(monkeypatch, documents, "--detailed-usernames") == 0

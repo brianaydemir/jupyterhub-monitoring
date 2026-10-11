@@ -1,8 +1,8 @@
 """Clients, configuration, and derived values built from parsed args.
 
-Each helper here reads an ``argparse.Namespace`` so that nothing outside
-:mod:`app.cli` has to. All of them assume the arguments have already
-passed :mod:`app.cli.validation`.
+Each helper here reads an ``argparse.Namespace``
+so that nothing outside :mod:`app.cli` has to.
+All of them assume the arguments have already passed :mod:`app.cli.validation`.
 """
 
 import argparse
@@ -33,8 +33,8 @@ from app.reports.model import Duration
 def make_es_client(args: argparse.Namespace) -> ElasticsearchClient:
     """Build an Elasticsearch client from parsed args.
 
-    When ``args.es_username`` is set, prompts for a
-    password via :func:`app.cli.credentials.prompt_credentials`.
+    When ``args.es_username`` is set, prompts for a password
+    via :func:`app.cli.credentials.prompt_credentials`.
 
     Raises:
         AppError: If the API key file cannot be read.
@@ -84,10 +84,10 @@ def make_output_targets(
     which is also what makes their flags required
     (:func:`app.cli.validation.validate_email_arguments`).
 
-    *subject_prefix* and *window* are what a default ``--subject`` is
-    made of. They arrive here rather than through the parser because the
-    parser is built before the window is resolved, so a caller passes
-    both once it holds the window
+    *subject_prefix* and *window* are what a default ``--subject`` is made of.
+    They arrive here rather than through the parser
+    because the parser is built before the window is resolved,
+    so a caller passes both once it holds the window
     :func:`compute_report_time_range` returned.
     """
     return OutputTargets(
@@ -126,12 +126,13 @@ def _make_email_config(
 def _default_subject(prefix: str, start: datetime, end: datetime) -> str:
     """Render the subject line a run gets when ``--subject`` is not given.
 
-    The stderr echo names the window to the minute, with its zone and its
-    length; an inbox list has room for far less, so this names only the
-    days the report covers, and only once when they are the same day.
-    The window is half-open, so its last day is the one holding the
-    instant before *end*: a window closing at midnight is named by the
-    day it reported on rather than by the day it stops at.
+    The stderr echo names the window to the minute,
+    with its zone and its length; an inbox list has room for far less,
+    so this names only the days the report covers,
+    and only once when they are the same day.
+    The window is half-open, so its last day is the one
+    holding the instant before *end*: a window closing at midnight is named
+    by the day it reported on rather than by the day it stops at.
     """
     first = start.strftime(DATE_FMT)
     last = last_instant(end).strftime(DATE_FMT)
@@ -144,16 +145,16 @@ def compute_report_time_range(
     """Return the ``(start, end)`` datetime pair for the reporting window.
 
     Assumes the arguments have already passed
-    :func:`app.cli.validation.validate_query_arguments`, which resolves
-    the window the same way.
+    :func:`app.cli.validation.validate_query_arguments`,
+    which resolves the window the same way.
 
-    Echoes the resolved window to stderr, which is what makes a misparse
-    visible: ``dateparser`` reads a bare ``"a"`` as a date rather than
-    refusing it.
+    Echoes the resolved window to stderr,
+    which is what makes a misparse visible:
+    ``dateparser`` reads a bare ``"a"`` as a date rather than refusing it.
 
     Raises:
-        DataShapeError: If the window's ``--duration`` or bounds cannot be
-            parsed.
+        DataShapeError: If the window's ``--duration`` or bounds
+            cannot be parsed.
     """
     tz = parse_timezone(args.timezone)
 
@@ -184,10 +185,9 @@ def _format_reporting_window(start: datetime, end: datetime, tz: tzinfo) -> str:
 def _format_window_length(length: timedelta) -> str:
     """Render a window's length in whole days, or in hours below a day.
 
-    Days alone would report a half-day window as ``0 days``, so a shorter
-    one borrows the ``H:MM`` rendering of
-    :class:`app.reports.model.Duration` rather than growing a duration
-    formatter of its own.
+    Days alone would report a half-day window as ``0 days``, so a shorter one
+    borrows the ``H:MM`` rendering of :class:`app.reports.model.Duration`
+    rather than growing a duration formatter of its own.
     """
     if length < timedelta(days=1):
         return f"{Duration(length.total_seconds()).display()} hours"
@@ -199,7 +199,7 @@ def get_strftime_fmt(args: argparse.Namespace) -> str:
     """Return the strftime format string for ``--date-format``.
 
     Only a command whose parser adds that argument may call this.
-    ``get-new-activity`` omits it and passes :data:`DATETIME_FMT`
-    itself, so ``get-new-users`` is the one caller.
+    ``get-new-activity`` omits it and passes :data:`DATETIME_FMT` itself,
+    so ``get-new-users`` is the one caller.
     """
     return DATE_FMT if args.date_format == "date" else DATETIME_FMT

@@ -1,11 +1,13 @@
 """Selecting newly created users and dating their first server.
 
-The user records come from JupyterHub; the first-server times come from
-the same server-snapshot documents the activity report reads.
-:class:`AdoptionSummary` combines the two, so that a report can say how
-many of the new users went on to use the hub. :class:`UserTally` says
-what shape of user list the hub answered with, which is what tells a
-quiet window apart from an endpoint or token that reached the wrong hub.
+The user records come from JupyterHub;
+the first-server times come from the same server-snapshot documents
+the activity report reads.
+:class:`AdoptionSummary` combines the two,
+so that a report can say how many of the new users went on to use the hub.
+:class:`UserTally` says what shape of user list the hub answered with,
+which is what tells a quiet window apart from an endpoint or token
+that reached the wrong hub.
 """
 
 import statistics
@@ -22,12 +24,13 @@ from app.usage.snapshots import snapshot_seconds, started_seconds
 class AdoptionSummary:
     """How many of a report's new users went on to start a server.
 
-    Counts are per new-user record rather than per distinct username, so
-    that *new_users* is the number of rows the report's table shows and
-    *started* and *never_started* sum to it.
+    Counts are per new-user record rather than per distinct username,
+    so that *new_users* is the number of rows the report's table shows
+    and *started* and *never_started* sum to it.
 
-    *median_seconds_to_first* is raw seconds, or ``None`` when no elapsed
-    time could be measured; formatting is the report builder's job.
+    *median_seconds_to_first* is raw seconds, or ``None``
+    when no elapsed time could be measured;
+    formatting is the report builder's job.
     """
 
     new_users: int = 0
@@ -41,9 +44,9 @@ class AdoptionSummary:
 class UserTally:
     """How many users the hub listed, and how many of them were new.
 
-    *undated* counts the users whose ``created`` value is missing or
-    unparsable, which no window can hold, so they are counted neither in
-    *in_window* nor anywhere else in a report.
+    *undated* counts the users
+    whose ``created`` value is missing or unparsable, which no window can hold,
+    so they are counted neither in *in_window* nor anywhere else in a report.
     """
 
     retrieved: int = 0
@@ -56,12 +59,13 @@ def _created_in_window(
 ) -> bool | None:
     """Return whether a user was created within ``[start, end)``.
 
-    The rule lives here alone, so that :func:`filter_new_users` and
-    :func:`tally_users` cannot disagree about which users are new.
+    The rule lives here alone,
+    so that :func:`filter_new_users` and :func:`tally_users`
+    cannot disagree about which users are new.
 
     Returns:
-        ``None`` when the user's ``created`` value is missing or
-        unparsable, since no window can then be said to hold it.
+        ``None`` when the user's ``created`` value is missing or unparsable,
+        since no window can then be said to hold it.
     """
     created = parse_iso_utc(user.get("created"))
     if created is None:
@@ -76,9 +80,10 @@ def filter_new_users(
 ) -> list[dict[str, Any]]:
     """Filter users created within the half-open window ``[start, end)``.
 
-    The window excludes its own end, matching
-    :func:`~app.usage.snapshots.build_query`, so that back-to-back
-    reports do not both count a user created on their shared boundary.
+    The window excludes its own end,
+    matching :func:`~app.usage.snapshots.build_query`,
+    so that back-to-back reports do not both count a user created
+    on their shared boundary.
     Users whose ``created`` value is missing or unparsable are skipped;
     :func:`tally_users` is what counts those.
     """
@@ -115,11 +120,13 @@ def compute_first_server(
 ) -> dict[str, int]:
     """Find each user's earliest server start, in epoch seconds.
 
-    The time comes from the earliest ``server.started`` seen for that
-    user. A snapshot taken while the server was still spawning carries
-    no ``server.started``, so those fall back to ``meta.snapshot-time``,
-    which is late by at most one push interval. Documents with neither,
-    or without a usable ``user.name``, are silently skipped.
+    The time comes from the earliest ``server.started`` seen for that user.
+    A snapshot taken while the server was still spawning
+    carries no ``server.started``,
+    so those fall back to ``meta.snapshot-time``,
+    which is late by at most one push interval.
+    Documents with neither, or without a usable ``user.name``,
+    are silently skipped.
     """
     earliest: dict[str, int] = {}
 
@@ -147,24 +154,27 @@ def summarize_adoption(
 ) -> AdoptionSummary:
     """Summarize how many new users went on to start a server.
 
-    *users* holds the records :func:`filter_new_users` returns and
-    *first_server* the mapping :func:`compute_first_server` returns; a
-    user absent from the mapping never started a server. Same-day starts
-    are judged in *tz*, the zone the report renders its timestamps in, so
-    the count cannot contradict the table the reader is looking at.
+    *users* holds the records :func:`filter_new_users` returns
+    and *first_server* the mapping :func:`compute_first_server` returns;
+    a user absent from the mapping never started a server.
+    Same-day starts are judged in *tz*,
+    the zone the report renders its timestamps in,
+    so the count cannot contradict the table the reader is looking at.
 
-    An elapsed time is floored at zero. :func:`compute_first_server`
-    falls back to a snapshot time, and the search that feeds it opens at
-    the start of the reporting window rather than at each user's own
-    creation, so a first server can be dated just before the user it
-    belongs to. Reading that as an immediate start keeps the median over
-    exactly the users *started* counts, which discarding it would not.
+    An elapsed time is floored at zero.
+    :func:`compute_first_server` falls back to a snapshot time,
+    and the search that feeds it opens at the start of the reporting window
+    rather than at each user's own creation,
+    so a first server can be dated just before the user it belongs to.
+    Reading that as an immediate start keeps the median over exactly the users
+    *started* counts, which discarding it would not.
 
-    A record whose ``created`` value is unparsable still counts as a new
-    user, and as having started a server when the mapping holds it, but
-    contributes to neither the same-day count nor the median: nothing
-    places it in time. The median is therefore ``None`` whenever no
-    elapsed time could be measured, not only when nobody started.
+    A record whose ``created`` value is unparsable still counts as a new user,
+    and as having started a server when the mapping holds it,
+    but contributes to neither the same-day count nor the median:
+    nothing places it in time.
+    The median is therefore ``None``
+    whenever no elapsed time could be measured, not only when nobody started.
     """
     total = 0
     started = 0

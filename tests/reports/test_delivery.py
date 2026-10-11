@@ -150,8 +150,8 @@ def test_deliver_report_reports_a_failed_send(
 ) -> None:
     """A refused or timed-out send is an exit code, not a traceback.
 
-    The files were written before the send was attempted, so they are
-    not lost to it.
+    The files were written before the send was attempted,
+    so they are not lost to it.
     """
 
     def _fail(host: str, port: int, timeout: float) -> Any:
@@ -303,8 +303,8 @@ def test_one_entry_may_carry_several_mailboxes(
 ) -> None:
     """Entries are parsed, not counted, so a list in one reaches everyone.
 
-    ``--recipient-email`` accepts a list in a single occurrence, which
-    arrives here as one entry holding two mailboxes.
+    ``--recipient-email`` accepts a list in a single occurrence,
+    which arrives here as one entry holding two mailboxes.
     """
     sent = _capture_smtp(monkeypatch)
     config = _email(recipients=("Ops <a@example.org>, b@example.org",))
@@ -337,10 +337,10 @@ def test_a_quoted_display_name_keeps_its_quotes_and_its_address(
 def test_a_non_ascii_display_name_is_encoded_but_its_address_is_not() -> None:
     """Encoding the mailbox whole would bury the address in the word.
 
-    The choice between base64 and quoted-printable is the shortest of
-    the two for the name at hand, so the test asserts what has to hold
-    of either: the header is ASCII, the address is still readable in
-    it, and the name decodes back to what was given.
+    The choice between base64 and quoted-printable is the shortest of the two
+    for the name at hand, so the test asserts what has to hold of either:
+    the header is ASCII, the address is still readable in it,
+    and the name decodes back to what was given.
     """
     message = _addressed_to(["exämple Ops <ops@example.org>"])
     header = message["To"]
@@ -357,9 +357,8 @@ def test_one_unreadable_recipient_does_not_cost_the_others_their_copy(
 ) -> None:
     """Parsing the entries as one field would drop every one of them.
 
-    An unbalanced quote passes the CLI's per-entry check, so it can
-    reach here; parsing each entry on its own keeps the damage to the
-    entry that caused it.
+    An unbalanced quote passes the CLI's per-entry check, so it can reach here;
+    parsing each entry on its own keeps the damage to the entry that caused it.
     """
     sent = _capture_smtp(monkeypatch)
     config = _email(recipients=('"Doe <a@example.org>', "b@example.org"))
@@ -373,8 +372,8 @@ def test_one_unreadable_recipient_does_not_cost_the_others_their_copy(
 def test_an_anonymized_report_leaks_no_identifier_in_any_format() -> None:
     """The pseudonyms exist to keep raw identifiers out of every output.
 
-    One session never started and half the users never did either, so
-    that every user table of both reports holds a row.
+    One session never started and half the users never did either,
+    so that every user table of both reports holds a row.
     """
     names = ["alice@x.edu", "eppn:alice@x.edu", "orcid:0009-0008-3064-0494", "svc-account"]
     activity = build_activity_report(

@@ -19,10 +19,10 @@ from app.usage.activity import (
 
 CHICAGO = ZoneInfo("America/Chicago")
 
-# The reporting window the tests summarize over: the local day that the
-# default snapshot falls on, so that the days it fills are the one day
-# under test. A test whose subject is the window itself passes its own
-# bounds.
+# The reporting window the tests summarize over:
+# the local day that the default snapshot falls on,
+# so that the days it fills are the one day under test.
+# A test whose subject is the window itself passes its own bounds.
 START = datetime(2026, 6, 20, tzinfo=CHICAGO)
 END = datetime(2026, 6, 21, tzinfo=CHICAGO)
 
@@ -76,8 +76,8 @@ def test_a_session_is_gpu_if_any_of_its_snapshots_is() -> None:
         {"server.user_options.resources": "cpu_and_gpu"},
         {"server.user_options.profile": "Large GPU node"},
         # An accepted limit of the word-anywhere rule, not an oversight:
-        # a GPU-capable image, or a note that mentions a GPU, is
-        # indistinguishable from a request for one.
+        # a GPU-capable image, or a note that mentions a GPU,
+        # is indistinguishable from a request for one.
         {"server.user_options.image": "tensorflow-gpu:latest"},
         {
             "server.user_options.image": "tensorflow-gpu:latest",
@@ -303,9 +303,8 @@ def test_concurrency_counts_documents_sharing_a_snapshot_time() -> None:
 def test_concurrency_keeps_two_hubs_apart_at_one_snapshot_time() -> None:
     """Hubs whose pushes coincide must not read as one busier hub.
 
-    Grouping on the hub as well as the time is what makes the figures
-    the same whether or not two schedules happen to fire in the same
-    second.
+    Grouping on the hub as well as the time is what makes the figures the same
+    whether or not two schedules happen to fire in the same second.
     """
     docs = [
         _doc(snapshot=1000, hub="a"),
@@ -374,9 +373,9 @@ def test_the_summary_carries_the_length_of_its_own_window(
 def test_the_window_length_is_elapsed_time_across_dst() -> None:
     """Two local days around spring-forward are 47 hours, not 48.
 
-    The durations in the table are summed push intervals, so the length
-    they are read against, and the mean taken over it, measure time the
-    same way.
+    The durations in the table are summed push intervals,
+    so the length they are read against, and the mean taken over it,
+    measure time the same way.
     """
     start = datetime(2026, 3, 7, tzinfo=CHICAGO)
     end = datetime(2026, 3, 9, tzinfo=CHICAGO)
@@ -389,8 +388,8 @@ def test_the_window_length_is_elapsed_time_across_dst() -> None:
 def test_an_inverted_window_is_carried_as_no_length() -> None:
     """A summary must not hold a window its own figures deny.
 
-    The window mean already reads such a window as no window, so the
-    length it is measured against reads the same way.
+    The window mean already reads such a window as no window,
+    so the length it is measured against reads the same way.
     """
     summary = summarize_activity([], [], CHICAGO, START, START - timedelta(hours=1))
     assert summary.window_seconds == 0.0
@@ -507,8 +506,8 @@ def test_per_day_walks_calendar_days_across_a_dst_transition(
 def test_a_window_holding_no_instant_covers_no_day(length: timedelta) -> None:
     """A window of no length, or an inverted one, has no day to report.
 
-    Both read as no window everywhere else in the summary, so neither
-    gets a row of its own here.
+    Both read as no window everywhere else in the summary,
+    so neither gets a row of its own here.
     """
     start = _midnight(7, 2)
     assert not summarize_activity([], [], CHICAGO, start, start + length).per_day_seconds

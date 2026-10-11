@@ -96,8 +96,8 @@ def _validate_arguments(
     """Run post-parse argument validation."""
     validate_jupyterhub_arguments(args, parser)
 
-    # --debug excuses a complete Elasticsearch group, but not a flag that
-    # would be useless even without it.
+    # --debug excuses a complete Elasticsearch group,
+    # but not a flag that would be useless even without it.
     reject_es_flags_without_endpoint(args, parser)
     if not args.debug:
         if not args.es_endpoint:

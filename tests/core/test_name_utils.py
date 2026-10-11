@@ -37,8 +37,8 @@ def test_parse_name_recognizes_the_documented_forms(
 def test_parse_name_prefers_orcid_over_the_bare_eppn_form() -> None:
     """An ORCID value containing "@" is still an ORCID, not a NetID.
 
-    The bare ``{id}@{domain}`` pattern would otherwise claim it and report
-    the prefix as part of the identifier.
+    The bare ``{id}@{domain}`` pattern would otherwise claim it
+    and report the prefix as part of the identifier.
     """
     parsed = parse_name("orcid:abc@example.org")
     assert (parsed.domain, parsed.uid, parsed.login_method) == (

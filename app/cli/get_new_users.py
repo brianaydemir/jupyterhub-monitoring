@@ -25,13 +25,14 @@ from app.reports.delivery import deliver_report
 from app.usage.new_users import UserTally, compute_first_server, filter_new_users, tally_users
 from app.usage.snapshots import build_query, select_hub
 
-# The data this report draws on. Shared by the parser and the validator
+# The data this report draws on.
+# Shared by the parser and the validator
 # so that the two cannot disagree about which arguments exist.
 _SOURCES: Final = (JUPYTERHUB_SOURCE, OPTIONAL_ELASTICSEARCH_SOURCE)
 
-# The fixed part of the default email subject, which the run completes
-# with the reporting window. Shared with the parser, whose help for
-# ``--subject`` names it.
+# The fixed part of the default email subject,
+# which the run completes with the reporting window.
+# Shared with the parser, whose help for ``--subject`` names it.
 _SUBJECT_PREFIX: Final = "JupyterHub New Users Report"
 
 
@@ -81,9 +82,9 @@ def _validate_arguments(
 ) -> None:
     """Run post-parse argument validation.
 
-    ``--hub`` scopes the Elasticsearch lookup alone, so passing it
-    without ``--es-endpoint`` is an error rather than a filter that
-    silently does nothing.
+    ``--hub`` scopes the Elasticsearch lookup alone,
+    so passing it without ``--es-endpoint`` is an error rather than a filter
+    that silently does nothing.
     """
     validate_report_arguments(args, parser, sources=_SOURCES)
     if args.hub is not None and args.es_endpoint is None:
@@ -93,10 +94,10 @@ def _validate_arguments(
 def _format_user_tally(tally: UserTally) -> str:
     """Render the retrieved/new user diagnostic for stderr.
 
-    The total is what tells a quiet window apart from an endpoint or
-    token that reached a hub with few or no users on it. Users with no
-    creation time are mentioned only when there are some, as
-    ``get-new-activity`` mentions skipped documents.
+    The total is what tells a quiet window apart from an endpoint or token
+    that reached a hub with few or no users on it.
+    Users with no creation time are mentioned only when there are some,
+    as ``get-new-activity`` mentions skipped documents.
     """
     noun = "user" if tally.retrieved == 1 else "users"
     retrieved = f"Retrieved {tally.retrieved} {noun}"
@@ -111,10 +112,10 @@ def _format_user_tally(tally: UserTally) -> str:
 def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
-    Elasticsearch is consulted for first-server times only when
-    ``--es-endpoint`` was given. The user tally leads the report, and
-    also goes to stderr, where a scheduled run's log keeps it apart from
-    the report on stdout.
+    Elasticsearch is consulted for first-server times
+    only when ``--es-endpoint`` was given.
+    The user tally leads the report, and also goes to stderr,
+    where a scheduled run's log keeps it apart from the report on stdout.
 
     Raises:
         ExternalServiceError: If listing users or querying Elasticsearch
@@ -159,14 +160,15 @@ def _query_first_server(
 ) -> dict[str, int]:
     """Query Elasticsearch for each new user's first server-start time.
 
-    Searches from *start_time* through now: a user created inside the
-    reporting window cannot have started a server before being created, so
-    this captures their true first start even if it occurred after the
-    window closed. A snapshot taken before *start_time* is not visible.
+    Searches from *start_time* through now:
+    a user created inside the reporting window cannot have started a server
+    before being created, so this captures their true first start
+    even if it occurred after the window closed.
+    A snapshot taken before *start_time* is not visible.
 
-    ``--hub`` scopes the search the same way it does for
-    ``get-new-activity``, so on a multi-hub index the column reports a
-    user's first server on that hub rather than anywhere in the index.
+    ``--hub`` scopes the search the same way it does for ``get-new-activity``,
+    so on a multi-hub index the column reports a user's first server
+    on that hub rather than anywhere in the index.
 
     Raises:
         ExternalServiceError: If Elasticsearch querying fails.

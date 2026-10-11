@@ -8,8 +8,8 @@ from datetime import datetime, tzinfo
 class FrozenClock:
     """Answers :meth:`now` with a fixed instant.
 
-    Substituted for the ``datetime`` name inside a module under test, which
-    is enough for code that only calls ``datetime.now(tz)``.
+    Substituted for the ``datetime`` name inside a module under test,
+    which is enough for code that only calls ``datetime.now(tz)``.
     """
 
     instant: datetime

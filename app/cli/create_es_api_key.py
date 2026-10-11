@@ -17,9 +17,10 @@ def _format_encoded_key(result: dict[str, Any]) -> str:
     """Format a created key as the encoded secret alone.
 
     Raises:
-        DataShapeError: If the response carries no encoded key. Printing
-            an empty string and exiting 0 would hand a shell pipeline an
-            empty secret while reporting success.
+        DataShapeError: If the response carries no encoded key.
+            Printing an empty string and exiting 0
+            would hand a shell pipeline an empty secret
+            while reporting success.
     """
     encoded = result.get("encoded")
     if not isinstance(encoded, str) or not encoded:
@@ -68,9 +69,10 @@ _ES_TIME_VALUE = re.compile(r"(\d+)(nanos|micros|ms|d|h|m|s)", re.IGNORECASE)
 def _expiration(value: str) -> str | None:
     """Parse ``--expiration`` into what the client sends.
 
-    ``"never"`` becomes ``None``, which omits the field and leaves the
-    key with no expiry. Anything else must be a positive Elasticsearch
-    time value, checked here so that a typo fails before a key is minted
+    ``"never"`` becomes ``None``, which omits the field
+    and leaves the key with no expiry.
+    Anything else must be a positive Elasticsearch time value,
+    checked here so that a typo fails before a key is minted
     rather than after its secret has been printed.
 
     Raises:

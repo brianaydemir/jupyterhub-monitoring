@@ -1,9 +1,10 @@
 """Tests for :mod:`app.cli.push_servers`.
 
-The pipeline itself lives in :mod:`app.usage.push` and is covered by
-``tests/usage/test_push.py``. What is left here is the command's own
-post-parse validation, which decides what ``--debug`` excuses, and the
-exit code and sink its run chooses.
+The pipeline itself lives in :mod:`app.usage.push`
+and is covered by ``tests/usage/test_push.py``.
+What is left here is the command's own post-parse validation,
+which decides what ``--debug`` excuses,
+and the exit code and sink its run chooses.
 """
 
 # This module exercises the command's parser and validator directly.

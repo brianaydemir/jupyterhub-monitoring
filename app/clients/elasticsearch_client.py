@@ -13,14 +13,15 @@ from app.core.errors import ExternalServiceError
 
 _SCROLL_TIMEOUT = "2m"
 
-# Documents per scroll page. Snapshot documents are small, so a large
-# page keeps a full-index export to a few hundred round trips.
+# Documents per scroll page.
+# Snapshot documents are small, so a large page keeps a full-index export
+# to a few hundred round trips.
 _DEFAULT_PAGE_SIZE = 5000
 
-# Client-side wait, in seconds, for a bulk request. The transport's
-# ten-second default is tight for a whole batch, and a request that times
-# out has probably been applied anyway, so its documents would be
-# miscounted as failures.
+# Client-side wait, in seconds, for a bulk request.
+# The transport's ten-second default is tight for a whole batch,
+# and a request that times out has probably been applied anyway,
+# so its documents would be miscounted as failures.
 _BULK_TIMEOUT = 30
 
 
@@ -28,10 +29,11 @@ _BULK_TIMEOUT = 30
 def _translating(operation: str) -> Iterator[None]:
     """Re-raise an Elasticsearch failure as an :class:`ExternalServiceError`.
 
-    *operation* names what was being attempted, so each method reports
-    itself and callers do not have to translate at their own boundary.
-    ``ApiError`` and ``TransportError`` are the two roots of the client
-    library's hierarchy, so between them they cover every remote failure.
+    *operation* names what was being attempted, so each method reports itself
+    and callers do not have to translate at their own boundary.
+    ``ApiError`` and ``TransportError``
+    are the two roots of the client library's hierarchy,
+    so between them they cover every remote failure.
 
     Raises:
         ExternalServiceError: If the wrapped block fails.
@@ -81,8 +83,8 @@ class ElasticsearchClient:
     ) -> dict[str, Any]:
         """Upload a single document to an Elasticsearch index.
 
-        Provided for a caller with one document to store; ``push-servers``
-        sends whole batches through :meth:`upload_documents`.
+        Provided for a caller with one document to store;
+        ``push-servers`` sends whole batches through :meth:`upload_documents`.
 
         Raises:
             ExternalServiceError: If Elasticsearch rejects the document,
@@ -101,23 +103,25 @@ class ElasticsearchClient:
     ) -> list[dict[str, Any]]:
         """Upload documents to an Elasticsearch index in one bulk request.
 
-        Each pair is a document and the id to store it under; a *None*
-        id lets Elasticsearch assign one. The operation is ``index``, so
-        a repeated id overwrites the document already there instead of
-        conflicting with it.
+        Each pair is a document and the id to store it under;
+        a *None* id lets Elasticsearch assign one.
+        The operation is ``index``,
+        so a repeated id overwrites the document already there
+        instead of conflicting with it.
 
         Returns one result per document, in the order they were given,
-        each carrying that item's ``status`` and either a ``result`` or
-        an ``error``. A document Elasticsearch rejects is described in
-        its own result rather than raised, which is what lets a caller
-        count it and still keep the rest of the batch. Only a failure of
-        the request as a whole raises, and a request that times out may
-        have been applied regardless, so a caller's count of what it
-        stored is a lower bound.
+        each carrying that item's ``status``
+        and either a ``result`` or an ``error``.
+        A document Elasticsearch rejects is described in its own result
+        rather than raised, which is what lets a caller count it
+        and still keep the rest of the batch.
+        Only a failure of the request as a whole raises,
+        and a request that times out may have been applied regardless,
+        so a caller's count of what it stored is a lower bound.
 
         Raises:
-            ExternalServiceError: If the request fails, or the response
-                does not describe every document.
+            ExternalServiceError: If the request fails,
+                or the response does not describe every document.
         """
         if not documents:
             return []
@@ -141,8 +145,8 @@ class ElasticsearchClient:
                 f"Bulk-uploading documents to Elasticsearch failed: {counted}"
             )
 
-        # Every item is keyed by the operation it answers, and the only
-        # operation this method sends is ``index``.
+        # Every item is keyed by the operation it answers,
+        # and the only operation this method sends is ``index``.
         return [cast(dict[str, Any], item.get("index", {})) for item in items]
 
     def query(
@@ -159,12 +163,12 @@ class ElasticsearchClient:
         Accepts either Query DSL (*query*) or query-string syntax
         (*query_string*); with neither, the query is ``match_all``.
         Results are streamed via scroll pagination in pages of *size*.
-        *limit* caps both the results yielded and the page size; a
-        *limit* of zero or less yields nothing.
+        *limit* caps both the results yielded and the page size;
+        a *limit* of zero or less yields nothing.
 
-        Because this is a generator, no request is made until it is
-        first iterated, and failures surface there rather than at the
-        call that created it.
+        Because this is a generator, no request is made
+        until it is first iterated, and failures surface there
+        rather than at the call that created it.
 
         Raises:
             ExternalServiceError: If a search or scroll request fails.
@@ -211,9 +215,9 @@ class ElasticsearchClient:
                         scroll_id=scroll_id,
                         scroll=_SCROLL_TIMEOUT,
                     )
-                # Elasticsearch may reuse the id and omit it from the
-                # response. Overwriting it with None would both break the
-                # next scroll and skip the cleanup below.
+                # Elasticsearch may reuse the id and omit it from the response.
+                # Overwriting it with None would both break the next scroll
+                # and skip the cleanup below.
                 scroll_id = response.get("_scroll_id") or scroll_id
                 hits = response["hits"]["hits"]
 
@@ -257,14 +261,15 @@ class ElasticsearchClient:
     ) -> dict[str, Any]:
         """Create an Elasticsearch API key.
 
-        Without *key_name* the key is named ``api-key-{username}``, or
-        ``api-key`` when no *username* is given. A *username* is also
-        recorded as ``created_by`` metadata on the key.
+        Without *key_name* the key is named ``api-key-{username}``,
+        or ``api-key`` when no *username* is given.
+        A *username* is also recorded as ``created_by`` metadata on the key.
 
-        No ``role_descriptors`` are sent, deliberately, so the key
-        carries every privilege of the authenticated user. Narrow such a
-        key by creating it as an account that already holds only the
-        privileges it needs, rather than as a superuser.
+        No ``role_descriptors`` are sent, deliberately,
+        so the key carries every privilege of the authenticated user.
+        Narrow such a key by creating it as an account
+        that already holds only the privileges it needs,
+        rather than as a superuser.
 
         Raises:
             ExternalServiceError: If the request fails.
@@ -287,13 +292,13 @@ class ElasticsearchClient:
     ) -> dict[str, Any]:
         """Invalidate an Elasticsearch API key.
 
-        Exactly one of *key_id* or *key_name* must be
-        provided. The request is scoped to the
-        authenticated user's own keys (``owner=True``).
+        Exactly one of *key_id* or *key_name* must be provided.
+        The request is scoped to the authenticated user's own keys
+        (``owner=True``).
 
         Raises:
-            ValueError: If neither or both of
-                *key_id* / *key_name* are provided.
+            ValueError: If neither or both of *key_id* / *key_name*
+                are provided.
             ExternalServiceError: If the request fails.
         """
         if key_id is None and key_name is None:

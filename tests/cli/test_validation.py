@@ -1,9 +1,9 @@
 """Tests for :mod:`app.cli.validation`.
 
-Every helper under test reports through ``parser.error``, which prints
-usage and raises ``SystemExit(2)``. Each case therefore asserts on the
-exit status and on the message a user would see, since those messages are
-the module's entire output.
+Every helper under test reports through ``parser.error``,
+which prints usage and raises ``SystemExit(2)``.
+Each case therefore asserts on the exit status and on the message
+a user would see, since those messages are the module's entire output.
 """
 
 import argparse
@@ -29,9 +29,10 @@ from tests.helpers.clock import FrozenClock
 
 Validator = Callable[[argparse.Namespace, argparse.ArgumentParser], None]
 
-# The moment the future-end cases are measured against. It is in the
-# zone ``_query_args`` defaults to, so an offset from it can be written
-# as a bare datetime and read back in the same zone.
+# The moment the future-end cases are measured against.
+# It is in the zone ``_query_args`` defaults to,
+# so an offset from it can be written as a bare datetime
+# and read back in the same zone.
 NOW = datetime(2026, 7, 8, 14, 30, tzinfo=ZoneInfo("America/Chicago"))
 
 
@@ -288,9 +289,9 @@ def _query_args(
 def _freeze(monkeypatch: pytest.MonkeyPatch) -> None:
     """Freeze both clocks a window is measured against, at :data:`NOW`.
 
-    The future-end check reads this module's, and the snap
-    ``--whole-days`` applies reads :mod:`app.core.time_utils`'s, so a
-    case that exercises both has to hold the two together.
+    The future-end check reads this module's,
+    and the snap ``--whole-days`` applies reads :mod:`app.core.time_utils`'s,
+    so a case that exercises both has to hold the two together.
     """
     monkeypatch.setattr(validation, "datetime", FrozenClock(NOW))
     monkeypatch.setattr(time_utils, "datetime", FrozenClock(NOW))
@@ -411,8 +412,9 @@ def test_a_forward_range_is_accepted() -> None:
 def _end_offset_from_now(monkeypatch: pytest.MonkeyPatch, offset: timedelta) -> str:
     """Freeze the clock at :data:`NOW` and spell *offset* from it as an end.
 
-    The result is an absolute datetime, so only the reference the check
-    reads is frozen; parsing the bound itself consults no clock.
+    The result is an absolute datetime,
+    so only the reference the check reads is frozen;
+    parsing the bound itself consults no clock.
     """
     monkeypatch.setattr(validation, "datetime", FrozenClock(NOW))
     return (NOW + offset).strftime("%Y-%m-%d %H:%M:%S")
@@ -425,8 +427,9 @@ def test_a_future_report_end_is_rejected(
 ) -> None:
     """No data can exist for a window reaching past the present.
 
-    Both values parse and both run forwards from the start, so this check
-    is the only thing standing between the typo and a wrong report.
+    Both values parse and both run forwards from the start,
+    so this check is the only thing
+    standing between the typo and a wrong report.
     """
     message = _reject(
         validate_query_arguments,
@@ -440,10 +443,10 @@ def test_a_future_report_end_is_rejected(
 def test_a_report_end_of_now_is_accepted() -> None:
     """The documented ``now`` must pass reliably, not most of the time.
 
-    It is resolved here and again in
-    :func:`app.cli.factories.compute_report_time_range`, and the reference
-    it is compared against is read later still, so no two of those answers
-    are the same instant.
+    It is resolved
+    here and again in :func:`app.cli.factories.compute_report_time_range`,
+    and the reference it is compared against is read later still,
+    so no two of those answers are the same instant.
     """
     _accept(
         validate_query_arguments,
@@ -525,8 +528,9 @@ def test_a_whole_days_window_ending_today_is_not_a_future_end(
 ) -> None:
     """The snap stops at the last midnight, so it cannot outrun the check.
 
-    Widening this end to tomorrow's midnight would put the window hours
-    into the future and fail a legitimate command line.
+    Widening this end to tomorrow's midnight
+    would put the window hours into the future
+    and fail a legitimate command line.
     """
     _freeze(monkeypatch)
     _accept(
@@ -599,8 +603,9 @@ def _email_args(
 ) -> argparse.Namespace:
     """Build the namespace :func:`validate_email_arguments` reads.
 
-    ``--recipient-email`` collects a list, so *recipient_email* is a
-    sequence here; ``None`` is the flag having been left out.
+    ``--recipient-email`` collects a list,
+    so *recipient_email* is a sequence here;
+    ``None`` is the flag having been left out.
     """
     return argparse.Namespace(
         send_email=send_email,

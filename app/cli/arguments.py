@@ -1,8 +1,8 @@
 """The argument groups a command adds to its parser.
 
-Each helper here only declares arguments. Checking what was parsed is
-:mod:`app.cli.validation`'s job, and reading values back out of the
-namespace is :mod:`app.cli.factories`'s.
+Each helper here only declares arguments.
+Checking what was parsed is :mod:`app.cli.validation`'s job,
+and reading values back out of the namespace is :mod:`app.cli.factories`'s.
 """
 
 import argparse
@@ -11,16 +11,15 @@ from email.utils import getaddresses
 from pathlib import Path
 from typing import cast
 
-# argparse keeps its argument-group types private, but the helpers below
-# need them in their signatures. Aliasing them here keeps the linter
-# suppressions to these two lines.
+# argparse keeps its argument-group types private,
+# but the helpers below need them in their signatures.
+# Aliasing them here keeps the linter suppressions to these two lines.
 # pylint: disable=protected-access
 type ArgumentGroup = argparse._ArgumentGroup  # pyright: ignore[reportPrivateUsage]
 type ActionsContainer = argparse._ActionsContainer  # pyright: ignore[reportPrivateUsage]
 # pylint: enable=protected-access
 
-# The parser behind ``To:``, which ``_recipient`` uses to detect group
-# syntax.
+# The parser behind ``To:``, which ``_recipient`` uses to detect group syntax.
 _HEADERS = HeaderRegistry()
 
 
@@ -29,10 +28,10 @@ def add_jupyterhub_argument_group(
 ) -> ArgumentGroup:
     """Add a "JupyterHub API" argument group and return it.
 
-    Every ``add_*_argument_group`` helper returns its group so a command
-    can add further arguments to it, as the report commands do with
-    :func:`add_hub_argument`. Callers with nothing to add may ignore the
-    return value.
+    Every ``add_*_argument_group`` helper returns its group
+    so a command can add further arguments to it,
+    as the report commands do with :func:`add_hub_argument`.
+    Callers with nothing to add may ignore the return value.
     """
     hub_group = parser.add_argument_group("JupyterHub API")
     hub_group.add_argument(
@@ -191,10 +190,10 @@ def add_output_argument_group(
 ) -> ArgumentGroup:
     """Add report output-format arguments and return the group.
 
-    Clearing *include_date_format* leaves ``--date-format`` out, for a
-    report whose timestamps identify a row rather than merely date it.
-    Such a command must also stop reading ``args.date_format``, which is
-    then absent from the namespace.
+    Clearing *include_date_format* leaves ``--date-format`` out,
+    for a report whose timestamps identify a row rather than merely date it.
+    Such a command must also stop reading ``args.date_format``,
+    which is then absent from the namespace.
     """
     output_group = parser.add_argument_group("Output")
     output_group.add_argument(
@@ -251,31 +250,34 @@ def add_output_argument_group(
 def _recipient(value: str) -> str:
     """Check that one ``--recipient-email`` value names usable mailboxes.
 
-    The value is written as a ``To:`` header writes it, so it may list
-    several mailboxes. It is returned as typed, stripped; rendering it
-    is :func:`app.reports.email_utils.create_message`'s job.
+    The value is written as a ``To:`` header writes it,
+    so it may list several mailboxes.
+    It is returned as typed, stripped;
+    rendering it is :func:`app.reports.email_utils.create_message`'s job.
 
-    ``getaddresses`` is too forgiving to trust on its own: a malformed
-    value yields an empty address, a quoted ``"a@host, b@host"`` yields
-    one address holding a comma, and a bare display name yields its
-    first word. Requiring an ``@`` and no comma in every address catches
-    all three, and also refuses a local name such as ``root``.
+    ``getaddresses`` is too forgiving to trust on its own:
+    a malformed value yields an empty address,
+    a quoted ``"a@host, b@host"`` yields one address holding a comma,
+    and a bare display name yields its first word.
+    Requiring an ``@`` and no comma in every address catches all three,
+    and also refuses a local name such as ``root``.
 
-    Group syntax (``Team: a@host, b@host;``) is refused, since the group
-    name would be dropped. ``getaddresses`` cannot see a group, so the
-    header registry parses the value a second time to find one.
+    Group syntax (``Team: a@host, b@host;``) is refused,
+    since the group name would be dropped.
+    ``getaddresses`` cannot see a group,
+    so the header registry parses the value a second time to find one.
 
     Raises:
-        argparse.ArgumentTypeError: If the value names no mailbox, names
-            one whose address is unreadable, or is written as a group.
+        argparse.ArgumentTypeError: If the value names no mailbox,
+            names one whose address is unreadable, or is written as a group.
     """
     mailboxes = getaddresses([value])
     unreadable = any("@" not in address or "," in address for _, address in mailboxes)
     if not mailboxes or unreadable:
         raise argparse.ArgumentTypeError(f"could not read a recipient from {value!r}")
-    # ``HeaderRegistry`` builds its header classes at run time, so it is
-    # typed as returning the base class; ``To`` is an address header,
-    # and only those carry ``groups``.
+    # ``HeaderRegistry`` builds its header classes at run time,
+    # so it is typed as returning the base class;
+    # ``To`` is an address header, and only those carry ``groups``.
     header = cast(AddressHeader, _HEADERS("To", value))
     if any(group.display_name is not None for group in header.groups):
         raise argparse.ArgumentTypeError(f"group syntax is not supported in {value!r}")
@@ -291,15 +293,15 @@ def add_email_arguments(
     """Add email-related arguments to a parser or argument group.
 
     *subject_prefix* is the fixed part of the default subject line,
-    which :func:`app.cli.factories.make_output_targets` completes with
-    the reporting window. ``--subject`` therefore defaults to ``None``
-    rather than to a string: a parser is built before the window is
-    resolved, and a literal default could not be told apart from the
-    same text typed out.
+    which :func:`app.cli.factories.make_output_targets` completes
+    with the reporting window.
+    ``--subject`` therefore defaults to ``None`` rather than to a string:
+    a parser is built before the window is resolved,
+    and a literal default could not be told apart from the same text typed out.
 
-    With *required* set, the connection arguments become mandatory and
-    their help text drops the "(required with --send-email)" note. The
-    report commands gate them on ``--send-email`` instead
+    With *required* set, the connection arguments become mandatory
+    and their help text drops the "(required with --send-email)" note.
+    The report commands gate them on ``--send-email`` instead
     (:func:`app.cli.validation.validate_email_arguments`),
     so they leave it unset.
     """
@@ -376,9 +378,9 @@ def add_format_argument(
 ) -> None:
     """Add the ``--format`` argument the API-key commands share.
 
-    Only what the ``key`` format prints differs between them, so that is
-    all a caller supplies: *key_format_summary* is spliced into the help
-    text (for example, ``"encoded key only"``).
+    Only what the ``key`` format prints differs between them,
+    so that is all a caller supplies: *key_format_summary* is spliced
+    into the help text (for example, ``"encoded key only"``).
     """
     parser.add_argument(
         "--format",

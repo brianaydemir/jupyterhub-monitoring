@@ -13,9 +13,10 @@ from email.utils import formataddr, formatdate, getaddresses, make_msgid
 
 from app.reports.model import ReportAttachment
 
-# Seconds to wait on the SMTP server before giving up, so that a relay
-# that stops answering fails a scheduled run instead of hanging it. This
-# also bounds sending the whole message, attachments included.
+# Seconds to wait on the SMTP server before giving up,
+# so that a relay that stops answering fails a scheduled run
+# instead of hanging it.
+# This also bounds sending the whole message, attachments included.
 _SMTP_TIMEOUT = 60
 
 
@@ -23,9 +24,10 @@ _SMTP_TIMEOUT = 60
 class EmailConfig:
     """The settings a report email is composed and sent with.
 
-    *recipients* holds at least one entry, each of them one or more
-    ``To:`` header mailboxes as they were typed: a bare address, an
-    address with a display name, or a comma-separated list of either.
+    *recipients* holds at least one entry,
+    each of them one or more ``To:`` header mailboxes as they were typed:
+    a bare address, an address with a display name,
+    or a comma-separated list of either.
     """
 
     sender_name: str | None
@@ -44,8 +46,8 @@ def _make_attachment_part(
 ) -> MIMEBase:
     """Create a base64-encoded MIME attachment part.
 
-    When *mime_type* is ``None``, the type is guessed from
-    *filename*, falling back to ``application/octet-stream``.
+    When *mime_type* is ``None``, the type is guessed from *filename*,
+    falling back to ``application/octet-stream``.
     """
     if mime_type is None:
         mime_type, _ = mimetypes.guess_type(filename)
@@ -107,10 +109,10 @@ def create_message(
 def _mailboxes(recipients: Sequence[str]) -> list[tuple[str, str]]:
     """Parse each recipient into a display name and an address.
 
-    An entry may name several mailboxes, so this returns a flat list
-    rather than one pair per entry. Each entry is parsed on its own, as
-    the CLI checked it: parsed together, one entry with an unbalanced
-    quote would swallow the entries after it.
+    An entry may name several mailboxes,
+    so this returns a flat list rather than one pair per entry.
+    Each entry is parsed on its own, as the CLI checked it: parsed together,
+    one entry with an unbalanced quote would swallow the entries after it.
     """
     return [mailbox for recipient in recipients for mailbox in getaddresses([recipient])]
 
@@ -119,9 +121,8 @@ def _format_recipients(recipients: Sequence[str]) -> str:
     """Render the ``To`` header for one or more recipients.
 
     Each entry is parsed and rendered again rather than passed through,
-    because the legacy email policy would encode a non-ASCII display
-    name together with its address; ``formataddr`` encodes the name
-    alone.
+    because the legacy email policy would encode a non-ASCII display name
+    together with its address; ``formataddr`` encodes the name alone.
     """
     return ", ".join(formataddr(mailbox) for mailbox in _mailboxes(recipients))
 
@@ -146,14 +147,13 @@ def send_email(
 ) -> None:
     """Send an email message via SMTP.
 
-    The envelope recipients are the bare addresses parsed out of
-    *recipients*. Pass a sequence even for one recipient: a bare string
-    would be read as one recipient per character.
+    The envelope recipients are the bare addresses parsed out of *recipients*.
+    Pass a sequence even for one recipient:
+    a bare string would be read as one recipient per character.
 
     Raises:
         OSError: If the SMTP connection fails or times out.
-        smtplib.SMTPException: If an SMTP-level error
-            occurs.
+        smtplib.SMTPException: If an SMTP-level error occurs.
     """
     to_addrs = [address for _, address in _mailboxes(recipients)]
     if use_ssl:
@@ -173,9 +173,9 @@ def send_report_email(
     """Build and send a report email with one or more attachments.
 
     Returns:
-        An exit code: 0 if the message was sent, 1 if it was not. The
-        failure is reported on stderr rather than raised, so that file
-        output already written is not discarded.
+        An exit code: 0 if the message was sent, 1 if it was not.
+        The failure is reported on stderr rather than raised,
+        so that file output already written is not discarded.
     """
     try:
         message = create_message(

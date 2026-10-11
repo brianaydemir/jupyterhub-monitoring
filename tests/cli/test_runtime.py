@@ -1,7 +1,7 @@
 """Tests for :mod:`app.cli.runtime`.
 
-Every command's ``main`` is one call to :func:`run_command`, so the exit
-codes documented in the README are decided here.
+Every command's ``main`` is one call to :func:`run_command`,
+so the exit codes documented in the README are decided here.
 """
 
 import argparse
