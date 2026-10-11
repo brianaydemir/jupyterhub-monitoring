@@ -81,7 +81,10 @@ Environment variables:
         "--metadata",
         action="append",
         metavar="KEY=VALUE",
-        help="Additional metadata to add to documents (can be specified multiple times)",
+        help=(
+            "Additional metadata to add to documents as meta.KEY (can be specified "
+            "multiple times); the report commands' --hub selects on hub=NAME"
+        ),
     )
     return parser
 

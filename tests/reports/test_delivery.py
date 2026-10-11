@@ -150,7 +150,7 @@ def test_deliver_report_reports_a_failed_send(
     """A refused or timed-out send is an exit code, not a traceback.
 
     The files were written before the send was attempted, so they are
-    not lost to it; the README promises as much under "Exit Codes".
+    not lost to it.
     """
 
     def _fail(host: str, port: int, timeout: float) -> Any:

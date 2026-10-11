@@ -42,6 +42,14 @@ INVERTING_UIDS = ("alice", "bob")
 # The footnote every section showing a duration carries.
 TIMES_NOTE = "Times are HH:MM."
 
+# The footnotes on how a report's window and activity figures are read.
+WINDOW_NOTE = "The reporting window includes its start and excludes its end."
+SNAPSHOT_NOTE = (
+    "Each snapshot of a running or starting server adds one snapshot interval to active time."
+)
+GPU_NOTE = "A session counts as GPU when one of its spawn options names a GPU."
+UNSTARTED_NOTE = 'A Started of "n/a" is a server seen only while it was still starting.'
+
 
 def test_new_users_report_has_the_documented_columns() -> None:
     """Without Elasticsearch, the report is Created plus the identity columns."""
@@ -120,7 +128,14 @@ def test_the_new_users_table_gains_no_unit_note() -> None:
         [_user("a@x.edu", "2026-07-02T10:00:00Z")],
         first_server={"a@x.edu": _epoch("2026-07-02T10:30:00Z")},
     )
-    assert _users_table_section(report).footnotes == ["Timezone: America/Chicago"]
+    assert _users_table_section(report).footnotes == [WINDOW_NOTE, "Timezone: America/Chicago"]
+
+
+def test_the_new_users_table_says_which_bounds_its_window_includes() -> None:
+    """The table states the window, so it also says how to read it."""
+    report = _users_report([_user("a@x.edu", "2026-07-02T10:00:00Z")], first_server={})
+    assert WINDOW_NOTE in _users_table_section(report).footnotes
+    assert WINDOW_NOTE not in report.sections[0].footnotes
 
 
 def test_adoption_counts_split_the_users_the_table_lists() -> None:
@@ -364,7 +379,7 @@ def test_reports_name_the_zone_of_their_own_window(tz_str: str) -> None:
         end_time=end,
         strftime_fmt="%Y-%m-%d %H:%M",
     )
-    assert users.sections[0].footnotes == [f"Timezone: {tz_str}"]
+    assert users.sections[0].footnotes == [WINDOW_NOTE, f"Timezone: {tz_str}"]
     assert activity.sections[-1].footnotes == [TIMES_NOTE, f"Timezone: {tz_str}"]
 
 
@@ -423,8 +438,8 @@ def test_activity_by_day_is_omitted_without_daily_data() -> None:
     assert [s.heading for s in report.sections] == ["Summary", "User Totals", "User Activity"]
 
 
-def test_summary_rows_are_in_the_documented_order() -> None:
-    """README lists these metrics in this order."""
+def test_summary_rows_keep_a_fixed_order() -> None:
+    """Pins the row order, so that changing it is a deliberate choice."""
     report = _activity_report(sessions=[], summary=ActivitySummary())
     assert [row[0] for row in _only_table(report, section=0).rows] == [
         "Reporting window",
@@ -553,11 +568,22 @@ def test_the_window_mean_is_not_rounded_away_on_an_idle_window() -> None:
 def test_summary_footnote_distinguishes_the_two_concurrency_means() -> None:
     """Labeling the rows is not enough; the report has to define them."""
     report = _activity_report([], ActivitySummary())
-    assert report.sections[0].footnotes == [
-        TIMES_NOTE,
+    assert report.sections[0].footnotes[-1] == (
         '"(active)" averages over snapshots that had at least one active'
-        + ' server; "(window)" averages over the whole reporting window.',
+        + ' server; "(window)" averages over the whole reporting window.'
+    )
+
+
+def test_summary_footnotes_say_how_the_window_and_figures_are_read() -> None:
+    """The Summary first states the window and the GPU figures."""
+    report = _activity_report([], ActivitySummary())
+    assert report.sections[0].footnotes[:4] == [
+        TIMES_NOTE,
+        WINDOW_NOTE,
+        SNAPSHOT_NOTE,
+        GPU_NOTE,
     ]
+    assert not any(WINDOW_NOTE in section.footnotes for section in report.sections[1:])
 
 
 def test_summary_footnote_names_the_hubs_a_report_combines() -> None:
@@ -574,7 +600,7 @@ def test_one_hub_or_none_adds_no_footnote(hubs: set[str]) -> None:
     """The common case is unambiguous, so it stays uncluttered."""
     report = _activity_report([], ActivitySummary(hubs=hubs))
     assert not any("aggregate across hubs" in note for note in report.sections[0].footnotes)
-    assert len(report.sections[0].footnotes) == 2
+    assert len(report.sections[0].footnotes) == 5
 
 
 def test_every_section_showing_a_duration_states_its_unit() -> None:
@@ -814,6 +840,22 @@ def test_a_server_name_the_document_omitted_reads_as_not_available() -> None:
     ]
     table = _only_table(_activity_report(sessions, ActivitySummary()), section=-1)
     assert [row[1] for row in table.rows] == ["gpu", "n/a", "(default)"]
+
+
+@pytest.mark.parametrize(
+    ("started", "expected"),
+    [
+        (None, [TIMES_NOTE, UNSTARTED_NOTE, "Timezone: America/Chicago"]),
+        ("2026-07-02T10:00:00Z", [TIMES_NOTE, "Timezone: America/Chicago"]),
+    ],
+)
+def test_an_unstarted_session_is_explained_only_when_shown(
+    started: str | None, expected: list[str]
+) -> None:
+    """A note explaining a cell no row holds would be noise."""
+    sessions = [_session("a@x.edu", started=started, seconds=60)]
+    report = _activity_report(sessions, ActivitySummary())
+    assert report.sections[-1].footnotes == expected
 
 
 @pytest.mark.parametrize("server", ["", "gpu"])

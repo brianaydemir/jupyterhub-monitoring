@@ -92,6 +92,14 @@ def _timezone_footnote(tz: tzinfo) -> str:
 # table rather than in each column header.
 _DURATION_FOOTNOTE = "Times are HH:MM."
 
+# How a report's window and its activity figures are read, stated once
+# per report on the section that first states the window.
+_WINDOW_FOOTNOTE = "The reporting window includes its start and excludes its end."
+_SNAPSHOT_FOOTNOTE = (
+    "Each snapshot of a running or starting server adds one snapshot interval to active time."
+)
+_GPU_FOOTNOTE = "A session counts as GPU when one of its spawn options names a GPU."
+
 
 def _summary_description(
     *,
@@ -408,7 +416,7 @@ def build_new_users_report(
                 headers=headers,
                 rows=rows,
                 attachment_filename="new-users.csv",
-                footnotes=[_timezone_footnote(tz)],
+                footnotes=[_WINDOW_FOOTNOTE, _timezone_footnote(tz)],
             )
         )
     )
@@ -446,6 +454,12 @@ def _session_sort_key(session: SessionActivity) -> tuple[bool, str, str]:
 # The header of the per-session table's one right-aligned column. The
 # optional ``Server`` column moves it, so it is found by name.
 _ACTIVITY_TIME_HEADER = "Time"
+
+# Explains a ``Started`` of "n/a": every snapshot of that session was
+# taken while its server was still spawning, so none carried a start.
+_UNSTARTED_FOOTNOTE = (
+    f'A Started of "{_NOT_APPLICABLE}" is a server seen only while it was still starting.'
+)
 
 
 def _show_server(sessions: list[SessionActivity]) -> bool:
@@ -519,6 +533,20 @@ def _activity_table(
         )
         rows.append(row)
     return headers, rows
+
+
+def _activity_footnotes(rows: list[list[Cell]], tz: tzinfo) -> list[str]:
+    """Return the footnotes for the per-session activity table.
+
+    The note on a ``Started`` of ``"n/a"`` is decided from the rows, as
+    :func:`_adoption_section` decides its unit note, so that the note
+    and the table cannot disagree.
+    """
+    footnotes = [_DURATION_FOOTNOTE]
+    if any(row[0] == _NOT_APPLICABLE for row in rows):
+        footnotes.append(_UNSTARTED_FOOTNOTE)
+    footnotes.append(_timezone_footnote(tz))
+    return footnotes
 
 
 def _user_totals_section(
@@ -634,9 +662,11 @@ def _summary_sections(
     """Build the ``Summary`` and (optional) ``Activity by Day`` sections.
 
     The description states the window's length as well as its bounds,
-    so that the prose and the ``Reporting window`` row agree. A report
-    drawn from several hubs says so, since its figures combine them; one
-    hub, or none named, adds no such note.
+    so that the prose and the ``Reporting window`` row agree. Its notes
+    also say how the window and the activity figures are read, since
+    this is the first section to state either. A report drawn from
+    several hubs says so, since its figures combine them; one hub, or
+    none named, adds no such note.
 
     The daily section is present whenever the summary holds a day, which
     a summary computed over a window of any length does. What is dropped
@@ -653,7 +683,13 @@ def _summary_sections(
         '"(active)" averages over snapshots that had at least one active '
         'server; "(window)" averages over the whole reporting window.'
     )
-    footnotes = [_DURATION_FOOTNOTE, concurrency_note]
+    footnotes = [
+        _DURATION_FOOTNOTE,
+        _WINDOW_FOOTNOTE,
+        _SNAPSHOT_FOOTNOTE,
+        _GPU_FOOTNOTE,
+        concurrency_note,
+    ]
     if len(summary.hubs) > 1:
         footnotes.append(_hubs_footnote(summary.hubs))
     sections = [
@@ -747,7 +783,7 @@ def build_activity_report(
                 rows=rows,
                 right_align_columns={headers.index(_ACTIVITY_TIME_HEADER)},
                 attachment_filename="activity.csv",
-                footnotes=[_DURATION_FOOTNOTE, _timezone_footnote(tz)],
+                footnotes=_activity_footnotes(rows, tz),
             )
         )
     )

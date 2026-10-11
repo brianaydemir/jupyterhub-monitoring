@@ -8,7 +8,7 @@ from app.core.name_utils import parse_name, trailing_domain_key
 @pytest.mark.parametrize(
     ("name", "domain", "uid", "login_method"),
     [
-        # The four forms documented in README's "Username Parsing" table.
+        # The four forms that carry an institution.
         ("user@example.edu", "example.edu", "user", "local NetID"),
         ("eppn:user@example.edu", "example.edu", "user", "legacy eppn"),
         ("email:user@example.edu", "example.edu", "user", "email"),

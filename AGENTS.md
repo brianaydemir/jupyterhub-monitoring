@@ -221,6 +221,20 @@ for example, `--es-index` without `--es-endpoint`,
 or `--subject` without `--send-email`.
 Report it from a validator in `app/cli/validation.py`.
 
+### Documentation
+
+- Document a command's options in its `--help` text.
+  Keep `README.md` to an overview, installation, exit codes,
+  and pointers to `docs/`.
+
+- Do not describe report contents
+  (sections, rows, columns, or their order)
+  in `README.md` or `docs/`.
+  A report that needs explaining gets a footnote or a clearer label.
+
+- Put only details expected to stay stable in `docs/`,
+  such as the snapshot documents `push-servers` writes.
+
 ### Spacing
 
 In comments and text files,

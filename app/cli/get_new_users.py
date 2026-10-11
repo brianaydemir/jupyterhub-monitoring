@@ -55,10 +55,8 @@ Examples:
     --report-start "2 weeks ago" --report-end "yesterday" --whole-days
 
 Elasticsearch:
-  Optional. Pass --es-endpoint and --es-index to add a
-  "First server" column reporting when each new user
-  first started a server. Without them the column is
-  omitted.
+  Optional. Pass --es-endpoint and --es-index to also
+  report when each new user first started a server.
 
 Environment variables:
   JUPYTERHUB_API_KEY     API key (when --jupyterhub-api-key

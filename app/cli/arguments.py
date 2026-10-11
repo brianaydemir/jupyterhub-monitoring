@@ -45,7 +45,8 @@ def add_jupyterhub_argument_group(
         type=Path,
         help=(
             "Path to file containing the JupyterHub API key for authentication "
-            "(or set JUPYTERHUB_API_KEY)"
+            "(or set JUPYTERHUB_API_KEY); it needs the scopes list:users, "
+            "read:users, and read:servers"
         ),
     )
     hub_group.add_argument(
@@ -99,7 +100,10 @@ def add_es_connection_argument_group(
     es_group.add_argument(
         "--es-username",
         metavar="USERNAME",
-        help="Username for basic authentication (password will be prompted)",
+        help=(
+            "Username for basic authentication (password will be prompted); "
+            "takes precedence over ELASTICSEARCH_API_KEY"
+        ),
     )
     return es_group
 
@@ -175,7 +179,7 @@ def add_hub_argument(
     """Add the ``--hub`` filter that both report commands share."""
     group.add_argument(
         "--hub",
-        help="Filter results to documents with this meta.hub value",
+        help="Filter results to documents whose meta.hub is exactly this value",
     )
 
 
@@ -237,7 +241,8 @@ def add_output_argument_group(
             action="store_true",
             help=(
                 "Replace within-institution identifiers with generic "
-                "pseudonyms; the institution is still shown"
+                "pseudonyms; the institution is still shown. The pseudonyms "
+                "are an unkeyed hash of the username, not a privacy guarantee"
             ),
         )
     return output_group

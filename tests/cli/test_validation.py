@@ -526,7 +526,7 @@ def test_a_whole_days_window_ending_today_is_not_a_future_end(
     """The snap stops at the last midnight, so it cannot outrun the check.
 
     Widening this end to tomorrow's midnight would put the window hours
-    into the future and fail a command line the README calls legitimate.
+    into the future and fail a legitimate command line.
     """
     _freeze(monkeypatch)
     _accept(

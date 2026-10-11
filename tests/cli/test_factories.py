@@ -356,7 +356,7 @@ def test_a_duration_window_never_ends_in_the_future(
 def test_a_whole_days_range_covers_whole_local_days(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The window the epilog and the README advertise, resolved.
+    """The window the get-new-users epilog advertises, resolved.
 
     Without the flag these bounds resolve to 17:48 on each day, leaving a
     partial day at either end.
