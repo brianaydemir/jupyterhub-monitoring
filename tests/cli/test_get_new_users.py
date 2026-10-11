@@ -4,7 +4,7 @@ Selecting the users and dating their servers is :mod:`app.usage.new_users`'
 work, covered by ``tests/usage/test_new_users.py``. What is left here is
 the command's own Elasticsearch lookup, whose window is not the reporting
 window and which ``--hub`` scopes, when that lookup is made, and its stderr
-tally of the user list the hub answered with.
+tally of the user list the hub answered with, which the report states again.
 """
 
 # This module exercises the command's internal helpers directly.
@@ -30,7 +30,7 @@ from app.reports.builders import build_new_users_report
 from app.reports.delivery import OutputTargets
 from app.reports.model import Report
 from app.reports.renderers import render_text
-from app.usage.new_users import filter_new_users
+from app.usage.new_users import UserTally, filter_new_users, tally_users
 from tests.helpers.stub_clients import QueryStubClient, install_client
 
 # The email settings a run needs before it will build any at all.
@@ -192,15 +192,24 @@ def _report_on(
 
 def test_the_tally_carries_its_own_noun() -> None:
     """The wording matches ``get-new-activity``'s, so the two read alike."""
-    assert _format_user_tally(1, 1) == "Retrieved 1 user; 1 created in the reporting window."
-    assert _format_user_tally(812, 3) == (
+    assert _format_user_tally(UserTally(retrieved=1, in_window=1)) == (
+        "Retrieved 1 user; 1 created in the reporting window."
+    )
+    assert _format_user_tally(UserTally(retrieved=812, in_window=3)) == (
         "Retrieved 812 users; 3 created in the reporting window."
     )
 
 
 def test_retrieving_no_users_does_not_claim_none_of_none_were_created() -> None:
     """A hub that answered with nothing is the failure worth seeing."""
-    assert _format_user_tally(0, 0) == "Retrieved 0 users."
+    assert _format_user_tally(UserTally()) == "Retrieved 0 users."
+
+
+def test_undated_users_are_named_only_when_there_are_some() -> None:
+    """Like ``get-new-activity``'s skips, they are named only when present."""
+    assert _format_user_tally(UserTally(retrieved=812, undated=5, in_window=3)) == (
+        "Retrieved 812 users; 3 created in the reporting window, 5 with no creation time."
+    )
 
 
 def test_the_tally_counts_only_the_users_created_in_the_window(
@@ -210,23 +219,29 @@ def test_the_tally_counts_only_the_users_created_in_the_window(
     """The second number is the report's own selection, not the list's size.
 
     The report on stdout is compared against one built from the same
-    users, so the tally is shown to have changed no figure in it.
+    users and their tally, so the tally the report states is the one
+    stderr does.
     """
     users: list[dict[str, Any]] = [
         {"name": "a@x.edu", "created": "2026-08-05T10:00:00Z"},
         {"name": "b@x.edu", "created": "2026-08-06T11:00:00Z"},
         {"name": "old@x.edu", "created": "2020-01-01T00:00:00Z"},
         {"name": "later@x.edu", "created": "2026-09-15T00:00:00Z"},
+        {"name": "undated@x.edu", "created": None},
     ]
     assert _report_on(monkeypatch, users) == 0
 
     captured = capsys.readouterr()
-    assert "Retrieved 4 users; 2 created in the reporting window." in captured.err.splitlines()
+    assert (
+        "Retrieved 5 users; 2 created in the reporting window, 1 with no creation time."
+        in captured.err.splitlines()
+    )
     assert "Reporting window:" in captured.err
     assert "Retrieved" not in captured.out
 
     expected = build_new_users_report(
         users=filter_new_users(users, WINDOW_START, WINDOW_END),
+        tally=tally_users(users, WINDOW_START, WINDOW_END),
         start_time=WINDOW_START,
         end_time=WINDOW_END,
         strftime_fmt=DATE_FMT,
@@ -262,12 +277,13 @@ def test_elasticsearch_dates_each_new_users_first_server(
 
     expected = build_new_users_report(
         users=filter_new_users(users, WINDOW_START, WINDOW_END),
+        tally=tally_users(users, WINDOW_START, WINDOW_END),
         start_time=WINDOW_START,
         end_time=WINDOW_END,
         strftime_fmt=DATE_FMT,
         first_server={"a@x.edu": int(datetime.fromisoformat(started).timestamp())},
     )
-    assert expected.sections[0].heading == "Adoption"
+    assert expected.sections[1].heading == "Adoption"
     assert capsys.readouterr().out == f"---\n{render_text(expected)}\n---\n"
 
 

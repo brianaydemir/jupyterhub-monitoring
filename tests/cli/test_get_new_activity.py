@@ -5,7 +5,7 @@ Accounting for the activity and assembling the report belong to
 through those. What is left here is the query the command sends, how it
 wires the window and its output flags into those modules, and its own
 stderr diagnostic: the wording it gives each shape of document set, and
-the fact that it stays off stdout, where the report goes.
+the fact that it stays off stdout, where the report states it again.
 """
 
 # This module exercises the command's internal helpers directly.
@@ -29,6 +29,7 @@ from app.usage.activity import (
     SkipReason,
     compute_activity,
     summarize_activity,
+    tally_documents,
 )
 from tests.helpers.stub_clients import QueryStubClient, install_client
 
@@ -179,19 +180,22 @@ def test_the_report_on_stdout_is_the_builders_over_the_resolved_window(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The window, the summary, and the output flags all reach the builders.
+    """The window, summary, tally, and output flags all reach the builders.
 
     The report is compared against one built from the same documents, so
     a flag reaching the wrong parameter, or a timestamp format other than
-    the one this command fixes, would show up as a different report.
+    the one this command fixes, would show up as a different report. One
+    document is skipped, so a tally other than the documents' own would
+    too.
     """
-    documents = [_document("a@x.edu"), _document("b@x.edu")]
+    documents = [_document("a@x.edu"), _document("b@x.edu"), {"user.name": "c@x.edu"}]
     assert _report_on(monkeypatch, documents, "--detailed-usernames") == 0
 
     sessions = compute_activity(documents)
     expected = build_activity_report(
         sessions=sessions,
         summary=summarize_activity(sessions, documents, CHICAGO, WINDOW_START, WINDOW_END),
+        tally=tally_documents(documents),
         start_time=WINDOW_START,
         end_time=WINDOW_END,
         strftime_fmt=DATETIME_FMT,

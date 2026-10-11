@@ -8,10 +8,9 @@ as the push cadence that produced the documents.
 :class:`SessionActivity`, :class:`UserActivity`, and
 :class:`ActivitySummary` are defined here, beside the code that produces
 them; the report builders only consume them.
-:class:`DocumentTally` is diagnostic rather than reported: it says how
-many documents a run saw and why any of them could not be counted, which
-is what tells an idle hub apart from a pipeline that fed the report
-nothing it could read.
+:class:`DocumentTally` says how many documents a run saw and why any of
+them could not be counted, which is what tells an idle hub apart from a
+pipeline that fed the report nothing it could read.
 """
 
 import re
@@ -52,7 +51,8 @@ class UserActivity:
 
     *sessions* counts every session the user holds, the spawn-only ones
     that carry no ``started`` included, so it agrees with the number of
-    rows the per-session view shows for that user.
+    rows the report's two per-session views, of servers still starting
+    and of servers that started, show for that user together.
     """
 
     user: str
@@ -109,6 +109,7 @@ class ActivitySummary:  # pylint: disable=too-many-instance-attributes
     mean_user_seconds: float = 0.0
     median_user_seconds: float = 0.0
     max_user_seconds: float = 0.0
+    max_session_seconds: float = 0.0
     mean_sessions_per_user: float = 0.0
     mean_session_seconds: float = 0.0
     peak_concurrency: int = 0
@@ -145,11 +146,11 @@ class DocumentTally:
     """How many snapshots a run retrieved, counted, and skipped.
 
     *skipped* holds only the reasons that actually occurred, and
-    *counted* plus its values always sum to *retrieved*. Nothing in a
-    report is derived from any of this: it exists so that a command can
-    say what shape of data it saw, since a zero report reads the same
-    whether the hub was idle, the query named the wrong index or hub, or
-    every document retrieved was unreadable.
+    *counted* plus its values always sum to *retrieved*. None of the
+    report's activity figures is derived from any of this: it exists so
+    that a run can say what shape of data it saw, since a zero report
+    reads the same whether the hub was idle, the query named the wrong
+    index or hub, or every document retrieved was unreadable.
     """
 
     retrieved: int = 0
@@ -527,6 +528,7 @@ def summarize_activity(
         mean_user_seconds=statistics.mean(per_user) if per_user else 0.0,
         median_user_seconds=statistics.median(per_user) if per_user else 0.0,
         max_user_seconds=max(per_user) if per_user else 0.0,
+        max_session_seconds=max((session.seconds for session in sessions), default=0.0),
         mean_sessions_per_user=total_sessions / active_users if active_users else 0.0,
         mean_session_seconds=total_seconds / total_sessions if total_sessions else 0.0,
         peak_concurrency=peak_concurrency,

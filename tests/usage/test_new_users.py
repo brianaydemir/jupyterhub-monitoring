@@ -12,9 +12,11 @@ import pytest
 
 from app.usage.new_users import (
     AdoptionSummary,
+    UserTally,
     compute_first_server,
     filter_new_users,
     summarize_adoption,
+    tally_users,
 )
 
 START = datetime(2026, 7, 1, tzinfo=timezone.utc)
@@ -63,8 +65,31 @@ def test_an_offset_created_timestamp_is_honored() -> None:
     ],
 )
 def test_users_without_a_usable_created_time_are_skipped(user: dict[str, Any]) -> None:
-    """A record that cannot be placed in time cannot be placed in the window."""
+    """A record that cannot be placed in time cannot be placed in the window.
+
+    The tally is what counts it instead.
+    """
     assert filter_new_users([user], START, END) == []
+    assert tally_users([user], START, END) == UserTally(retrieved=1, undated=1, in_window=0)
+
+
+def test_the_tally_counts_the_users_the_filter_keeps() -> None:
+    """One rule decides both, so the tally and the selection agree."""
+    users: list[dict[str, Any]] = [
+        {"name": "at-start", "created": "2026-07-01T00:00:00Z"},
+        {"name": "at-end", "created": "2026-07-08T00:00:00Z"},
+        {"name": "old", "created": "2026-06-30T23:59:59Z"},
+        {"name": "undated", "created": None},
+        {"name": "garbled", "created": "last Tuesday"},
+    ]
+    tally = tally_users(users, START, END)
+    assert tally == UserTally(retrieved=5, undated=2, in_window=1)
+    assert tally.in_window == len(filter_new_users(users, START, END))
+
+
+def test_no_users_tally_as_none_retrieved() -> None:
+    """A hub that answered with nothing is told apart from a quiet window."""
+    assert tally_users([], START, END) == UserTally()
 
 
 def test_filtered_users_are_reduced_to_name_and_created() -> None:

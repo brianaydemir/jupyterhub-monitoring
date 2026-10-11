@@ -24,7 +24,8 @@ from app.reports.renderers import (
     render_text,
     render_xlsx_bytes,
 )
-from app.usage.activity import ActivitySummary, SessionActivity
+from app.usage.activity import ActivitySummary, DocumentTally, SessionActivity
+from app.usage.new_users import UserTally
 from tests.helpers import sample_reports
 
 CHICAGO = ZoneInfo("America/Chicago")
@@ -370,20 +371,25 @@ def test_one_unreadable_recipient_does_not_cost_the_others_their_copy(
 
 
 def test_an_anonymized_report_leaks_no_identifier_in_any_format() -> None:
-    """The pseudonyms exist to keep raw identifiers out of every output."""
+    """The pseudonyms exist to keep raw identifiers out of every output.
+
+    One session never started and half the users never did either, so
+    that every user table of both reports holds a row.
+    """
     names = ["alice@x.edu", "eppn:alice@x.edu", "orcid:0009-0008-3064-0494", "svc-account"]
     activity = build_activity_report(
         sessions=[
             SessionActivity(
                 user=name,
                 server_name="",
-                started="2026-07-02T10:00:00Z",
+                started=None if name == "svc-account" else "2026-07-02T10:00:00Z",
                 seconds=3600,
                 gpu=False,
             )
             for name in names
         ],
         summary=ActivitySummary(total_seconds=14400, per_day_seconds={"2026-07-02": 14400}),
+        tally=DocumentTally(retrieved=48, counted=48),
         start_time=START,
         end_time=END,
         strftime_fmt="%Y-%m-%d %H:%M",
@@ -391,11 +397,12 @@ def test_an_anonymized_report_leaks_no_identifier_in_any_format() -> None:
     )
     users = build_new_users_report(
         users=[{"name": name, "created": "2026-07-02T10:00:00Z"} for name in names],
+        tally=UserTally(retrieved=4, in_window=4),
         start_time=START,
         end_time=END,
         strftime_fmt="%Y-%m-%d",
         anonymize=True,
-        first_server={name: 1782000000 for name in names},
+        first_server={name: 1782000000 for name in names[::2]},
     )
     secrets = ["alice", "0009-0008-3064-0494", "svc-account"]
     for built in (activity, users):

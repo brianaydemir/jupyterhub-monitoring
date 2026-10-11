@@ -110,8 +110,8 @@ def _format_document_tally(tally: DocumentTally) -> str:
 def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
-    The document tally goes to stderr, so that stdout holds only the
-    report.
+    The document tally leads the report, and also goes to stderr, where
+    a scheduled run's log keeps it apart from the report on stdout.
 
     Raises:
         DataShapeError: If the reporting window is not timezone-aware.
@@ -130,13 +130,15 @@ def _run(args: argparse.Namespace) -> int:
         )
         documents = list(select_hub(client.query(index=args.es_index, query=query), args.hub))
 
-    print(_format_document_tally(tally_documents(documents)), file=sys.stderr)
+    tally = tally_documents(documents)
+    print(_format_document_tally(tally), file=sys.stderr)
 
     sessions = compute_activity(documents)
     summary = summarize_activity(sessions, documents, tz, start_time, end_time)
     report = build_activity_report(
         sessions=sessions,
         summary=summary,
+        tally=tally,
         start_time=start_time,
         end_time=end_time,
         strftime_fmt=DATETIME_FMT,

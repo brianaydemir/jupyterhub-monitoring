@@ -12,11 +12,13 @@ from app.reports.anonymize import build_pseudonyms
 from app.reports.model import Cell, Duration, Fixed, Percent, Report, ReportSection, TableBlock
 from app.usage.activity import (
     ActivitySummary,
+    DocumentTally,
     SessionActivity,
+    SkipReason,
     UserActivity,
     aggregate_user_activity,
 )
-from app.usage.new_users import AdoptionSummary, summarize_adoption
+from app.usage.new_users import AdoptionSummary, UserTally, summarize_adoption
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,11 @@ def _timezone_footnote(tz: tzinfo) -> str:
 # table rather than in each column header.
 _DURATION_FOOTNOTE = "Times are HH:MM."
 
+# The heading of the section each report leads with: what the run
+# retrieved, and how much of it could be used, before any figure that
+# is only as good as that data.
+_COLLECTION_HEADING = "Data Collection"
+
 # How a report's window and its activity figures are read, stated once
 # per report on the section that first states the window.
 _WINDOW_FOOTNOTE = "The reporting window includes its start and excludes its end."
@@ -151,10 +158,8 @@ _DEFAULT_SERVER = "(default)"
 _NO_IDENTITY = "(none)"
 
 
-def _format_first_server(ts: int | None, strftime_fmt: str, tz: tzinfo) -> str:
-    """Format a user's first server-start time, or ``"n/a"`` if never."""
-    if ts is None:
-        return _NOT_APPLICABLE
+def _format_first_server(ts: int, strftime_fmt: str, tz: tzinfo) -> str:
+    """Format a user's first server-start time in the report's zone."""
     return datetime.fromtimestamp(ts, tz).strftime(strftime_fmt)
 
 
@@ -200,10 +205,10 @@ def _identity_cell(value: str) -> str:
 class _UserDisplay:
     """The identity columns a user table presents its usernames in.
 
-    The new-users table and the two activity tables each read one
-    instance, so no two of them can disagree about a user's displayed
-    identifier, about whether the ``Login method`` column is shown, or
-    about how an absent domain or login method renders.
+    The new-users tables of a report read one instance, as the activity
+    tables of a report do, so no two of them can disagree about a user's
+    displayed identifier, about whether the ``Login method`` column is
+    shown, or about how an absent domain or login method renders.
     """
 
     parsed: dict[str, ParsedName]
@@ -261,74 +266,96 @@ def _user_display(
 def _window_length(summary: ActivitySummary) -> Duration:
     """Return the reporting window's length, in the units of the durations.
 
-    Both the ``Reporting window`` row and the section's own sentence
-    read this, so the two cannot disagree. A window of no length, or an
-    inverted one, is floored to no time at all rather than left as the
-    negative duration it would otherwise display as:
+    A window of no length, or an inverted one, is floored to no time at
+    all rather than left as the negative duration it would otherwise
+    display as:
     :func:`~app.usage.activity.summarize_activity` already floors such a
     window, but a summary built by hand need not have.
     """
     return Duration(max(summary.window_seconds, 0.0))
 
 
-def _user_table(  # pylint: disable=too-many-locals
+def _user_table(
     users: list[dict[str, Any]],
+    display: _UserDisplay,
     tz: tzinfo,
     strftime_fmt: str,
-    detailed_usernames: bool,
     first_server: dict[str, int] | None,
-    anonymize: bool,
 ) -> tuple[list[str], list[list[Cell]]]:
-    """Build headers and rows for the new-users table.
+    """Build headers and rows for one table of new users.
 
-    A *first_server* of ``None`` drops the "First server" column, rather
-    than filling it with ``"n/a"`` for every row.
+    A *first_server* of ``None`` drops the "First server" column, as for
+    users who have not started a server, rather than filling it with
+    ``"n/a"`` for every row. Otherwise every user in *users* must appear
+    in it.
 
     Rows are ordered by creation date, and an equal date breaks on the
     same identity key the activity tables break an equal total on. A row
     is one entry of *users*, not one username, so a user repeated in the
     input is listed as many times as it appears.
     """
-    show_first_server = first_server is not None
-    lookup = first_server or {}
     dated = [
         (
             _format_iso_timestamp(user.get("created", ""), strftime_fmt, tz),
-            _format_first_server(lookup.get(user.get("name", "")), strftime_fmt, tz),
             user.get("name", ""),
         )
         for user in users
     ]
-    display = _user_display((name for _, _, name in dated), detailed_usernames, anonymize)
-    ordered = sorted(dated, key=lambda r: (r[0], display.name_key(r[2])))
+    ordered = sorted(dated, key=lambda r: (r[0], display.name_key(r[1])))
 
     headers = ["Created"]
-    if show_first_server:
+    if first_server is not None:
         headers.append("First server")
     headers.extend(display.headers())
 
     rows: list[list[Cell]] = []
-    for created, first, name in ordered:
+    for created, name in ordered:
         row: list[Cell] = [created]
-        if show_first_server:
-            row.append(first)
+        if first_server is not None:
+            row.append(_format_first_server(first_server[name], strftime_fmt, tz))
         row.extend(display.cells(name))
         rows.append(row)
     return headers, rows
 
 
+def _user_collection_section(
+    tally: UserTally, start_time: datetime, end_time: datetime
+) -> ReportSection:
+    """Build the ``Data Collection`` section of the new-users report.
+
+    The undated count is shown whether or not it is zero, so that a
+    reader never has to wonder whether its absence means none or
+    unchecked: a user with no creation time is otherwise in no table.
+    """
+    return _stats_section(
+        _COLLECTION_HEADING,
+        (
+            "Users listed by JupyterHub, and how many were created from "
+            f"{start_time.strftime(DATETIME_FMT)} to {end_time.strftime(DATETIME_FMT)}."
+        ),
+        ["Metric", "Value"],
+        [
+            ["Users retrieved", tally.retrieved],
+            ["Users with no creation time", tally.undated],
+            ["Created in window", tally.in_window],
+        ],
+        footnotes=[_WINDOW_FOOTNOTE],
+    )
+
+
 def _adoption_rows(adoption: AdoptionSummary) -> list[list[Cell]]:
     """Build the ``Metric``/``Value`` rows for the adoption table.
 
-    The population leads, then the split of it, then how quickly the
-    users who did start got started. The median row is dropped rather
-    than filled with ``"n/a"`` when no elapsed time could be measured,
-    since a median over nothing is not a figure a reader can act on.
+    The population leads, then the split of it, the users who have not
+    started a server first, then how quickly the users who did start got
+    started. The median row is dropped rather than filled with ``"n/a"``
+    when no elapsed time could be measured, since a median over nothing
+    is not a figure a reader can act on.
     """
     rows: list[list[Cell]] = [
         ["New users", adoption.new_users],
-        ["Started a server", adoption.started],
         ["Never started a server", adoption.never_started],
+        ["Started a server", adoption.started],
         ["Started same day", adoption.same_day],
     ]
     if adoption.median_seconds_to_first is not None:
@@ -357,8 +384,46 @@ def _adoption_section(adoption: AdoptionSummary) -> ReportSection:
     )
 
 
+@dataclass(frozen=True)
+class _UserTableSpec:
+    """What distinguishes one new-users table section from another."""
+
+    heading: str
+    description: str
+    attachment_filename: str
+    first_server: dict[str, int] | None = None
+
+
+def _user_table_section(
+    users: list[dict[str, Any]],
+    display: _UserDisplay,
+    tz: tzinfo,
+    strftime_fmt: str,
+    spec: _UserTableSpec,
+) -> ReportSection:
+    """Build a section holding one table of new users."""
+    headers, rows = _user_table(users, display, tz, strftime_fmt, spec.first_server)
+    return _table_section(
+        TabularSectionSpec(
+            heading=spec.heading,
+            description=spec.description,
+            headers=headers,
+            rows=rows,
+            attachment_filename=spec.attachment_filename,
+            footnotes=[_timezone_footnote(tz)],
+        )
+    )
+
+
+def _started_count_sentence(count: int, predicate: str) -> str:
+    """Return a sentence counting the new users a table lists."""
+    subject = "new user has" if count == 1 else "new users have"
+    return f"{count} {subject} {predicate}."
+
+
 def build_new_users_report(
     users: list[dict[str, Any]],
+    tally: UserTally,
     start_time: datetime,
     end_time: datetime,
     strftime_fmt: str,
@@ -368,22 +433,30 @@ def build_new_users_report(
 ) -> Report:
     """Build a report object for recently created JupyterHub users.
 
-    An ``Adoption`` section leads the report whenever *first_server* was
-    supplied, counting how many of the new users went on to start a
-    server and how quickly; the ``New Users`` table follows it.
+    A ``Data Collection`` section leads the report, stating from *tally*
+    how many users the hub listed and how many of them carried no
+    creation time, since the tables below say nothing of either.
+
+    Whenever *first_server* was supplied, an ``Adoption`` section counts
+    how many of the new users went on to start a server and how quickly,
+    and the users are then split into a ``Not Yet Started`` table and a
+    ``Started`` table, in that order, so that the users who have done
+    nothing yet are listed before those who have. Both tables read one
+    display identity, so they agree about the ``Login method`` column.
 
     The reporting window supplies the zone: timestamps are rendered in
-    *start_time*'s zone, which is also the one the report's footnote
-    names. :func:`~app.usage.new_users.summarize_adoption` reads that
-    same zone, so its same-day count agrees with the dates the table
-    shows.
+    *start_time*'s zone, which is also the one the report's footnotes
+    name. :func:`~app.usage.new_users.summarize_adoption` reads that
+    same zone, so its same-day count agrees with the dates the tables
+    show.
 
     *first_server* maps a username to the epoch-seconds time of that
-    user's first server start; users absent from the mapping are shown as
-    having never started a server. Pass ``None`` when Elasticsearch was
-    not consulted at all, which omits the "First server" column and the
-    ``Adoption`` section: with nothing to date, every figure in that
-    section would understate users who may well have started servers.
+    user's first server start; users absent from the mapping have never
+    started a server. Pass ``None`` when Elasticsearch was not consulted
+    at all, which lists every user in a single ``New Users`` table with
+    no "First server" column and omits the ``Adoption`` section: with
+    nothing to date, every figure in that section would understate users
+    who may well have started servers.
 
     When *anonymize* is set, within-institution identifiers are replaced
     with generic pseudonyms; the institution is still shown.
@@ -393,39 +466,66 @@ def build_new_users_report(
             timezone-aware.
     """
     tz = _report_zone(start_time, end_time)
-    headers, rows = _user_table(
-        users, tz, strftime_fmt, detailed_usernames, first_server, anonymize
-    )
-    description = _summary_description(
-        count=len(users),
-        singular_phrase="new user created",
-        plural_phrase="new users created",
-        zero_phrase="No new users created",
-        start_time=start_time,
-        end_time=end_time,
+    display = _user_display(
+        (user.get("name", "") for user in users), detailed_usernames, anonymize
     )
 
-    sections: list[ReportSection] = []
-    if first_server is not None:
-        sections.append(_adoption_section(summarize_adoption(users, first_server, tz)))
-    sections.append(
-        _table_section(
-            TabularSectionSpec(
-                heading="New Users",
-                description=description,
-                headers=headers,
-                rows=rows,
-                attachment_filename="new-users.csv",
-                footnotes=[_WINDOW_FOOTNOTE, _timezone_footnote(tz)],
+    sections = [_user_collection_section(tally, start_time, end_time)]
+    if first_server is None:
+        description = _summary_description(
+            count=len(users),
+            singular_phrase="new user created",
+            plural_phrase="new users created",
+            zero_phrase="No new users created",
+            start_time=start_time,
+            end_time=end_time,
+        )
+        sections.append(
+            _user_table_section(
+                users,
+                display,
+                tz,
+                strftime_fmt,
+                _UserTableSpec("New Users", description, "new-users.csv"),
             )
         )
-    )
+    else:
+        not_started = [user for user in users if user.get("name", "") not in first_server]
+        started = [user for user in users if user.get("name", "") in first_server]
+        sections.append(_adoption_section(summarize_adoption(users, first_server, tz)))
+        sections.append(
+            _user_table_section(
+                not_started,
+                display,
+                tz,
+                strftime_fmt,
+                _UserTableSpec(
+                    "Not Yet Started",
+                    _started_count_sentence(len(not_started), "not started a server"),
+                    "new-users-not-started.csv",
+                ),
+            )
+        )
+        sections.append(
+            _user_table_section(
+                started,
+                display,
+                tz,
+                strftime_fmt,
+                _UserTableSpec(
+                    "Started",
+                    _started_count_sentence(len(started), "started a server"),
+                    "new-users-started.csv",
+                    first_server=first_server,
+                ),
+            )
+        )
 
     return Report(title="JupyterHub New Users Report", sections=sections)
 
 
 def _activity_order(users: list[UserActivity], display: _UserDisplay) -> dict[str, int]:
-    """Return the position each username takes in both activity tables.
+    """Return the position each username takes in the per-user activity tables.
 
     Users are ordered by total active time, most active first, so that
     the report leads with whoever consumed the most rather than with
@@ -441,24 +541,24 @@ def _activity_order(users: list[UserActivity], display: _UserDisplay) -> dict[st
     return {user.user: position for position, user in enumerate(ordered)}
 
 
-def _session_sort_key(session: SessionActivity) -> tuple[bool, str, str]:
-    """Return a sort key ordering sessions by start time, blanks last.
+def _session_sort_key(session: SessionActivity) -> tuple[str, str]:
+    """Return a sort key ordering a user's started sessions by start time.
 
     The server name breaks ties, so a user's concurrent named servers
     keep a stable order.
     """
-    started = session.started or ""
-    return (not started, started, session.server_name or "")
+    return (session.started or "", session.server_name or "")
 
 
-# The header of the per-session table's one right-aligned column. The
+# The header of the duration column in both per-session tables. The
 # optional ``Server`` column moves it, so it is found by name.
 _ACTIVITY_TIME_HEADER = "Time"
 
-# Explains a ``Started`` of "n/a": every snapshot of that session was
-# taken while its server was still spawning, so none carried a start.
-_UNSTARTED_FOOTNOTE = (
-    f'A Started of "{_NOT_APPLICABLE}" is a server seen only while it was still starting.'
+# What a ``Servers Starting`` row adds up: every snapshot of one of a
+# user's servers taken while it was spawning, since those carry no start.
+_STARTING_FOOTNOTE = (
+    "Each row sums one user's server over the snapshots that showed it starting, "
+    "before it had a start time."
 )
 
 
@@ -485,14 +585,84 @@ def _server_label(server_name: str | None) -> str:
     return server_name or _DEFAULT_SERVER
 
 
-def _activity_table(
+@dataclass(frozen=True)
+class _SessionColumns:
+    """The columns both per-session tables share, after any of their own.
+
+    ``Servers Starting`` and ``User Activity`` each read one instance,
+    so the two agree about whether the ``Server`` column is shown and
+    about the order the shared columns come in.
+    """
+
+    display: _UserDisplay
+    show_server: bool
+
+    def headers(self) -> list[str]:
+        """Return the shared column headers."""
+        headers = ["Server"] if self.show_server else []
+        return [*headers, _ACTIVITY_TIME_HEADER, *self.display.headers(), "GPU"]
+
+    def cells(self, session: SessionActivity) -> list[Cell]:
+        """Return the shared cells for a session."""
+        cells: list[Cell] = [_server_label(session.server_name)] if self.show_server else []
+        return [
+            *cells,
+            Duration(session.seconds),
+            *self.display.cells(session.user),
+            "Yes" if session.gpu else "No",
+        ]
+
+
+def _starting_section(
     sessions: list[SessionActivity],
-    display: _UserDisplay,
+    columns: _SessionColumns,
+    start_time: datetime,
+    end_time: datetime,
+) -> ReportSection:
+    """Build the ``Servers Starting`` section from the unstarted sessions.
+
+    The longest time spent starting leads, since a server that took
+    longest to start, or never did, is the one a reader looks for here.
+    An equal time breaks on the displayed identity and then the server.
+
+    A report in which no server was seen starting still gets the
+    section, headers and no rows, so that the report's layout does not
+    change with what the window happened to hold.
+    """
+    ordered = sorted(
+        sessions,
+        key=lambda s: (-s.seconds, columns.display.name_key(s.user), s.server_name or ""),
+    )
+    headers = columns.headers()
+    return _table_section(
+        TabularSectionSpec(
+            heading="Servers Starting",
+            description=_summary_description(
+                count=len(sessions),
+                singular_phrase="server was seen starting",
+                plural_phrase="servers were seen starting",
+                zero_phrase="No server was seen starting",
+                start_time=start_time,
+                end_time=end_time,
+            ),
+            headers=headers,
+            rows=[columns.cells(session) for session in ordered],
+            right_align_columns={headers.index(_ACTIVITY_TIME_HEADER)},
+            attachment_filename="servers-starting.csv",
+            footnotes=[_DURATION_FOOTNOTE, _STARTING_FOOTNOTE],
+        )
+    )
+
+
+def _user_activity_section(
+    sessions: list[SessionActivity],
+    columns: _SessionColumns,
     order: dict[str, int],
     tz: tzinfo,
     strftime_fmt: str,
-) -> tuple[list[str], list[list[Cell]]]:
-    """Build headers and rows for the per-session activity table.
+    window: tuple[datetime, datetime],
+) -> ReportSection:
+    """Build the ``User Activity`` section from the started sessions.
 
     Users appear in *order*, the one ``User Totals`` reads, so a heavy
     user's sessions sit where that table puts the user;
@@ -503,50 +673,34 @@ def _activity_table(
     present only when :func:`_show_server` finds a named server: without
     it, two of one user's concurrent servers render as identical rows.
     """
-    sorted_sessions = sorted(
-        sessions,
-        key=lambda s: (order[s.user], _session_sort_key(s)),
+    start_time, end_time = window
+    sorted_sessions = sorted(sessions, key=lambda s: (order[s.user], _session_sort_key(s)))
+    headers = ["Started", *columns.headers()]
+    rows: list[list[Cell]] = [
+        [
+            _format_iso_timestamp(session.started or "", strftime_fmt, tz),
+            *columns.cells(session),
+        ]
+        for session in sorted_sessions
+    ]
+    return _table_section(
+        TabularSectionSpec(
+            heading="User Activity",
+            description=_summary_description(
+                count=len(sessions),
+                singular_phrase="started session was active",
+                plural_phrase="started sessions were active",
+                zero_phrase="No started sessions were active",
+                start_time=start_time,
+                end_time=end_time,
+            ),
+            headers=headers,
+            rows=rows,
+            right_align_columns={headers.index(_ACTIVITY_TIME_HEADER)},
+            attachment_filename="activity.csv",
+            footnotes=[_DURATION_FOOTNOTE, _timezone_footnote(tz)],
+        )
     )
-    show_server = _show_server(sessions)
-
-    headers = ["Started"]
-    if show_server:
-        headers.append("Server")
-    headers.extend([_ACTIVITY_TIME_HEADER, *display.headers(), "GPU"])
-
-    rows: list[list[Cell]] = []
-    for session in sorted_sessions:
-        started = (
-            _format_iso_timestamp(session.started, strftime_fmt, tz)
-            if session.started
-            else _NOT_APPLICABLE
-        )
-        row: list[Cell] = [started]
-        if show_server:
-            row.append(_server_label(session.server_name))
-        row.extend(
-            [
-                Duration(session.seconds),
-                *display.cells(session.user),
-                "Yes" if session.gpu else "No",
-            ]
-        )
-        rows.append(row)
-    return headers, rows
-
-
-def _activity_footnotes(rows: list[list[Cell]], tz: tzinfo) -> list[str]:
-    """Return the footnotes for the per-session activity table.
-
-    The note on a ``Started`` of ``"n/a"`` is decided from the rows, as
-    :func:`_adoption_section` decides its unit note, so that the note
-    and the table cannot disagree.
-    """
-    footnotes = [_DURATION_FOOTNOTE]
-    if any(row[0] == _NOT_APPLICABLE for row in rows):
-        footnotes.append(_UNSTARTED_FOOTNOTE)
-    footnotes.append(_timezone_footnote(tz))
-    return footnotes
 
 
 def _user_totals_section(
@@ -587,11 +741,72 @@ def _user_totals_section(
     )
 
 
-def _summary_rows(summary: ActivitySummary) -> list[list[Cell]]:
-    """Build the ``Metric``/``Value`` rows for the summary table.
+def _document_collection_section(
+    tally: DocumentTally,
+    summary: ActivitySummary,
+    start_time: datetime,
+    end_time: datetime,
+) -> ReportSection:
+    """Build the ``Data Collection`` section of the activity report.
 
-    The window's length leads, so that a reader meets the scale the
-    quantities below it are measured against before the quantities.
+    Every skip reason has a row, a zero included, so that a reader never
+    has to wonder whether an absent reason means none or unchecked. Its
+    notes say how the window is read, since this is the first section to
+    state it, and a report drawn from several hubs says so here, since
+    every figure after it combines them.
+
+    The description states the window's bounds alone: its length is the
+    ``Reporting window`` row of ``Usage``, which is read in the unit
+    that section notes.
+    """
+    skipped: list[list[Cell]] = [
+        [f"Skipped: {reason.value}", tally.skipped.get(reason, 0)] for reason in SkipReason
+    ]
+    rows: list[list[Cell]] = [
+        ["Documents retrieved", tally.retrieved],
+        ["Documents counted", tally.counted],
+        *skipped,
+    ]
+    footnotes = [_WINDOW_FOOTNOTE]
+    if len(summary.hubs) > 1:
+        footnotes.append(f"Figures aggregate across hubs: {', '.join(sorted(summary.hubs))}.")
+    return _stats_section(
+        _COLLECTION_HEADING,
+        (
+            f"Snapshots taken from {start_time.strftime(DATETIME_FMT)} "
+            f"to {end_time.strftime(DATETIME_FMT)}, and how many could be counted."
+        ),
+        ["Metric", "Value"],
+        rows,
+        footnotes=footnotes,
+    )
+
+
+def _usage_rows(summary: ActivitySummary) -> list[list[Cell]]:
+    """Build the ``Metric``/``Value`` rows for the usage table.
+
+    These are the figures that say whether the hub was used at all. The
+    window's length leads, so that a reader meets the scale the
+    quantities below it are measured against before the quantities, and
+    the longest session sits beside it for comparison.
+
+    A day with no activity is one whose total is not positive, the same
+    test that keeps such a day from being named the busiest.
+    """
+    idle_days = sum(1 for secs in summary.per_day_seconds.values() if secs <= 0)
+    return [
+        ["Reporting window", _window_length(summary)],
+        ["Active users", summary.active_users],
+        ["Sessions", summary.total_sessions],
+        ["Total active time", Duration(summary.total_seconds)],
+        ["Longest session", Duration(summary.max_session_seconds)],
+        ["Mean concurrent servers (window)", Fixed(summary.mean_concurrency_window, digits=2)],
+        ["Days with no activity", idle_days],
+    ]
+
+
+def _statistics_rows(summary: ActivitySummary) -> list[list[Cell]]:
+    """Build the ``Metric``/``Value`` rows for the statistics table.
 
     Every row states one quantity, so that a spreadsheet can sort or
     chart any of them: the GPU time and its share of the total are two
@@ -607,10 +822,6 @@ def _summary_rows(summary: ActivitySummary) -> list[list[Cell]]:
     busiest: Cell = day if secs > 0 else _NOT_APPLICABLE
     busiest_time: Cell = Duration(secs) if secs > 0 else _NOT_APPLICABLE
     return [
-        ["Reporting window", _window_length(summary)],
-        ["Total active time", Duration(total)],
-        ["Active users", summary.active_users],
-        ["Sessions", summary.total_sessions],
         ["GPU active time", Duration(gpu)],
         ["GPU share of total", share],
         ["CPU active time", Duration(total - gpu)],
@@ -623,7 +834,6 @@ def _summary_rows(summary: ActivitySummary) -> list[list[Cell]]:
         ["Mean session length", Duration(summary.mean_session_seconds)],
         ["Peak concurrent servers", summary.peak_concurrency],
         ["Mean concurrent servers (active)", Fixed(summary.mean_concurrency_active, digits=2)],
-        ["Mean concurrent servers (window)", Fixed(summary.mean_concurrency_window, digits=2)],
         ["Busiest day", busiest],
         ["Busiest day active time", busiest_time],
     ]
@@ -642,31 +852,16 @@ def _daily_rows(summary: ActivitySummary) -> list[list[Cell]]:
     ]
 
 
-def _hubs_footnote(hubs: set[str]) -> str:
-    """Return the footnote for a summary that spans more than one hub.
+def _aggregate_sections(summary: ActivitySummary) -> list[ReportSection]:
+    """Build the sections of aggregate figures, in the order they are read.
 
-    The per-hub-push claim is scoped to the two figures it holds for:
-    the window mean divides a total that already spans every hub.
-    """
-    return (
-        f"Figures aggregate across hubs: {', '.join(sorted(hubs))}. "
-        "Peak and mean (active) concurrency are measured per hub push."
-    )
-
-
-def _summary_sections(
-    summary: ActivitySummary,
-    start_time: datetime,
-    end_time: datetime,
-) -> list[ReportSection]:
-    """Build the ``Summary`` and (optional) ``Activity by Day`` sections.
-
-    The description states the window's length as well as its bounds,
-    so that the prose and the ``Reporting window`` row agree. Its notes
-    also say how the window and the activity figures are read, since
-    this is the first section to state either. A report drawn from
-    several hubs says so, since its figures combine them; one hub, or
-    none named, adds no such note.
+    ``Usage`` and the daily series come first, since they say whether
+    anything happened at all; ``Statistics`` holds the breakdowns that
+    matter only once something has. The two concurrency means are split
+    between them, and each section explains its own. A report drawn from
+    several hubs notes beside the per-push figures that they alone do
+    not combine the hubs, the window mean dividing a total that already
+    does.
 
     The daily section is present whenever the summary holds a day, which
     a summary computed over a window of any length does. What is dropped
@@ -674,31 +869,17 @@ def _summary_sections(
     saw no activity: the latter is a real, if quiet, series, and a table
     of zeros states that more plainly than an absent section does.
     """
-    window = (
-        f"Usage from {start_time.strftime(DATETIME_FMT)} "
-        f"to {end_time.strftime(DATETIME_FMT)} "
-        f"({_window_length(summary).display()})."
-    )
-    concurrency_note = (
-        '"(active)" averages over snapshots that had at least one active '
-        'server; "(window)" averages over the whole reporting window.'
-    )
-    footnotes = [
-        _DURATION_FOOTNOTE,
-        _WINDOW_FOOTNOTE,
-        _SNAPSHOT_FOOTNOTE,
-        _GPU_FOOTNOTE,
-        concurrency_note,
-    ]
-    if len(summary.hubs) > 1:
-        footnotes.append(_hubs_footnote(summary.hubs))
     sections = [
         _stats_section(
-            "Summary",
-            window,
+            "Usage",
+            "Whether and how much the hub was used.",
             ["Metric", "Value"],
-            _summary_rows(summary),
-            footnotes=footnotes,
+            _usage_rows(summary),
+            footnotes=[
+                _DURATION_FOOTNOTE,
+                _SNAPSHOT_FOOTNOTE,
+                '"(window)" averages over the whole reporting window, idle stretches included.',
+            ],
         )
     ]
     if summary.per_day_seconds:
@@ -711,12 +892,31 @@ def _summary_sections(
                 footnotes=[_DURATION_FOOTNOTE],
             )
         )
+    statistics_footnotes = [
+        _DURATION_FOOTNOTE,
+        _GPU_FOOTNOTE,
+        '"(active)" averages over snapshots that had at least one active server.',
+    ]
+    if len(summary.hubs) > 1:
+        statistics_footnotes.append(
+            "Peak and mean (active) concurrency are measured per hub push."
+        )
+    sections.append(
+        _stats_section(
+            "Statistics",
+            "Usage broken down by GPU, user, session, concurrency, and day.",
+            ["Metric", "Value"],
+            _statistics_rows(summary),
+            footnotes=statistics_footnotes,
+        )
+    )
     return sections
 
 
 def build_activity_report(
     sessions: list[SessionActivity],
     summary: ActivitySummary,
+    tally: DocumentTally,
     start_time: datetime,
     end_time: datetime,
     strftime_fmt: str,
@@ -725,29 +925,38 @@ def build_activity_report(
 ) -> Report:
     """Build a report object for per-session JupyterHub server activity.
 
-    The report opens with a ``Summary`` section of aggregate usage
-    statistics and, when the summary covers at least one day, an
-    ``Activity by Day`` section listing every one of them, followed by
-    the ``User Totals`` and ``User Activity`` tables. ``User Totals``
-    holds one row per user, most active first; each ``User Activity``
-    row is one user session, identified by the user, the named server,
-    and that server's start time; the ``GPU`` column reflects whether
-    the session requested a GPU. ``User Activity`` names the server in
-    a ``Server`` column whenever a session ran on a named one, so that
-    two of a user's concurrent servers cannot read as one row printed
-    twice; ``User Totals`` gains no such column, since it sums a user's
-    servers together. Both tables take their user order from one
-    :func:`_activity_order`, so a user found in ``User Totals`` is found
-    at the same place in ``User Activity``, that user's sessions
-    ordered by start time within it.
+    The sections run from what may be wrong, through whether anything
+    happened, to the detail:
+
+    - ``Data Collection``, from *tally*: the documents retrieved, and
+      how many could be counted and why the rest could not.
+    - ``Servers Starting``: each session that never carried a start
+      time, being made of snapshots taken while its server was spawning.
+    - ``Usage``, and, when the summary covers at least one day,
+      ``Activity by Day``.
+    - ``Statistics``: the remaining aggregate figures.
+    - ``User Totals``: one row per user, most active first, its sessions
+      and time including those in ``Servers Starting``.
+    - ``User Activity``: one row per started session, identified by the
+      user, the named server, and that server's start time; the ``GPU``
+      column reflects whether the session requested a GPU.
+
+    Both per-session tables name the server in a ``Server`` column
+    whenever any session ran on a named one, so that two of a user's
+    concurrent servers cannot read as one row printed twice; ``User
+    Totals`` gains no such column, since it sums a user's servers
+    together. ``User Totals`` and ``User Activity`` take their user
+    order from one :func:`_activity_order`, so a user found in one is
+    found at the same place in the other, that user's sessions ordered
+    by start time within it.
 
     The reporting window supplies the zone: timestamps are rendered in
     *start_time*'s zone, which is also the one the report's footnote
     names.
 
     *summary* must have been computed over that same window: the
-    ``Reporting window`` row and the ``Summary`` description read the
-    window's length from ``summary.window_seconds``, while its bounds
+    ``Reporting window`` row reads the window's length from
+    ``summary.window_seconds``, while the bounds the descriptions state
     come from *start_time* and *end_time*, so a summary computed over
     some other window makes the two disagree.
 
@@ -760,32 +969,22 @@ def build_activity_report(
     """
     tz = _report_zone(start_time, end_time)
     users = aggregate_user_activity(sessions)
-    display = _user_display((user.user for user in users), detailed_usernames, anonymize)
-    order = _activity_order(users, display)
-    headers, rows = _activity_table(sessions, display, order, tz, strftime_fmt)
-    description = _summary_description(
-        count=len(sessions),
-        singular_phrase="session was active",
-        plural_phrase="sessions were active",
-        zero_phrase="No sessions were active",
-        start_time=start_time,
-        end_time=end_time,
+    columns = _SessionColumns(
+        display=_user_display((user.user for user in users), detailed_usernames, anonymize),
+        show_server=_show_server(sessions),
     )
+    order = _activity_order(users, columns.display)
+    started = [session for session in sessions if session.started]
+    starting = [session for session in sessions if not session.started]
 
-    sections = _summary_sections(summary, start_time, end_time)
-    sections.append(_user_totals_section(users, display, order))
-    sections.append(
-        _table_section(
-            TabularSectionSpec(
-                heading="User Activity",
-                description=description,
-                headers=headers,
-                rows=rows,
-                right_align_columns={headers.index(_ACTIVITY_TIME_HEADER)},
-                attachment_filename="activity.csv",
-                footnotes=_activity_footnotes(rows, tz),
-            )
-        )
-    )
+    sections = [
+        _document_collection_section(tally, summary, start_time, end_time),
+        _starting_section(starting, columns, start_time, end_time),
+        *_aggregate_sections(summary),
+        _user_totals_section(users, columns.display, order),
+        _user_activity_section(
+            started, columns, order, tz, strftime_fmt, (start_time, end_time)
+        ),
+    ]
 
     return Report(title="JupyterHub Activity Report", sections=sections)

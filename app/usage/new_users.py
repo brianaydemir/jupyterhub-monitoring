@@ -3,7 +3,9 @@
 The user records come from JupyterHub; the first-server times come from
 the same server-snapshot documents the activity report reads.
 :class:`AdoptionSummary` combines the two, so that a report can say how
-many of the new users went on to use the hub.
+many of the new users went on to use the hub. :class:`UserTally` says
+what shape of user list the hub answered with, which is what tells a
+quiet window apart from an endpoint or token that reached the wrong hub.
 """
 
 import statistics
@@ -35,6 +37,38 @@ class AdoptionSummary:
     median_seconds_to_first: float | None = None
 
 
+@dataclass(frozen=True)
+class UserTally:
+    """How many users the hub listed, and how many of them were new.
+
+    *undated* counts the users whose ``created`` value is missing or
+    unparsable, which no window can hold, so they are counted neither in
+    *in_window* nor anywhere else in a report.
+    """
+
+    retrieved: int = 0
+    undated: int = 0
+    in_window: int = 0
+
+
+def _created_in_window(
+    user: dict[str, Any], cutoff_time: datetime, end_time: datetime
+) -> bool | None:
+    """Return whether a user was created within ``[start, end)``.
+
+    The rule lives here alone, so that :func:`filter_new_users` and
+    :func:`tally_users` cannot disagree about which users are new.
+
+    Returns:
+        ``None`` when the user's ``created`` value is missing or
+        unparsable, since no window can then be said to hold it.
+    """
+    created = parse_iso_utc(user.get("created"))
+    if created is None:
+        return None
+    return cutoff_time <= created < end_time
+
+
 def filter_new_users(
     users: Iterable[dict[str, Any]],
     cutoff_time: datetime,
@@ -45,24 +79,35 @@ def filter_new_users(
     The window excludes its own end, matching
     :func:`~app.usage.snapshots.build_query`, so that back-to-back
     reports do not both count a user created on their shared boundary.
-    Users whose ``created`` value is missing or unparsable are skipped.
+    Users whose ``created`` value is missing or unparsable are skipped;
+    :func:`tally_users` is what counts those.
     """
-    new_users: list[dict[str, Any]] = []
+    return [
+        {"name": user.get("name", ""), "created": user.get("created")}
+        for user in users
+        if _created_in_window(user, cutoff_time, end_time)
+    ]
+
+
+def tally_users(
+    users: Iterable[dict[str, Any]],
+    cutoff_time: datetime,
+    end_time: datetime,
+) -> UserTally:
+    """Count the users retrieved, the undated ones, and the new ones."""
+    retrieved = 0
+    undated = 0
+    in_window = 0
+
     for user in users:
-        created_str = user.get("created")
-        created_dt = parse_iso_utc(created_str)
-        if created_dt is None:
-            continue
+        retrieved += 1
+        outcome = _created_in_window(user, cutoff_time, end_time)
+        if outcome is None:
+            undated += 1
+        elif outcome:
+            in_window += 1
 
-        if cutoff_time <= created_dt < end_time:
-            new_users.append(
-                {
-                    "name": user.get("name", ""),
-                    "created": created_str,
-                }
-            )
-
-    return new_users
+    return UserTally(retrieved=retrieved, undated=undated, in_window=in_window)
 
 
 def compute_first_server(

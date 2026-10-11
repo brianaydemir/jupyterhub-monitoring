@@ -259,6 +259,23 @@ def test_summary_derives_user_statistics_from_sessions() -> None:
     assert summary.mean_session_seconds == 300.0
 
 
+def test_the_longest_session_is_one_session_not_one_user() -> None:
+    """A user's two sessions are not added together for this figure."""
+    docs = [
+        _doc(started="2026-07-02T10:00:00Z"),
+        _doc(started="2026-07-02T10:00:00Z"),
+        _doc(started="2026-07-02T12:00:00Z"),
+    ]
+    summary = summarize_activity(compute_activity(docs), docs, CHICAGO, START, END)
+    assert summary.max_user_seconds == 900.0
+    assert summary.max_session_seconds == 600.0
+
+
+def test_no_sessions_have_no_longest_session() -> None:
+    """An idle window reads as zero, as the other maxima do."""
+    assert summarize_activity([], [], CHICAGO, START, END).max_session_seconds == 0.0
+
+
 def test_summary_counts_gpu_users_and_sessions_separately() -> None:
     """One user with one GPU session among two is one GPU user."""
     docs = [

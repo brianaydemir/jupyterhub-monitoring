@@ -93,7 +93,8 @@ It is organized into the following sub-packages:
   and the accessors for a snapshot's hub and timestamps),
   `activity` (per-session accounting, the report summary,
   and the tally of which documents could be counted),
-  `new_users` (new-user selection, first-server times, and adoption), and
+  `new_users` (new-user selection, the tally of which users could be dated,
+  first-server times, and adoption), and
   `push` (the pipeline behind `push-servers`)
 
 A client in `app/clients` raises the exception types in

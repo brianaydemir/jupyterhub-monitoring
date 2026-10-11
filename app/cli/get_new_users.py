@@ -22,7 +22,7 @@ from app.cli.report_arguments import (
 from app.cli.runtime import run_command
 from app.reports.builders import build_new_users_report
 from app.reports.delivery import deliver_report
-from app.usage.new_users import compute_first_server, filter_new_users
+from app.usage.new_users import UserTally, compute_first_server, filter_new_users, tally_users
 from app.usage.snapshots import build_query, select_hub
 
 # The data this report draws on. Shared by the parser and the validator
@@ -90,24 +90,31 @@ def _validate_arguments(
         parser.error("--hub requires --es-endpoint")
 
 
-def _format_user_tally(retrieved: int, created: int) -> str:
+def _format_user_tally(tally: UserTally) -> str:
     """Render the retrieved/new user diagnostic for stderr.
 
     The total is what tells a quiet window apart from an endpoint or
-    token that reached a hub with few or no users on it.
+    token that reached a hub with few or no users on it. Users with no
+    creation time are mentioned only when there are some, as
+    ``get-new-activity`` mentions skipped documents.
     """
-    noun = "user" if retrieved == 1 else "users"
-    if not retrieved:
-        return f"Retrieved {retrieved} {noun}."
-    return f"Retrieved {retrieved} {noun}; {created} created in the reporting window."
+    noun = "user" if tally.retrieved == 1 else "users"
+    retrieved = f"Retrieved {tally.retrieved} {noun}"
+    if not tally.retrieved:
+        return f"{retrieved}."
+    created = f"{tally.in_window} created in the reporting window"
+    if not tally.undated:
+        return f"{retrieved}; {created}."
+    return f"{retrieved}; {created}, {tally.undated} with no creation time."
 
 
 def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
     Elasticsearch is consulted for first-server times only when
-    ``--es-endpoint`` was given. The user tally goes to stderr, so that
-    stdout holds only the report.
+    ``--es-endpoint`` was given. The user tally leads the report, and
+    also goes to stderr, where a scheduled run's log keeps it apart from
+    the report on stdout.
 
     Raises:
         ExternalServiceError: If listing users or querying Elasticsearch
@@ -118,8 +125,9 @@ def _run(args: argparse.Namespace) -> int:
     users = list(make_jupyterhub_client(args).list_users())
 
     new_users = filter_new_users(users, start_time, end_time)
+    tally = tally_users(users, start_time, end_time)
 
-    print(_format_user_tally(len(users), len(new_users)), file=sys.stderr)
+    print(_format_user_tally(tally), file=sys.stderr)
 
     first_server: dict[str, int] | None = None
     if args.es_endpoint is not None:
@@ -129,6 +137,7 @@ def _run(args: argparse.Namespace) -> int:
 
     report = build_new_users_report(
         users=new_users,
+        tally=tally,
         start_time=start_time,
         end_time=end_time,
         strftime_fmt=strftime_fmt,
