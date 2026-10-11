@@ -61,20 +61,40 @@ class _StubSession:
         self.closed = True
 
     def get(self, url: str, **kwargs: Any) -> _StubResponse:
-        """Serve the next prepared response."""
+        """Serve the next prepared response, or an empty page once they run out."""
         self.calls.append({"url": url, **kwargs})
+        if not self.pages:
+            return _StubResponse([])
         return self.pages.pop(0)
 
 
 def test_list_users_walks_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Paging continues until a short page ends the walk."""
+    """Paging continues until an empty page ends the walk."""
     session = _install(
         monkeypatch,
         [_users_page(100), _users_page(100, offset=100), _users_page(3, offset=200)],
     )
     users = list(_client().list_users())
     assert len(users) == 203
-    assert [call["params"]["offset"] for call in session.calls] == [0, 100, 200]
+    assert [call["params"]["offset"] for call in session.calls] == [0, 100, 200, 203]
+
+
+def test_list_users_keeps_walking_when_the_hub_caps_the_page_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A page shorter than asked for may be the hub's cap, not the end.
+
+    JupyterHub silently clamps ``limit`` to its ``api_page_max_limit``,
+    so a walk that stopped at the first short page would truncate the
+    list at that cap without saying so.
+    """
+    session = _install(
+        monkeypatch,
+        [_users_page(50), _users_page(50, offset=50), _users_page(20, offset=100)],
+    )
+    users = list(_client().list_users())
+    assert len(users) == 120
+    assert [call["params"]["offset"] for call in session.calls] == [0, 50, 100, 120]
 
 
 def test_list_users_stops_on_an_empty_page(monkeypatch: pytest.MonkeyPatch) -> None:

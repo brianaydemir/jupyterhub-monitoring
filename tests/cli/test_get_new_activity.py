@@ -2,15 +2,16 @@
 
 Accounting for the activity and assembling the report belong to
 :mod:`app.usage.activity` and :mod:`app.reports.builders`, and are covered
-through those. What is left here is the query the command sends, and its
-own stderr diagnostic: the wording it gives each shape of document set,
-and the fact that it stays off stdout, where the report goes.
+through those. What is left here is the query the command sends, how it
+wires the window and its output flags into those modules, and its own
+stderr diagnostic: the wording it gives each shape of document set, and
+the fact that it stays off stdout, where the report goes.
 """
 
 # This module exercises the command's internal helpers directly.
 # pyright: reportPrivateUsage=false
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -18,9 +19,17 @@ import pytest
 
 from app.cli import get_new_activity
 from app.cli.get_new_activity import _build_parser, _format_document_tally, _run
+from app.core.time_utils import DATETIME_FMT
+from app.reports.builders import build_activity_report
 from app.reports.delivery import OutputTargets
 from app.reports.model import Report
-from app.usage.activity import DocumentTally, SkipReason
+from app.reports.renderers import render_text
+from app.usage.activity import (
+    DocumentTally,
+    SkipReason,
+    compute_activity,
+    summarize_activity,
+)
 from tests.helpers.stub_clients import QueryStubClient, install_client
 
 # The email settings a run needs before it will build any at all.
@@ -36,10 +45,30 @@ _EMAIL_ARGV = [
     "465",
 ]
 
+# The explicit reporting window the run tests resolve, in the default
+# timezone, so that a report built from the same bounds can be compared
+# against the one the command prints.
+CHICAGO = ZoneInfo("America/Chicago")
+WINDOW_START = datetime(2026, 8, 1, tzinfo=CHICAGO)
+WINDOW_END = datetime(2026, 9, 1, tzinfo=CHICAGO)
+
+
+def _document(user: str) -> dict[str, Any]:
+    """Build a countable snapshot of *user*'s server, inside the window."""
+    return {
+        "user.name": user,
+        "server.name": "",
+        "server.ready": True,
+        "server.started": "2026-08-05T14:00:00Z",
+        "meta.snapshot-time": int(datetime(2026, 8, 5, 10, 0, tzinfo=CHICAGO).timestamp()),
+        "meta.interval": "5m",
+    }
+
 
 def _report_on(
     monkeypatch: pytest.MonkeyPatch,
     documents: list[dict[str, Any]],
+    *argv: str,
 ) -> int:
     """Run the command over *documents*, against a stubbed client."""
     client = QueryStubClient(documents)
@@ -50,8 +79,11 @@ def _report_on(
             "https://es.example.edu:9200",
             "--es-index",
             "servers",
-            "--duration",
-            "1 day",
+            "--report-start",
+            "2026-08-01 00:00",
+            "--report-end",
+            "2026-09-01 00:00",
+            *argv,
         ]
     )
     return _run(args)
@@ -143,6 +175,32 @@ def test_the_query_covers_the_reporting_window_and_the_hub(
     assert "Retrieved 1 document; counted 1." in capsys.readouterr().err.splitlines()
 
 
+def test_the_report_on_stdout_is_the_builders_over_the_resolved_window(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The window, the summary, and the output flags all reach the builders.
+
+    The report is compared against one built from the same documents, so
+    a flag reaching the wrong parameter, or a timestamp format other than
+    the one this command fixes, would show up as a different report.
+    """
+    documents = [_document("a@x.edu"), _document("b@x.edu")]
+    assert _report_on(monkeypatch, documents, "--detailed-usernames") == 0
+
+    sessions = compute_activity(documents)
+    expected = build_activity_report(
+        sessions=sessions,
+        summary=summarize_activity(sessions, documents, CHICAGO, WINDOW_START, WINDOW_END),
+        start_time=WINDOW_START,
+        end_time=WINDOW_END,
+        strftime_fmt=DATETIME_FMT,
+        detailed_usernames=True,
+        anonymize=False,
+    )
+    assert capsys.readouterr().out == f"---\n{render_text(expected)}\n---\n"
+
+
 def test_a_clean_run_reports_what_it_counted() -> None:
     """Nothing was skipped, so no reason has to be named."""
     tally = DocumentTally(retrieved=1440, counted=1440)
@@ -200,18 +258,7 @@ def test_the_diagnostic_goes_to_stderr_and_leaves_stdout_to_the_report(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The report stays safe to pipe, so the diagnostic joins the window echo."""
-    snapshot = int(datetime.now(timezone.utc).timestamp()) - 60
-    documents = [
-        {
-            "user.name": "a@x.edu",
-            "server.name": "",
-            "server.ready": True,
-            "server.started": "2026-07-02T10:00:00Z",
-            "meta.snapshot-time": snapshot,
-            "meta.interval": "5m",
-        },
-        {"user.name": "b@x.edu", "meta.snapshot-time": snapshot},
-    ]
+    documents = [_document("a@x.edu"), {"user.name": "b@x.edu"}]
     assert _report_on(monkeypatch, documents) == 0
 
     captured = capsys.readouterr()

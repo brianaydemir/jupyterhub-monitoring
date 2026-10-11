@@ -36,8 +36,11 @@ class JupyterHubClient:
         """Get the list of users from JupyterHub using offset-based pagination.
 
         *page_size* is how many users each request asks for, not a cap
-        on how many are yielded: the walk pages through every user.
-        A short page ends the walk. A hub that ignores *offset* would
+        on how many are yielded: the walk pages through every user. It
+        ends at an empty page rather than a short one, because JupyterHub
+        silently clamps the size it was asked for to its own
+        ``api_page_max_limit``, so a short page may be that cap rather
+        than the end of the list. A hub that ignores *offset* would
         otherwise page forever, so a repeat of the previous page also
         ends it.
 
@@ -78,6 +81,9 @@ class JupyterHubClient:
                 except requests.exceptions.RequestException as e:
                     raise ExternalServiceError(f"Listing users failed: {e}") from e
 
+                if not page:
+                    break
+
                 names = [user.get("name") for user in page]
 
                 if names == previous_names:
@@ -88,9 +94,6 @@ class JupyterHubClient:
                     break
 
                 yield from page
-
-                if len(page) < page_size:
-                    break
 
                 previous_names = names
                 offset += len(page)
