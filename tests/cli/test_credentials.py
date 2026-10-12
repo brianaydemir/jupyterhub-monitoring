@@ -1,12 +1,11 @@
 """Tests for :mod:`app.cli.credentials`."""
 
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
 from app.cli import credentials
-from app.cli.credentials import prompt_credentials, read_api_key
+from app.cli.credentials import prompt_password, read_api_key
 from app.core.errors import AppError, DataShapeError
 
 
@@ -60,50 +59,10 @@ def _answer_password(monkeypatch: pytest.MonkeyPatch, password: str) -> None:
     monkeypatch.setattr(credentials.getpass, "getpass", _getpass)
 
 
-def _answer(username: str) -> Callable[..., str]:
-    """Return a stand-in for ``input`` that answers with *username*."""
-
-    def _input(_prompt: str = "") -> str:
-        return username
-
-    return _input
-
-
-def test_a_supplied_username_is_not_prompted_for(monkeypatch: pytest.MonkeyPatch) -> None:
-    """--es-username is the whole point of the flag."""
-
-    def _refuse(prompt: str = "") -> str:
-        raise AssertionError("the username should not have been prompted for")
-
-    monkeypatch.setattr("builtins.input", _refuse)
-    _answer_password(monkeypatch, "pw")
-
-    assert prompt_credentials("elastic") == ("elastic", "pw")
-
-
-def test_an_absent_username_is_prompted_for(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Both values are then read interactively."""
-    monkeypatch.setattr("builtins.input", _answer("elastic"))
-    _answer_password(monkeypatch, "pw")
-
-    assert prompt_credentials(None) == ("elastic", "pw")
-
-
-@pytest.mark.parametrize("interruption", [EOFError, KeyboardInterrupt])
-def test_cancelling_the_username_prompt_returns_nothing(
-    interruption: type[BaseException],
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Ctrl-C and end-of-input are both a cancellation, not a crash."""
-
-    def _cancel(prompt: str = "") -> str:
-        raise interruption
-
-    monkeypatch.setattr("builtins.input", _cancel)
-
-    assert prompt_credentials(None) is None
-    assert "Operation cancelled." in capsys.readouterr().err
+def test_a_password_is_returned_as_entered(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unlike an API key, a password is not stripped: its spaces may be its own."""
+    _answer_password(monkeypatch, " pw ")
+    assert prompt_password() == " pw "
 
 
 @pytest.mark.parametrize("interruption", [EOFError, KeyboardInterrupt])
@@ -112,14 +71,14 @@ def test_cancelling_the_password_prompt_returns_nothing(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The second prompt is cancelled the same way as the first."""
+    """Ctrl-C and end-of-input are both a cancellation, not a crash."""
 
     def _cancel(prompt: str) -> str:
         raise interruption
 
     monkeypatch.setattr(credentials.getpass, "getpass", _cancel)
 
-    assert prompt_credentials("elastic") is None
+    assert prompt_password() is None
     assert "Operation cancelled." in capsys.readouterr().err
 
 
@@ -130,17 +89,5 @@ def test_an_empty_password_is_refused(
     """Sending an empty credential to Elasticsearch would only fail later."""
     _answer_password(monkeypatch, "")
 
-    assert prompt_credentials("elastic") is None
-    assert "Username and password are required." in capsys.readouterr().err
-
-
-def test_an_empty_username_is_refused(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """An empty answer at the prompt is not a username."""
-    monkeypatch.setattr("builtins.input", _answer(""))
-    _answer_password(monkeypatch, "pw")
-
-    assert prompt_credentials(None) is None
-    assert "Username and password are required." in capsys.readouterr().err
+    assert prompt_password() is None
+    assert "a password is required" in capsys.readouterr().err

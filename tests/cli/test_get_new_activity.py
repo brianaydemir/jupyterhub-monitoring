@@ -193,7 +193,7 @@ def test_the_report_on_stdout_is_the_builders_over_the_resolved_window(
     would too.
     """
     documents = [_document("a@x.edu"), _document("b@x.edu"), {"user.name": "c@x.edu"}]
-    assert _report_on(monkeypatch, documents, "--detailed-usernames") == 0
+    assert _report_on(monkeypatch, documents, "--detailed-usernames", "--anonymize") == 0
 
     sessions = compute_activity(documents)
     expected = build_activity_report(
@@ -204,7 +204,7 @@ def test_the_report_on_stdout_is_the_builders_over_the_resolved_window(
         end_time=WINDOW_END,
         strftime_fmt=DATETIME_FMT,
         detailed_usernames=True,
-        anonymize=False,
+        anonymize=True,
     )
     assert capsys.readouterr().out == f"---\n{render_text(expected)}\n---\n"
 

@@ -17,7 +17,8 @@ import pytest
 
 from app.cli import push_servers as command
 from app.cli.push_servers import _build_parser, _run, _validate_arguments
-from app.usage.push import DocumentSink, PrintingSink
+from app.usage.push import DocumentSink, ElasticsearchSink, PrintingSink
+from tests.helpers.stub_clients import StubClient, install_client
 
 _HUB = ["--jupyterhub-endpoint", "https://hub.example.edu/hub/api"]
 _ES = ["--es-endpoint", "https://es.example.edu:9200", "--es-index", "servers"]
@@ -168,6 +169,17 @@ def test_any_failed_document_fails_the_run(
     """A partial push exits 1, as the README documents; an idle hub does not."""
     _stub_pipeline(monkeypatch, outcome)
     assert _run(_build_parser().parse_args(_HUB + ["--debug", "--interval", "5m"])) == code
+
+
+def test_without_debug_the_run_pushes_to_elasticsearch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ordinary run hands the pipeline a sink bound to Elasticsearch."""
+    sinks = _stub_pipeline(monkeypatch, (1, 0))
+    install_client(monkeypatch, command, StubClient())
+    assert _run(_build_parser().parse_args(_HUB + _ES + ["--interval", "5m"])) == 0
+    assert len(sinks) == 1
+    assert isinstance(sinks[0], ElasticsearchSink)
 
 
 def test_debug_prints_instead_of_connecting_to_elasticsearch(

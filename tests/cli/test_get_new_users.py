@@ -221,8 +221,9 @@ def test_the_tally_counts_only_the_users_created_in_the_window(
     """The second number is the report's own selection, not the list's size.
 
     The report on stdout is compared against one
-    built from the same users and their tally,
-    so the tally the report states is the one stderr does.
+    built from the same users, their tally, and the output flags,
+    so the tally the report states is the one stderr does
+    and the flags reach the builder.
     """
     users: list[dict[str, Any]] = [
         {"name": "a@x.edu", "created": "2026-08-05T10:00:00Z"},
@@ -231,7 +232,7 @@ def test_the_tally_counts_only_the_users_created_in_the_window(
         {"name": "later@x.edu", "created": "2026-09-15T00:00:00Z"},
         {"name": "undated@x.edu", "created": None},
     ]
-    assert _report_on(monkeypatch, users) == 0
+    assert _report_on(monkeypatch, users, "--detailed-usernames", "--anonymize") == 0
 
     captured = capsys.readouterr()
     assert (
@@ -247,9 +248,9 @@ def test_the_tally_counts_only_the_users_created_in_the_window(
         start_time=WINDOW_START,
         end_time=WINDOW_END,
         strftime_fmt=DATE_FMT,
-        detailed_usernames=False,
+        detailed_usernames=True,
         first_server=None,
-        anonymize=False,
+        anonymize=True,
     )
     assert captured.out == f"---\n{render_text(expected)}\n---\n"
 

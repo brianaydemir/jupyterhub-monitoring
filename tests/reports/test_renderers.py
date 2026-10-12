@@ -6,6 +6,7 @@
 
 import csv
 import io
+import re
 from collections.abc import Callable
 from datetime import timedelta
 
@@ -144,6 +145,29 @@ def test_html_document_declares_a_doctype_and_charset() -> None:
     assert '<meta charset="utf-8">' in document
     assert "<title>Test Report</title>" in document
     assert "<table" in document
+
+
+def test_html_dark_mode_rules_target_the_classes_the_cells_carry() -> None:
+    """The light colors are inline, so dark mode needs a rule per cell class.
+
+    The stylesheet and the cells spell those classes independently,
+    and a rule naming a class no cell carries,
+    or a declaration without the ``!important`` that outranks an inline style,
+    would leave dark mode silently unapplied.
+    """
+    fragment = render_html_fragment(
+        sample_reports.report(sections=[_section(rows=[["a", "1"], ["b", "2"]])])
+    )
+    carried = set(re.findall(r'<t[hd] class="([^"]+)"', fragment))
+    rules = re.findall(r"\.([\w-]+) \{([^}]*)\}", fragment)
+
+    assert "@media (prefers-color-scheme: dark)" in fragment
+    assert {name for name, _ in rules} == carried
+    assert len(carried) == 3
+    for _, body in rules:
+        declarations = [line.strip() for line in body.strip().splitlines()]
+        assert declarations
+        assert all(declaration.endswith("!important;") for declaration in declarations)
 
 
 def test_html_escapes_cell_text() -> None:

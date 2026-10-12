@@ -9,7 +9,7 @@ import argparse
 import sys
 from datetime import datetime, timedelta, tzinfo
 
-from app.cli.credentials import prompt_credentials, read_api_key
+from app.cli.credentials import prompt_password, read_api_key
 from app.clients.elasticsearch_client import ElasticsearchClient
 from app.clients.jupyterhub_client import JupyterHubClient
 from app.core.errors import AuthCancelledError, DataShapeError
@@ -33,8 +33,8 @@ from app.reports.model import Duration
 def make_es_client(args: argparse.Namespace) -> ElasticsearchClient:
     """Build an Elasticsearch client from parsed args.
 
-    When ``args.es_username`` is set, prompts for a password
-    via :func:`app.cli.credentials.prompt_credentials`.
+    When ``args.es_username`` is set, prompts for its password
+    via :func:`app.cli.credentials.prompt_password`.
 
     Raises:
         AppError: If the API key file cannot be read.
@@ -42,13 +42,12 @@ def make_es_client(args: argparse.Namespace) -> ElasticsearchClient:
         DataShapeError: If no API key is available.
     """
     if args.es_username:
-        credentials = prompt_credentials(args.es_username)
-        if credentials is None:
+        password = prompt_password()
+        if password is None:
             raise AuthCancelledError("Credential entry cancelled")
-        username, password = credentials
         return ElasticsearchClient(
             endpoint=args.es_endpoint,
-            basic_auth=(username, password),
+            basic_auth=(args.es_username, password),
             ca_cert=args.es_ca_cert,
         )
     return ElasticsearchClient(

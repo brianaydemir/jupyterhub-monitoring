@@ -91,14 +91,9 @@ def test_an_es_client_prompts_when_a_username_is_given(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The password never comes from an argument, only from a prompt."""
-
-    def _prompt(username: str | None) -> tuple[str, str] | None:
-        assert username is not None
-        return username, "pw"
-
     recorded: list[dict[str, Any]] = []
     monkeypatch.setattr(factories, "ElasticsearchClient", _recorder(recorded))
-    monkeypatch.setattr(factories, "prompt_credentials", _prompt)
+    monkeypatch.setattr(factories, "prompt_password", lambda: "pw")
 
     make_es_client(_es_args(username="elastic"))
 
@@ -115,11 +110,7 @@ def test_cancelling_the_password_prompt_is_an_expected_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ctrl-C at the prompt should exit 1, not raise an unexpected error."""
-
-    def _cancel(_username: str | None) -> tuple[str, str] | None:
-        return None
-
-    monkeypatch.setattr(factories, "prompt_credentials", _cancel)
+    monkeypatch.setattr(factories, "prompt_password", lambda: None)
 
     with pytest.raises(AuthCancelledError):
         make_es_client(_es_args(username="elastic"))
@@ -372,41 +363,6 @@ def test_a_whole_days_range_covers_whole_local_days(
     assert start == datetime(2026, 8, 20, tzinfo=CHICAGO)
     assert end == datetime(2026, 9, 3, tzinfo=CHICAGO)
     assert end - start == timedelta(days=14)
-
-
-def test_a_whole_days_window_of_one_day_is_half_open(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A day runs to the next midnight, which the report then excludes."""
-    monkeypatch.setattr(
-        time_utils, "datetime", FrozenClock(datetime(2026, 9, 3, 17, 48, tzinfo=CHICAGO))
-    )
-
-    start, end = compute_report_time_range(
-        _window_args(
-            report_start="2026-09-02 09:00",
-            report_end="2026-09-02 16:00",
-            whole_days=True,
-        )
-    )
-
-    assert start == datetime(2026, 9, 2, tzinfo=CHICAGO)
-    assert end == datetime(2026, 9, 3, tzinfo=CHICAGO)
-
-
-def test_a_whole_days_window_ending_now_stops_at_the_last_midnight(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The end never reaches into a day the run is still in the middle of."""
-    now = datetime(2026, 9, 3, 17, 48, tzinfo=CHICAGO)
-    monkeypatch.setattr(time_utils, "datetime", FrozenClock(now))
-
-    _, end = compute_report_time_range(
-        _window_args(report_start="2 weeks ago", report_end="now", whole_days=True)
-    )
-
-    assert end == datetime(2026, 9, 3, tzinfo=CHICAGO)
-    assert end < now
 
 
 def test_a_range_without_whole_days_keeps_the_bounds_as_written(

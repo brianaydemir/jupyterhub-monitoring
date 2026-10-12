@@ -8,34 +8,25 @@ from pathlib import Path
 from app.core.errors import AppError, DataShapeError
 
 
-def prompt_credentials(
-    username_arg: str | None,
-) -> tuple[str, str] | None:
-    """Prompt for username and password interactively.
+def prompt_password() -> str | None:
+    """Prompt for a password interactively.
 
+    The username always arrives on the command line,
+    so the password is the one credential ever prompted for.
     Returns *None* if the user cancels (Ctrl-C / EOF)
-    or if either value is empty after entry.
+    or enters nothing.
     """
-    if username_arg:
-        username = username_arg
-    else:
-        try:
-            username = input("Username: ")
-        except EOFError, KeyboardInterrupt:
-            print("\nOperation cancelled.", file=sys.stderr)
-            return None
-
     try:
         password = getpass.getpass("Password: ")
     except EOFError, KeyboardInterrupt:
         print("\nOperation cancelled.", file=sys.stderr)
         return None
 
-    if not username or not password:
-        print("Error: Username and password are required.", file=sys.stderr)
+    if not password:
+        print("Error: a password is required.", file=sys.stderr)
         return None
 
-    return username, password
+    return password
 
 
 def read_api_key(file: Path | None, env_var: str) -> str:

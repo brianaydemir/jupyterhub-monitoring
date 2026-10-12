@@ -10,7 +10,7 @@ not two modes: the choice belongs to the caller,
 which is why ``--debug`` lives in the command module and not in this pipeline.
 
 A sink is handed whole batches rather than one document at a time,
-so that a run's length does not grow with the size of the hub:
+so that a run costs one request per batch rather than one per server:
 a run that outlasts its own ``--interval`` lets two runs overlap
 and count one real interval twice.
 """
@@ -386,8 +386,9 @@ def push_servers(
     total_servers = len(servers)
     print(f"Found {total_servers} server(s) to process")
 
-    # Stamp every document before any batch is sent,
-    # because the id _make_doc_id builds includes the snapshot time.
+    # Stamp every document before any batch is built,
+    # so that the whole run shares one snapshot time
+    # and every id _make_doc_id builds includes it.
     stamp = _snapshot_metadata(datetime.now(timezone.utc), interval, metadata)
     for server in servers:
         server.update(stamp)
