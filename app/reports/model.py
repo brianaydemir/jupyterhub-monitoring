@@ -114,9 +114,8 @@ class ReportAttachment:
 class TextBlock:
     """A free-form text block inside a report section.
 
-    An extension point: no builder emits one yet,
-    so every renderer's text-block branch is currently unexercised.
-    Renderers must keep handling it for :data:`SectionBlock` to stay honest.
+    An extension point: no builder emits one yet.
+    Every renderer still handles it, since :data:`SectionBlock` admits it.
     """
 
     text: str

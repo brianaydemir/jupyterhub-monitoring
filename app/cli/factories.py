@@ -182,16 +182,19 @@ def _format_reporting_window(start: datetime, end: datetime, tz: tzinfo) -> str:
 
 
 def _format_window_length(length: timedelta) -> str:
-    """Render a window's length in whole days, or in hours below a day.
+    """Render a window's length in whole days, or otherwise in hours.
 
-    Days alone would report a half-day window as ``0 days``, so a shorter one
-    borrows the ``H:MM`` rendering of :class:`app.reports.model.Duration`
+    A length within an hour of a whole number of days reads as those days,
+    so a window of whole local days that spans a daylight-saving transition
+    is not reported as 23 or 25 hours.
+    Any other length borrows the ``H:MM`` rendering
+    of :class:`app.reports.model.Duration`
     rather than growing a duration formatter of its own.
     """
-    if length < timedelta(days=1):
-        return f"{Duration(length.total_seconds()).display()} hours"
     days = round(length / timedelta(days=1))
-    return f"{days} day" if days == 1 else f"{days} days"
+    if days >= 1 and abs(length - timedelta(days=days)) <= timedelta(hours=1):
+        return f"{days} day" if days == 1 else f"{days} days"
+    return f"{Duration(length.total_seconds()).display()} hours"
 
 
 def get_strftime_fmt(args: argparse.Namespace) -> str:

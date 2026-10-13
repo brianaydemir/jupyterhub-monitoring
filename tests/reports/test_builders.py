@@ -1073,7 +1073,7 @@ def test_the_activity_tables_mark_a_name_carrying_no_institution() -> None:
     """One ``_UserDisplay`` feeds both tables, so both show the marker.
 
     The absent login method is marked the same way,
-    and the recognized user beside it renders exactly as before.
+    and the recognized user beside it is untouched.
     """
     sessions = [
         _session("service-account", seconds=600),

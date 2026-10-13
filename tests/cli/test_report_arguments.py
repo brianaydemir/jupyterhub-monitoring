@@ -253,8 +253,8 @@ def test_the_new_users_report_takes_either_date_format(choice: str) -> None:
     assert args.date_format == choice
 
 
-def test_the_new_users_report_still_defaults_to_a_bare_date() -> None:
-    """The default the option has carried since 2.x."""
+def test_the_new_users_report_defaults_to_a_bare_date() -> None:
+    """Without the option, a user's timestamps are bare dates."""
     assert build_users_parser().parse_args(USERS_ARGV).date_format == "date"
 
 

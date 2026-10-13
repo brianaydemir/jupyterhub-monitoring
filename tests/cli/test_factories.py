@@ -368,7 +368,7 @@ def test_a_whole_days_range_covers_whole_local_days(
 def test_a_range_without_whole_days_keeps_the_bounds_as_written(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The flag is opt-in, so an existing command line resolves as before."""
+    """The flag is opt-in, so without it the bounds resolve as written."""
     monkeypatch.setattr(
         time_utils, "datetime", FrozenClock(datetime(2026, 9, 3, 17, 48, tzinfo=CHICAGO))
     )
@@ -394,14 +394,14 @@ def test_the_resolved_window_is_echoed_to_stderr(
     stderr keeps stdout clear for whoever is piping the report itself.
     """
     compute_report_time_range(
-        _window_args(report_start="2026-01-03 00:00", report_end="2026-09-03 17:48")
+        _window_args(report_start="2026-01-03 00:00", report_end="2026-09-03 00:00")
     )
 
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == (
-        "Reporting window: 2026-01-03 00:00 to 2026-09-03 17:48"
-        " (America/Chicago, 244 days)\n"
+        "Reporting window: 2026-01-03 00:00 to 2026-09-03 00:00"
+        " (America/Chicago, 243 days)\n"
     )
 
 
@@ -450,6 +450,7 @@ def test_the_echo_shows_the_snapped_window(
         ("2026-07-01 00:45", "0:45 hours"),
         ("2026-07-01 12:00", "12:00 hours"),
         ("2026-07-02 00:00", "1 day"),
+        ("2026-07-02 12:00", "36:00 hours"),
         ("2026-07-08 00:00", "7 days"),
     ],
 )
@@ -458,21 +459,34 @@ def test_the_echoed_length_reads_in_days_or_in_hours(
     expected: str,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Days would report a sub-day window as ``0 days``, so it reads H:MM."""
+    """Only a whole number of days reads as days; anything else reads H:MM.
+
+    Rounding a day and a half up to ``2 days`` would misstate the window.
+    """
     compute_report_time_range(
         _window_args(report_start="2026-07-01 00:00", report_end=report_end)
     )
     assert capsys.readouterr().err.endswith(f"(America/Chicago, {expected})\n")
 
 
+@pytest.mark.parametrize(
+    ("report_end", "expected"),
+    [("2026-03-08 12:00", "11:00 hours"), ("2026-03-09 00:00", "1 day")],
+)
 def test_the_echoed_length_is_elapsed_time_across_dst(
+    report_end: str,
+    expected: str,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A half day that loses an hour to spring-forward is eleven hours long."""
+    """Spring-forward makes a half day eleven hours, and a whole day still a day.
+
+    The whole day is 23 hours of elapsed time,
+    which is close enough to a day to be named as one.
+    """
     compute_report_time_range(
-        _window_args(report_start="2026-03-08 00:00", report_end="2026-03-08 12:00")
+        _window_args(report_start="2026-03-08 00:00", report_end=report_end)
     )
-    assert capsys.readouterr().err.endswith("(America/Chicago, 11:00 hours)\n")
+    assert capsys.readouterr().err.endswith(f"(America/Chicago, {expected})\n")
 
 
 def test_the_echo_names_the_reports_own_zone(capsys: pytest.CaptureFixture[str]) -> None:

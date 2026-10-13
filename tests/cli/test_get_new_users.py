@@ -148,7 +148,7 @@ def test_the_lookup_is_scoped_to_the_given_hub(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_the_lookup_spans_every_hub_without_one(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Omitting --hub draws from the whole index, as it always has."""
+    """Omitting --hub draws from the whole index."""
     _, client = _lookup(monkeypatch, [])
     assert _hub_filters(client) == []
     assert client.request is not None
