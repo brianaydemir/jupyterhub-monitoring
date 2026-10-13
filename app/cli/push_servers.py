@@ -46,6 +46,13 @@ Interval:
   runs. It is stored as meta.interval, and get-new-activity
   adds it up to compute per-user uptime.
 
+Memory:
+  get-new-activity can report each session's peak memory
+  only when this command's JupyterHub token also has the
+  admin:server_state scope, which lets each document record
+  the server's Pod (server.state.pod_name and
+  server.state.namespace, under KubeSpawner).
+
 Environment variables:
   JUPYTERHUB_API_KEY     API key (when --jupyterhub-api-key
                          is not provided)

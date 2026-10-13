@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.cli import credentials
-from app.cli.credentials import prompt_password, read_api_key
+from app.cli.credentials import prompt_password, read_api_key, read_optional_api_key
 from app.core.errors import AppError, DataShapeError
 
 
@@ -48,6 +48,12 @@ def test_an_empty_environment_variable_supplies_no_key(
     monkeypatch.setenv("ELASTICSEARCH_API_KEY", value)
     with pytest.raises(DataShapeError, match="ELASTICSEARCH_API_KEY is unset or empty"):
         read_api_key(None, "ELASTICSEARCH_API_KEY")
+
+
+def test_an_optional_key_may_be_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No key is how an anonymous Prometheus is reached, so it is not an error."""
+    monkeypatch.delenv("PROMETHEUS_TOKEN", raising=False)
+    assert read_optional_api_key(None, "PROMETHEUS_TOKEN") is None
 
 
 def _answer_password(monkeypatch: pytest.MonkeyPatch, password: str) -> None:

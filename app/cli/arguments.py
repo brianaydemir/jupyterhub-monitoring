@@ -107,6 +107,34 @@ def add_es_connection_argument_group(
     return es_group
 
 
+def add_prometheus_argument_group(
+    parser: argparse.ArgumentParser,
+) -> ArgumentGroup:
+    """Add a "Prometheus" argument group, whose flags are all optional, and return it."""
+    prometheus_group = parser.add_argument_group("Prometheus")
+    prometheus_group.add_argument(
+        "--prometheus-endpoint",
+        help=(
+            "Prometheus server base URL (e.g., https://prometheus.example.com); "
+            "when given, the report adds each started session's peak memory"
+        ),
+    )
+    prometheus_group.add_argument(
+        "--prometheus-ca-cert",
+        type=Path,
+        help="Path to CA certificate file for TLS verification",
+    )
+    prometheus_group.add_argument(
+        "--prometheus-token",
+        type=Path,
+        help=(
+            "Path to file containing a bearer token for Prometheus "
+            "(or set PROMETHEUS_TOKEN); without either, requests are unauthenticated"
+        ),
+    )
+    return prometheus_group
+
+
 def add_query_argument_group(
     parser: argparse.ArgumentParser,
 ) -> ArgumentGroup:

@@ -1,13 +1,13 @@
 """Tests for :mod:`app.cli.get_new_activity`.
 
-Accounting for the activity and assembling the report
-belong to :mod:`app.usage.activity` and :mod:`app.reports.builders`,
-and are covered through those.
+Accounting for the activity, measuring its memory, and assembling the report
+belong to :mod:`app.usage.activity`, :mod:`app.usage.memory`,
+and :mod:`app.reports.builders`, and are covered through those.
 What is left here is the query the command sends,
-how it wires the window and its output flags into those modules,
-and its own stderr diagnostic:
-the wording it gives each shape of document set,
-and the fact that it stays off stdout, where the report states it again.
+how it wires the window, its output flags, and Prometheus into those modules,
+and its own stderr diagnostics:
+the wording it gives each shape of document set and of measurement,
+and the fact that they stay off stdout, where the report states them again.
 """
 
 # This module exercises the command's internal helpers directly.
@@ -20,7 +20,12 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.cli import get_new_activity
-from app.cli.get_new_activity import _build_parser, _format_document_tally, _run
+from app.cli.get_new_activity import (
+    _build_parser,
+    _format_document_tally,
+    _format_memory_tally,
+    _run,
+)
 from app.core.time_utils import DATETIME_FMT
 from app.reports.builders import build_activity_report
 from app.reports.delivery import OutputTargets
@@ -33,7 +38,13 @@ from app.usage.activity import (
     summarize_activity,
     tally_documents,
 )
-from tests.helpers.stub_clients import QueryStubClient, install_client
+from app.usage.memory import MemoryTally
+from tests.helpers.stub_clients import (
+    PrometheusStubClient,
+    QueryStubClient,
+    install_client,
+    install_prometheus_client,
+)
 
 # The email settings a run needs before it will build any at all.
 _EMAIL_ARGV = [
@@ -207,6 +218,48 @@ def test_the_report_on_stdout_is_the_builders_over_the_resolved_window(
         anonymize=True,
     )
     assert capsys.readouterr().out == f"---\n{render_text(expected)}\n---\n"
+
+
+def test_each_sessions_peak_memory_reaches_the_report(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The peak Prometheus reports for a Pod lands on that Pod's session.
+
+    The report is compared against one built with the same peaks,
+    so a peak attached to the wrong session would show up as a different report.
+    The session whose snapshots name no Pod is counted on stderr instead.
+    """
+    pod = {"server.state.pod_name": "jupyter-a", "server.state.namespace": "jhub"}
+    documents = [_document("a@x.edu") | pod, _document("b@x.edu")]
+    install_prometheus_client(
+        monkeypatch, get_new_activity, PrometheusStubClient({"jupyter-a": 2**30})
+    )
+    argv = ["--prometheus-endpoint", "https://prometheus.example.edu"]
+    assert _report_on(monkeypatch, documents, *argv) == 0
+
+    sessions = compute_activity(documents)
+    expected = build_activity_report(
+        sessions=sessions,
+        summary=summarize_activity(sessions, documents, CHICAGO, WINDOW_START, WINDOW_END),
+        tally=tally_documents(documents),
+        start_time=WINDOW_START,
+        end_time=WINDOW_END,
+        strftime_fmt=DATETIME_FMT,
+        max_memory={("a@x.edu", "", "2026-08-05T14:00:00Z"): float(2**30)},
+    )
+    captured = capsys.readouterr()
+    assert captured.out == f"---\n{render_text(expected)}\n---\n"
+    tally = "Measured peak memory for 1 of 2 started sessions; 1 named no Pod."
+    assert tally in captured.err.splitlines()
+
+
+def test_the_memory_diagnostic_tells_its_two_gaps_apart() -> None:
+    """A missing token scope and a Prometheus without samples need different fixes."""
+    tally = MemoryTally(started=5, unnamed=1, measured=3)
+    assert _format_memory_tally(tally) == (
+        "Measured peak memory for 3 of 5 started sessions; 1 named no Pod, 1 had no samples."
+    )
 
 
 def test_a_clean_run_reports_what_it_counted() -> None:

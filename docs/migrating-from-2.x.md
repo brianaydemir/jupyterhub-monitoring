@@ -29,6 +29,8 @@ New in 3.0.0:
 - `--xlsx-file`, for Excel output
 - `--anonymize`, for pseudonymized reports
 - optional Elasticsearch flags for `get-new-users`
+- optional Prometheus flags for `get-new-activity`,
+  for each session's peak memory
 
 The reports' layout has also changed; generate one to see it.
 

@@ -66,7 +66,8 @@ It is organized into the following sub-packages:
   Keep it that way,
   rather than deferring an import inside a function to break a cycle.
 
-- `app/clients` -- thin wrappers around the JupyterHub and Elasticsearch APIs
+- `app/clients` -- thin wrappers around the JupyterHub, Elasticsearch,
+  and Prometheus APIs
 
 - `app/core` -- shared errors and utilities that are tied to no service:
   `errors` (the project's exception types),
@@ -88,6 +89,8 @@ It is organized into the following sub-packages:
   and the accessors for a snapshot's hub and timestamps),
   `activity` (per-session accounting, the report summary,
   and the tally of which documents could be counted),
+  `memory` (each session's peak memory, queried from Prometheus,
+  and the tally of which sessions could be measured),
   `new_users` (new-user selection, the tally of which users could be dated,
   first-server times, and adoption),
   and `push` (the pipeline behind `push-servers`)
@@ -119,12 +122,14 @@ so that the two cannot disagree about which arguments exist,
 and a `_SUBJECT_PREFIX`, which the parser and the run share
 so that the default subject the help describes is the one a message carries.
 `get_new_users` adds `_query_first_server`,
-whose search window is not the reporting window.
-Each report command also holds the formatter for its own stderr tally,
-`_format_document_tally` and `_format_user_tally`,
+whose search window is not the reporting window,
+and `get_new_activity` adds `_query_max_memory`,
+which consults Prometheus only when `--prometheus-endpoint` is given.
+Each report command also holds the formatters for its own stderr tallies,
+`_format_document_tally`, `_format_memory_tally`, and `_format_user_tally`,
 and the API-key commands hold their own output formatters;
 these are presentation rather than business logic.
-Put new JupyterHub or Elasticsearch business logic here,
+Put new JupyterHub, Elasticsearch, or Prometheus business logic here,
 not in a command module.
 
 The domain types a report is built from,
@@ -146,7 +151,8 @@ from colliding.
 `tests/helpers` is the one directory that mirrors nothing;
 it holds the stand-ins the tests share, `clock` (a frozen `datetime`),
 `sample_reports` (report values for the renderer and delivery tests),
-and `stub_clients` (stand-in Elasticsearch clients for the command tests).
+and `stub_clients` (stand-in Elasticsearch and Prometheus clients
+for the command and usage tests).
 
 Most modules have a test module of their own.
 These do not, and are covered through the code that uses them:

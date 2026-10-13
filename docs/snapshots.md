@@ -16,6 +16,11 @@ plus metadata about the run:
   such as `server.name` (empty for the default server), `server.ready`,
   `server.started`, and `server.user_options.*`
 
+- `server.state.*` -- the spawner's state,
+  present only when the JupyterHub token has the `admin:server_state` scope;
+  under KubeSpawner, `server.state.pod_name` and `server.state.namespace`
+  name the server's Pod
+
 - `meta.interval` -- the run's `--interval`, as given (for example, `5m`)
 
 - `meta.snapshot-time` and `meta.snapshot-time-iso` --
@@ -58,3 +63,24 @@ that parses as a positive duration, is skipped.
 `get-new-activity` prints on standard error
 how many documents it retrieved, counted, and skipped,
 with the skips broken out by reason.
+
+## Memory
+
+With `--prometheus-endpoint`,
+`get-new-activity` also reports each started session's peak memory:
+the highest `container_memory_working_set_bytes`
+summed over the containers of the Pod
+that the session's documents name in `server.state.*`.
+
+The peak is taken over the time the session's active time covers:
+from one `meta.interval` before its first counted document,
+but not before its `server.started`,
+to its last counted document.
+KubeSpawner reuses a server's Pod name each time the server starts,
+so stopping at `server.started`
+keeps the previous session's Pod out of the figure.
+
+A session is not measured when no document names its Pod,
+or when Prometheus holds no samples for the Pod over that time.
+`get-new-activity` prints on standard error
+how many sessions it measured and why it missed the rest.

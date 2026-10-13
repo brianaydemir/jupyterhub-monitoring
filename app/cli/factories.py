@@ -9,9 +9,10 @@ import argparse
 import sys
 from datetime import datetime, timedelta, tzinfo
 
-from app.cli.credentials import prompt_password, read_api_key
+from app.cli.credentials import prompt_password, read_api_key, read_optional_api_key
 from app.clients.elasticsearch_client import ElasticsearchClient
 from app.clients.jupyterhub_client import JupyterHubClient
+from app.clients.prometheus_client import PrometheusClient
 from app.core.errors import AuthCancelledError, DataShapeError
 from app.core.time_utils import (
     DATE_FMT,
@@ -68,6 +69,22 @@ def make_jupyterhub_client(args: argparse.Namespace) -> JupyterHubClient:
         endpoint=args.jupyterhub_endpoint,
         api_key=read_api_key(args.jupyterhub_api_key, "JUPYTERHUB_API_KEY"),
         ca_cert=args.jupyterhub_ca_cert,
+    )
+
+
+def make_prometheus_client(args: argparse.Namespace) -> PrometheusClient:
+    """Build a Prometheus client from parsed args.
+
+    With neither ``--prometheus-token`` nor ``PROMETHEUS_TOKEN``,
+    the client sends its requests unauthenticated.
+
+    Raises:
+        AppError: If the token file cannot be read.
+    """
+    return PrometheusClient(
+        endpoint=args.prometheus_endpoint,
+        token=read_optional_api_key(args.prometheus_token, "PROMETHEUS_TOKEN"),
+        ca_cert=args.prometheus_ca_cert,
     )
 
 

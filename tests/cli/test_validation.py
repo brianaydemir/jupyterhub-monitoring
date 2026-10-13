@@ -15,13 +15,18 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.cli import validation
-from app.cli.arguments import add_email_argument_group, add_es_argument_group
+from app.cli.arguments import (
+    add_email_argument_group,
+    add_es_argument_group,
+    add_prometheus_argument_group,
+)
 from app.cli.validation import (
     positive_int_or_error,
     reject_es_flags_without_endpoint,
     validate_email_arguments,
     validate_es_arguments,
     validate_jupyterhub_arguments,
+    validate_prometheus_arguments,
     validate_query_arguments,
 )
 from app.core import time_utils
@@ -259,6 +264,29 @@ def test_an_es_flag_without_an_endpoint_is_rejected(
     add_es_argument_group(parser, required=False)
     message = _reject(reject_es_flags_without_endpoint, parser.parse_args(argv), capsys)
     assert f"{argv[0]} requires --es-endpoint" in message
+
+
+#
+# validate_prometheus_arguments
+#
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--prometheus-ca-cert", "ca.pem"],
+        ["--prometheus-token", "prometheus-token.txt"],
+    ],
+)
+def test_a_prometheus_flag_without_an_endpoint_is_rejected(
+    argv: list[str],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """With nothing to query, the flag would do nothing."""
+    parser = argparse.ArgumentParser(prog="cmd")
+    add_prometheus_argument_group(parser)
+    message = _reject(validate_prometheus_arguments, parser.parse_args(argv), capsys)
+    assert f"{argv[0]} requires --prometheus-endpoint" in message
 
 
 #

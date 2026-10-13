@@ -4,7 +4,7 @@
 # make this module run long.
 # pylint: disable=too-many-lines
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, tzinfo
 from typing import Any
@@ -18,6 +18,7 @@ from app.usage.activity import (
     ActivitySummary,
     DocumentTally,
     SessionActivity,
+    SessionKey,
     SkipReason,
     UserActivity,
     aggregate_user_activity,
@@ -582,6 +583,15 @@ _STARTING_FOOTNOTE = (
     "before it had a start time."
 )
 
+# The ``User Activity`` column a run consulting Prometheus adds,
+# the unit it is shown in, and what it measures.
+_MAX_MEMORY_HEADER = "Max memory"
+_BYTES_PER_GIB = 2**30
+_MEMORY_FOOTNOTE = (
+    "Max memory is the peak working set of the session's Pod, in GiB; "
+    "n/a where the snapshots name no Pod or Prometheus holds no samples."
+)
+
 
 def _show_server(sessions: list[SessionActivity]) -> bool:
     """Return whether the ``Server`` column should be shown.
@@ -676,6 +686,14 @@ def _starting_section(
     )
 
 
+def _memory_cell(session: SessionActivity, max_memory: Mapping[SessionKey, float]) -> Cell:
+    """Return the ``Max memory`` cell for a session, in GiB."""
+    peak = max_memory.get(session.key)
+    if peak is None:
+        return _NOT_APPLICABLE
+    return Fixed(peak / _BYTES_PER_GIB, digits=2)
+
+
 def _user_activity_section(
     sessions: list[SessionActivity],
     columns: _SessionColumns,
@@ -683,6 +701,7 @@ def _user_activity_section(
     tz: tzinfo,
     strftime_fmt: str,
     window: tuple[datetime, datetime],
+    max_memory: Mapping[SessionKey, float] | None,
 ) -> ReportSection:
     """Build the ``User Activity`` section from the started sessions.
 
@@ -694,17 +713,30 @@ def _user_activity_section(
     sit together ahead of the ones naming the user,
     and is present only when :func:`_show_server` finds a named server:
     without it, two of one user's concurrent servers render as identical rows.
+
+    A *max_memory* of ``None`` drops the ``Max memory`` column,
+    as for a run that did not consult Prometheus,
+    rather than filling it with ``"n/a"`` for every row.
     """
     start_time, end_time = window
     sorted_sessions = sorted(sessions, key=lambda s: (order[s.user], _session_sort_key(s)))
+
     headers = ["Started", *columns.headers()]
-    rows: list[list[Cell]] = [
-        [
+    footnotes = [_DURATION_FOOTNOTE, _timezone_footnote(tz)]
+    if max_memory is not None:
+        headers.append(_MAX_MEMORY_HEADER)
+        footnotes.append(_MEMORY_FOOTNOTE)
+
+    rows: list[list[Cell]] = []
+    for session in sorted_sessions:
+        row: list[Cell] = [
             _format_iso_timestamp(session.started or "", strftime_fmt, tz),
             *columns.cells(session),
         ]
-        for session in sorted_sessions
-    ]
+        if max_memory is not None:
+            row.append(_memory_cell(session, max_memory))
+        rows.append(row)
+
     return _table_section(
         TabularSectionSpec(
             heading="User Activity",
@@ -718,9 +750,13 @@ def _user_activity_section(
             ),
             headers=headers,
             rows=rows,
-            right_align_columns={headers.index(_ACTIVITY_TIME_HEADER)},
+            right_align_columns={
+                headers.index(header)
+                for header in (_ACTIVITY_TIME_HEADER, _MAX_MEMORY_HEADER)
+                if header in headers
+            },
             attachment_filename="activity.csv",
-            footnotes=[_DURATION_FOOTNOTE, _timezone_footnote(tz)],
+            footnotes=footnotes,
         )
     )
 
@@ -949,6 +985,7 @@ def build_activity_report(
     strftime_fmt: str,
     detailed_usernames: bool = False,
     anonymize: bool = False,
+    max_memory: Mapping[SessionKey, float] | None = None,
 ) -> Report:
     """Build a report object for per-session JupyterHub server activity.
 
@@ -992,6 +1029,13 @@ def build_activity_report(
     When *anonymize* is set, within-institution identifiers are replaced
     with generic pseudonyms; the institution is still shown.
 
+    *max_memory* maps a session's :attr:`~SessionActivity.key`
+    to the peak memory of its Pod, in bytes,
+    and adds a ``Max memory`` column to ``User Activity``;
+    a session absent from the mapping could not be measured.
+    Pass ``None`` when Prometheus was not consulted at all,
+    which leaves the column out.
+
     Raises:
         ValueError: If *start_time* or *end_time* is not timezone-aware.
     """
@@ -1005,14 +1049,15 @@ def build_activity_report(
     started = [session for session in sessions if session.started]
     starting = [session for session in sessions if not session.started]
 
-    sections = [
-        _document_collection_section(tally, summary, start_time, end_time),
-        _starting_section(starting, columns, start_time, end_time),
-        *_aggregate_sections(summary),
-        _user_totals_section(users, columns.display, order),
-        _user_activity_section(
-            started, columns, order, tz, strftime_fmt, (start_time, end_time)
-        ),
-    ]
-
-    return Report(title="JupyterHub Activity Report", sections=sections)
+    return Report(
+        title="JupyterHub Activity Report",
+        sections=[
+            _document_collection_section(tally, summary, start_time, end_time),
+            _starting_section(starting, columns, start_time, end_time),
+            *_aggregate_sections(summary),
+            _user_totals_section(users, columns.display, order),
+            _user_activity_section(
+                started, columns, order, tz, strftime_fmt, (start_time, end_time), max_memory
+            ),
+        ],
+    )

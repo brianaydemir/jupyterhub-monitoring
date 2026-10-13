@@ -18,7 +18,7 @@ that fed the report nothing it could read.
 import re
 import statistics
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, tzinfo
 from enum import Enum
@@ -27,6 +27,9 @@ from typing import Any, cast
 from app.core.dataclass_defaults import empty_string_set
 from app.core.time_utils import elapsed, last_instant, parse_duration
 from app.usage.snapshots import snapshot_hub, snapshot_seconds
+
+# A session: a user, one of their named servers, and that server's start.
+SessionKey = tuple[str, str | None, str | None]
 
 
 @dataclass(frozen=True)
@@ -46,6 +49,11 @@ class SessionActivity:
     started: str | None
     seconds: float
     gpu: bool
+
+    @property
+    def key(self) -> SessionKey:
+        """Return the key :func:`session_contributions` files this session under."""
+        return (self.user, self.server_name, self.started)
 
 
 @dataclass(frozen=True)
@@ -179,9 +187,6 @@ _DISABLED_OPTION_VALUES = frozenset({"", "0", "false", "no", "none", "off"})
 # so the two cannot disagree about a day's key.
 _DAY_FMT = "%Y-%m-%d"
 
-# A session: a user, one of their named servers, and that server's start.
-_SessionKey = tuple[str, str | None, str | None]
-
 # One hub's one push: the hub that wrote the documents, or ``None``
 # when they name none, and the snapshot time it stamped every one of them with.
 _PushKey = tuple[str | None, int]
@@ -279,24 +284,24 @@ def _document_contribution(doc: dict[str, Any]) -> tuple[str, float] | None:
     return None if isinstance(outcome, SkipReason) else outcome
 
 
-def compute_activity(
+def session_contributions(
     documents: Iterable[dict[str, Any]],
-) -> list[SessionActivity]:
-    """Sum active server time per session from Elasticsearch documents.
+) -> Iterator[tuple[SessionKey, float, dict[str, Any]]]:
+    """Yield each countable document with its session and the seconds it adds.
 
     A session is keyed by ``user.name``, ``server.name``,
     and ``server.started``,
-    so concurrent named servers and separate runs are tallied independently.
+    so concurrent named servers and separate runs are kept apart.
     Snapshots taken while a server is still spawning
     carry no ``server.started``,
     so a user's spawn attempts on one named server share a single session.
-    A session counts as GPU when any of its snapshots requested one,
-    and documents that :func:`_document_contribution` rejects
-    contribute nothing; :func:`tally_documents` is what counts those.
-    """
-    seconds: dict[_SessionKey, float] = {}
-    gpu: dict[_SessionKey, bool] = {}
+    Documents that :func:`_document_contribution` rejects are not yielded;
+    :func:`tally_documents` is what counts those.
 
+    Every per-session figure is read through this one function,
+    so no two of them can disagree
+    about which documents count or which session each belongs to.
+    """
     for doc in documents:
         contribution = _document_contribution(doc)
         if contribution is None:
@@ -310,7 +315,21 @@ def compute_activity(
             server if isinstance(server, str) else None,
             started if isinstance(started, str) else None,
         )
+        yield key, doc_seconds, doc
 
+
+def compute_activity(
+    documents: Iterable[dict[str, Any]],
+) -> list[SessionActivity]:
+    """Sum active server time per session from Elasticsearch documents.
+
+    Sessions are the ones :func:`session_contributions` files documents under.
+    A session counts as GPU when any of its snapshots requested one.
+    """
+    seconds: dict[SessionKey, float] = {}
+    gpu: dict[SessionKey, bool] = {}
+
+    for key, doc_seconds, doc in session_contributions(documents):
         seconds[key] = seconds.get(key, 0.0) + doc_seconds
         gpu[key] = gpu.get(key, False) or _document_uses_gpu(doc)
 

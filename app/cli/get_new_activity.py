@@ -2,16 +2,18 @@
 
 import argparse
 import sys
-from typing import Final
+from typing import Any, Final
 
 from app.cli.arguments import add_hub_argument
 from app.cli.factories import (
     compute_report_time_range,
     make_es_client,
     make_output_targets,
+    make_prometheus_client,
 )
 from app.cli.report_arguments import (
     ELASTICSEARCH_SOURCE,
+    PROMETHEUS_SOURCE,
     configure_report_parser,
     validate_report_arguments,
 )
@@ -22,17 +24,19 @@ from app.reports.builders import build_activity_report
 from app.reports.delivery import deliver_report
 from app.usage.activity import (
     DocumentTally,
+    SessionKey,
     SkipReason,
     compute_activity,
     summarize_activity,
     tally_documents,
 )
+from app.usage.memory import MemoryTally, measure_peak_memory
 from app.usage.snapshots import build_query, select_hub
 
 # The data this report draws on.
 # Shared by the parser and the validator
 # so that the two cannot disagree about which arguments exist.
-_SOURCES: Final = (ELASTICSEARCH_SOURCE,)
+_SOURCES: Final = (ELASTICSEARCH_SOURCE, PROMETHEUS_SOURCE)
 
 # The fixed part of the default email subject,
 # which the run completes with the reporting window.
@@ -61,10 +65,22 @@ Examples:
   %(prog)s --es-endpoint https://es.example.com:9200 \\
     --es-api-key /path/to/key --es-index servers \\
     --report-start "July 1 2026" --report-end "July 8 2026"
+  %(prog)s --es-endpoint https://es.example.com:9200 \\
+    --es-api-key /path/to/key --es-index servers \\
+    --duration "7 days" \\
+    --prometheus-endpoint https://prometheus.example.com
+
+Prometheus:
+  Optional. Pass --prometheus-endpoint to also report each
+  started session's peak memory. The snapshots must name
+  each session's Pod, which push-servers records when its
+  JupyterHub token has the admin:server_state scope.
 
 Environment variables:
   ELASTICSEARCH_API_KEY  API key (when --es-api-key is
                          not provided)
+  PROMETHEUS_TOKEN       Bearer token (when
+                         --prometheus-token is not provided)
         """,
     )
 
@@ -108,15 +124,58 @@ def _format_document_tally(tally: DocumentTally) -> str:
     return f"{retrieved}; counted {tally.counted}, skipped {skipped} ({reasons})."
 
 
+def _format_memory_tally(tally: MemoryTally) -> str:
+    """Render the measured/unmeasured session diagnostic for stderr.
+
+    The two gaps are named apart because each has its own fix:
+    sessions naming no Pod point at the ``push-servers`` token's scopes,
+    and sessions with no samples at Prometheus's retention or labels.
+    """
+    noun = "session" if tally.started == 1 else "sessions"
+    if not tally.started:
+        return f"Measured peak memory for 0 started {noun}."
+    measured = f"Measured peak memory for {tally.measured} of {tally.started} started {noun}"
+    gaps: list[str] = []
+    if tally.unnamed:
+        gaps.append(f"{tally.unnamed} named no Pod")
+    if tally.no_samples:
+        gaps.append(f"{tally.no_samples} had no samples")
+    if not gaps:
+        return f"{measured}."
+    return f"{measured}; {', '.join(gaps)}."
+
+
+def _query_max_memory(
+    args: argparse.Namespace,
+    documents: list[dict[str, Any]],
+) -> dict[SessionKey, float] | None:
+    """Query Prometheus for each started session's peak memory.
+
+    Returns ``None`` when ``--prometheus-endpoint`` was not given,
+    which leaves the report's memory column out
+    rather than filling it with ``"n/a"``.
+
+    Raises:
+        ExternalServiceError: If Prometheus querying fails.
+    """
+    if args.prometheus_endpoint is None:
+        return None
+    with make_prometheus_client(args) as client:
+        peaks, tally = measure_peak_memory(documents, client)
+    print(_format_memory_tally(tally), file=sys.stderr)
+    return peaks
+
+
 def _run(args: argparse.Namespace) -> int:
     """Execute command business logic.
 
     The document tally leads the report, and also goes to stderr,
     where a scheduled run's log keeps it apart from the report on stdout.
+    So does the memory tally, when Prometheus is consulted.
 
     Raises:
         DataShapeError: If the reporting window is not timezone-aware.
-        ExternalServiceError: If Elasticsearch querying fails.
+        ExternalServiceError: If Elasticsearch or Prometheus querying fails.
     """
     start_time, end_time = compute_report_time_range(args)
     tz = start_time.tzinfo
@@ -134,6 +193,8 @@ def _run(args: argparse.Namespace) -> int:
     tally = tally_documents(documents)
     print(_format_document_tally(tally), file=sys.stderr)
 
+    max_memory = _query_max_memory(args, documents)
+
     sessions = compute_activity(documents)
     summary = summarize_activity(sessions, documents, tz, start_time, end_time)
     report = build_activity_report(
@@ -145,6 +206,7 @@ def _run(args: argparse.Namespace) -> int:
         strftime_fmt=DATETIME_FMT,
         detailed_usernames=args.detailed_usernames,
         anonymize=args.anonymize,
+        max_memory=max_memory,
     )
     targets = make_output_targets(
         args,

@@ -112,6 +112,33 @@ def reject_es_flags_without_endpoint(
             parser.error(f"{flag} requires --es-endpoint")
 
 
+def validate_prometheus_arguments(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    """Validate the optional Prometheus group.
+
+    ``--prometheus-endpoint`` is the switch: without it, Prometheus is not used,
+    and any other flag in the group is an error.
+    No credential is required, since a Prometheus may need none.
+    ``PROMETHEUS_TOKEN`` without an endpoint is not an error,
+    since a container or secret mount may set it for every run.
+    """
+    if args.prometheus_endpoint is None:
+        for flag, attr in [
+            ("--prometheus-ca-cert", "prometheus_ca_cert"),
+            ("--prometheus-token", "prometheus_token"),
+        ]:
+            if getattr(args, attr) is not None:
+                parser.error(f"{flag} requires --prometheus-endpoint")
+        return
+
+    if args.prometheus_ca_cert is not None and not args.prometheus_ca_cert.exists():
+        parser.error(f"CA certificate file not found: {args.prometheus_ca_cert}")
+    if args.prometheus_token is not None and not args.prometheus_token.exists():
+        parser.error(f"Token file not found: {args.prometheus_token}")
+
+
 def validate_query_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,

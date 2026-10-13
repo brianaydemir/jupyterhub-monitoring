@@ -20,6 +20,7 @@ from app.cli.arguments import (
     add_es_argument_group,
     add_jupyterhub_argument_group,
     add_output_argument_group,
+    add_prometheus_argument_group,
     add_query_argument_group,
 )
 from app.cli.validation import (
@@ -27,6 +28,7 @@ from app.cli.validation import (
     validate_email_arguments,
     validate_es_arguments,
     validate_jupyterhub_arguments,
+    validate_prometheus_arguments,
     validate_query_arguments,
 )
 
@@ -89,6 +91,12 @@ ELASTICSEARCH_SOURCE: Final = ReportSource(
 OPTIONAL_ELASTICSEARCH_SOURCE: Final = ReportSource(
     add_arguments=_add_optional_es_argument_group,
     validate=_validate_optional_es_arguments,
+)
+
+# Every Prometheus flag is optional, so this source needs no optional twin.
+PROMETHEUS_SOURCE: Final = ReportSource(
+    add_arguments=add_prometheus_argument_group,
+    validate=validate_prometheus_arguments,
 )
 
 

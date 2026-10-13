@@ -7,5 +7,6 @@ directly; both paths are supported.
 
 from app.clients.elasticsearch_client import ElasticsearchClient
 from app.clients.jupyterhub_client import JupyterHubClient
+from app.clients.prometheus_client import PrometheusClient
 
-__all__ = ["ElasticsearchClient", "JupyterHubClient"]
+__all__ = ["ElasticsearchClient", "JupyterHubClient", "PrometheusClient"]
