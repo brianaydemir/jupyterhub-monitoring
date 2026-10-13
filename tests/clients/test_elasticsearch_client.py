@@ -5,11 +5,13 @@
 # pylint: disable=use-implicit-booleaness-not-comparison
 
 from collections.abc import Callable, Generator
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
 from elasticsearch import ApiError, TransportError
 
+from app.clients import elasticsearch_client
 from app.clients.elasticsearch_client import ElasticsearchClient
 from app.core.errors import ExternalServiceError
 
@@ -202,6 +204,38 @@ def test_exactly_one_credential_is_required() -> None:
             api_key="k",
             basic_auth=("u", "p"),
         )
+
+
+def test_each_credential_and_the_ca_bundle_reach_the_library(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The constructor is the one mapping no other test here reaches.
+
+    Every other case replaces the transport after construction,
+    so a wrong keyword would surface only on a real connection.
+    """
+    recorded: list[dict[str, Any]] = []
+
+    def _record(**kwargs: Any) -> object:
+        recorded.append(kwargs)
+        return object()
+
+    monkeypatch.setattr(elasticsearch_client, "Elasticsearch", _record)
+    ElasticsearchClient(endpoint="https://es.example.com:9200", api_key="k")
+    ElasticsearchClient(
+        endpoint="https://es.example.com:9200",
+        basic_auth=("u", "p"),
+        ca_cert=Path("/certs/ca.pem"),
+    )
+    assert recorded == [
+        {"hosts": ["https://es.example.com:9200"], "api_key": "k"},
+        {
+            "hosts": ["https://es.example.com:9200"],
+            "basic_auth": ("u", "p"),
+            "ca_certs": "/certs/ca.pem",
+            "verify_certs": True,
+        },
+    ]
 
 
 def test_query_yields_sources_across_scroll_pages() -> None:

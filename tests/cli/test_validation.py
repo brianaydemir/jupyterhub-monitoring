@@ -540,16 +540,21 @@ def test_a_whole_days_window_ending_today_is_not_a_future_end(
 
 
 def test_whole_days_does_not_rescue_a_future_report_end(
+    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Snapping a typo back to midnight still leaves it ahead of the present."""
+    """Snapping a typo back to midnight still leaves it ahead of the present.
+
+    The clock is frozen because an unfrozen ``tomorrow`` snaps to a midnight
+    that falls inside the tolerance during the last minute of each day.
+    """
+    _freeze(monkeypatch)
     message = _reject(
         validate_query_arguments,
         _query_args(report_start="2 weeks ago", report_end="tomorrow", whole_days=True),
         capsys,
     )
-    assert "--report-end resolves to" in message
-    assert "which is in the future" in message
+    assert "--report-end resolves to 2026-07-09 00:00, which is in the future" in message
 
 
 def test_a_whole_days_window_with_no_finished_day_is_rejected(
