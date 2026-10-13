@@ -43,10 +43,10 @@ def parse_name(name: str) -> ParsedName:
     """Parse a JupyterHub username into its components.
 
     Names are recognized in four forms:
-      - ``{id}@{domain}``          — ePPN-style (priority 0)
-      - ``eppn:{id}@{domain}``     — legacy ePPN (priority 1)
-      - ``email:{id}@{domain}``    — explicit email (priority 2)
-      - ``orcid:{id}``             — ORCID (priority 3)
+      - ``{id}@{domain}``          -- ePPN-style (priority 0)
+      - ``eppn:{id}@{domain}``     -- legacy ePPN (priority 1)
+      - ``email:{id}@{domain}``    -- explicit email (priority 2)
+      - ``orcid:{id}``             -- ORCID (priority 3)
 
     The prefixed forms are matched first,
     so a bare ``{id}@{domain}`` name is only assumed

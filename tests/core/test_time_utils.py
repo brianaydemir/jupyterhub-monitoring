@@ -28,7 +28,7 @@ CHICAGO = ZoneInfo("America/Chicago")
     [("+04:00", 4 * 3600), ("-05:30", -(5 * 3600 + 1800)), ("+00:00", 0)],
 )
 def test_parse_timezone_accepts_fixed_offsets(text: str, expected_seconds: int) -> None:
-    """A ``±HH:MM`` string becomes a fixed-offset zone."""
+    """A ``+/-HH:MM`` string becomes a fixed-offset zone."""
     offset = parse_timezone(text).utcoffset(None)
     assert offset is not None
     assert offset.total_seconds() == expected_seconds

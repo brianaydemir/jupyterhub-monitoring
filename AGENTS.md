@@ -41,7 +41,7 @@ and generating reports from that data.
 
 It is organized into the following sub-packages:
 
-- `app/cli` — command entry points,
+- `app/cli` -- command entry points,
   `runtime` (the parse/validate/run wrapper every command's `main` uses),
   and the helpers those commands share:
   `arguments` (the `add_*` argument builders,
@@ -66,15 +66,15 @@ It is organized into the following sub-packages:
   Keep it that way,
   rather than deferring an import inside a function to break a cycle.
 
-- `app/clients` — thin wrappers around the JupyterHub and Elasticsearch APIs
+- `app/clients` -- thin wrappers around the JupyterHub and Elasticsearch APIs
 
-- `app/core` — shared errors and utilities that are tied to no service:
+- `app/core` -- shared errors and utilities that are tied to no service:
   `errors` (the project's exception types),
   `dataclass_defaults` (the typed empty-collection factories
   that dataclass fields use as their `default_factory`),
   and `dict_utils`, `name_utils`, and `time_utils`
 
-- `app/reports` — turning usage data into a delivered report:
+- `app/reports` -- turning usage data into a delivered report:
   `model` (the rendering types),
   `builders` (assembling a report from `app/usage` data),
   `anonymize` (the pseudonyms `--anonymize` substitutes),
@@ -82,7 +82,7 @@ It is organized into the following sub-packages:
   `delivery` (writing the files and sending the mail),
   and `email_utils` (composing and sending one message)
 
-- `app/usage` — the JupyterHub usage domain:
+- `app/usage` -- the JupyterHub usage domain:
   `snapshots` (the Elasticsearch query for active server documents,
   the exact `--hub` match its results go through,
   and the accessors for a snapshot's hub and timestamps),
@@ -151,13 +151,13 @@ and `stub_clients` (stand-in Elasticsearch clients for the command tests).
 Most modules have a test module of their own.
 These do not, and are covered through the code that uses them:
 
-- `app/reports/email_utils.py` — `tests/reports/test_delivery.py`
+- `app/reports/email_utils.py` -- `tests/reports/test_delivery.py`
 
-- `app/core/errors.py` and `app/core/dataclass_defaults.py` —
+- `app/core/errors.py` and `app/core/dataclass_defaults.py` --
   exercised by everything that raises or declares them;
   a test asserting that an empty exception subclass exists would assert nothing
 
-- each `__init__.py` — a docstring,
+- each `__init__.py` -- a docstring,
   plus the re-exports in `app/core` and `app/clients`
   that are extension points (see below)
 
@@ -274,9 +274,9 @@ Documentation changes often still need step 1,
 because `make tidy` formats Markdown
 and runs spelling checks across the repository.
 
-1. `make tidy` — normalize formatting and spelling
+1. `make tidy` -- normalize formatting and spelling
 
-2. `make lint` — surface static analysis and quality issues
+2. `make lint` -- surface static analysis and quality issues
 
    **Note:** `make lint` always runs all linters, even if one exits non-zero,
    because each command in the `lint` target
@@ -284,14 +284,14 @@ and runs spelling checks across the repository.
    Pass `IGNORE_ERRORS=` to stop at the first failure,
    which is how CI invokes it.
 
-3. `make test` — run the test suite
+3. `make test` -- run the test suite
 
    **Note:** `pytest` is configured to turn warnings into errors,
    so a new `DeprecationWarning` fails the suite.
    Fix the cause, or add a narrow entry to `filterwarnings`
    in `pyproject.toml` explaining why it cannot be fixed.
 
-4. `poetry run pre-commit run --files <changed files>` —
+4. `poetry run pre-commit run --files <changed files>` --
    run pre-commit checks on the changed files
 
    **Note:** Some hooks edit files automatically.

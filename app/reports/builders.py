@@ -154,9 +154,9 @@ def _format_iso_timestamp(value: str, strftime_fmt: str, tz: tzinfo) -> str:
 # The report's vocabulary for a value it knows to be absent,
 # kept together so a change to one is a change to all three.
 # "n/a" is a value the source did not carry.
-# The other two are absences that are themselves data —
+# The other two are absences that are themselves data --
 # a server with no name is the default one,
-# and a username in none of the known forms carries no identity —
+# and a username in none of the known forms carries no identity --
 # and are named rather than blanked,
 # since a blank cell reads as data the report failed to fill in.
 # No real domain or login method takes the form of the last.

@@ -10,19 +10,19 @@ Each run of `push-servers` writes one document per server.
 A document is the server's JupyterHub model, flattened to dotted keys,
 plus metadata about the run:
 
-- `user.name` — the server's owner
+- `user.name` -- the server's owner
 
-- `server.*` — the server's own fields,
+- `server.*` -- the server's own fields,
   such as `server.name` (empty for the default server), `server.ready`,
   `server.started`, and `server.user_options.*`
 
-- `meta.interval` — the run's `--interval`, as given (for example, `5m`)
+- `meta.interval` -- the run's `--interval`, as given (for example, `5m`)
 
-- `meta.snapshot-time` and `meta.snapshot-time-iso` —
+- `meta.snapshot-time` and `meta.snapshot-time-iso` --
   the time of the run, in Unix seconds and in ISO 8601;
   every document from one run carries the same value
 
-- `meta.KEY` — one for each `--metadata KEY=VALUE`
+- `meta.KEY` -- one for each `--metadata KEY=VALUE`
 
 Tag each hub's documents with `--metadata hub=NAME`;
 the report commands' `--hub NAME` selects them, matching the name exactly.

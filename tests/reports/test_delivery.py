@@ -236,13 +236,13 @@ def test_a_message_body_survives_non_ascii_content() -> None:
         sender_email="a@example.edu",
         recipients=["b@example.org"],
         subject="S",
-        text_content="exämple.edu",
+        text_content="ex\u00e4mple.edu",
         html_content=None,
     )
     body = [p for p in message.walk() if p.get_content_type() == "text/plain"][0]
     payload = body.get_payload(decode=True)
     assert isinstance(payload, bytes)
-    assert payload.decode(str(body.get_content_charset())) == "exämple.edu"
+    assert payload.decode(str(body.get_content_charset())) == "ex\u00e4mple.edu"
 
 
 def test_an_attachment_type_is_guessed_from_its_filename() -> None:
@@ -342,14 +342,14 @@ def test_a_non_ascii_display_name_is_encoded_but_its_address_is_not() -> None:
     the header is ASCII, the address is still readable in it,
     and the name decodes back to what was given.
     """
-    message = _addressed_to(["exämple Ops <ops@example.org>"])
+    message = _addressed_to(["ex\u00e4mple Ops <ops@example.org>"])
     header = message["To"]
     assert header.isascii()
     assert header.endswith(" <ops@example.org>")
     assert b" <ops@example.org>" in message.as_bytes()
     name, address = parseaddr(header)
     assert address == "ops@example.org"
-    assert str(make_header(decode_header(name))) == "exämple Ops"
+    assert str(make_header(decode_header(name))) == "ex\u00e4mple Ops"
 
 
 def test_one_unreadable_recipient_does_not_cost_the_others_their_copy(

@@ -43,7 +43,7 @@ def parse_timezone(tz_str: str) -> tzinfo:
     except KeyError, ValueError:
         pass
 
-    # Try fixed UTC offset: ±HH:MM
+    # Try fixed UTC offset: +/-HH:MM
     if m := _OFFSET_RE.match(tz_str):
         hours, minutes = int(m.group(2)), int(m.group(3))
         if hours <= 23 and minutes <= 59:
@@ -59,7 +59,7 @@ def format_timezone(tz: tzinfo) -> str:
 
     Every form :func:`parse_timezone` accepts round-trips:
     a :class:`~zoneinfo.ZoneInfo` renders as the IANA key it was built from,
-    and a fixed-offset zone carries its ``±HH:MM`` string as its name.
+    and a fixed-offset zone carries its ``+/-HH:MM`` string as its name.
     Callers therefore need not carry the original string
     alongside the parsed zone.
     """

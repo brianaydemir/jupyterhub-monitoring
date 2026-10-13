@@ -1,4 +1,4 @@
-#───────────────────────────────────────────────────────────────────────────
+#---------------------------------------------------------------------------
 # Files the image build does not need.
 #
 # The build bind-mounts dist/ and installs the wheel from it, so that

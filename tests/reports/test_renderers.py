@@ -181,9 +181,9 @@ def test_html_escapes_cell_text() -> None:
 
 def test_csv_bytes_are_utf8_encoded_csv() -> None:
     """CSV is produced as bytes, so its text must survive the encoding."""
-    built = sample_reports.report(sections=[_section(rows=[["Ünïcodé", "1"]])])
+    built = sample_reports.report(sections=[_section(rows=[["\u00dcn\u00efcod\u00e9", "1"]])])
     payload = render_csv_bytes(built)
-    assert "Ünïcodé".encode("utf-8") in payload
+    assert "\u00dcn\u00efcod\u00e9".encode("utf-8") in payload
     assert payload.decode("utf-8").startswith("Test Report")
 
 
