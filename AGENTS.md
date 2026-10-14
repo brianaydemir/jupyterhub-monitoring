@@ -89,8 +89,9 @@ It is organized into the following sub-packages:
   and the accessors for a snapshot's hub and timestamps),
   `activity` (per-session accounting, the report summary,
   and the tally of which documents could be counted),
-  `memory` (each session's peak memory, queried from Prometheus,
-  and the tally of which sessions could be measured),
+  `pod_metrics` (each session's peak memory and CPU time,
+  queried from Prometheus,
+  and the tallies of which sessions could be measured),
   `new_users` (new-user selection, the tally of which users could be dated,
   first-server times, and adoption),
   and `push` (the pipeline behind `push-servers`)
@@ -123,10 +124,10 @@ and a `_SUBJECT_PREFIX`, which the parser and the run share
 so that the default subject the help describes is the one a message carries.
 `get_new_users` adds `_query_first_server`,
 whose search window is not the reporting window,
-and `get_new_activity` adds `_query_max_memory`,
+and `get_new_activity` adds `_query_pod_metrics`,
 which consults Prometheus only when `--prometheus-endpoint` is given.
 Each report command also holds the formatters for its own stderr tallies,
-`_format_document_tally`, `_format_memory_tally`, and `_format_user_tally`,
+`_format_document_tally`, `_format_pod_tally`, and `_format_user_tally`,
 and the API-key commands hold their own output formatters;
 these are presentation rather than business logic.
 Put new JupyterHub, Elasticsearch, or Prometheus business logic here,

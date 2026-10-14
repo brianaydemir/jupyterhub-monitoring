@@ -1,17 +1,18 @@
-"""Peak memory per session, read from Prometheus.
+"""Peak memory and CPU time per session, read from Prometheus.
 
 A session runs in a KubeSpawner Pod, which the spawner names in its state.
 ``push-servers`` records that state as ``server.state.pod_name``
 and ``server.state.namespace``
 when its JupyterHub token holds the ``admin:server_state`` scope.
 
+Both figures are summed over the Pod's containers.
 The peak is taken from ``container_memory_working_set_bytes``,
 the figure the kubelet holds a container's memory limit against,
-summed over the Pod's containers.
+and the CPU time from ``container_cpu_usage_seconds_total``.
 """
 
 import json
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
@@ -36,13 +37,13 @@ class MetricsQuerier(Protocol):
 
 
 @dataclass(frozen=True)
-class MemoryTally:
+class PodTally:
     """How many started sessions a run measured, and why it missed the rest.
 
     An *unnamed* session has no document naming its Pod,
     which is all a ``push-servers`` token without ``admin:server_state`` leaves.
     The rest of the unmeasured sessions named a Pod
-    that Prometheus held no samples for over the session's span.
+    that Prometheus held too few samples for over the session's span.
     """
 
     started: int = 0
@@ -50,9 +51,21 @@ class MemoryTally:
     measured: int = 0
 
     @property
-    def no_samples(self) -> int:
+    def too_few_samples(self) -> int:
         """How many sessions named a Pod but could not be measured."""
         return self.started - self.unnamed - self.measured
+
+
+@dataclass(frozen=True)
+class PodMetrics:
+    """The figures measured for each session, keyed by the session.
+
+    *cpu_time* is in seconds, and *peak_memory* in bytes.
+    A session absent from a mapping could not be measured.
+    """
+
+    cpu_time: Mapping[SessionKey, float]
+    peak_memory: Mapping[SessionKey, float]
 
 
 @dataclass(frozen=True)
@@ -121,17 +134,16 @@ def _pod_spans(
     return list(started), spans
 
 
-def _peak_query(span: _PodSpan) -> str:
-    """Build the PromQL for a Pod's peak working set over *span*.
+def _pod_selector(span: _PodSpan) -> str:
+    """Return the label matchers for the containers of *span*'s Pod.
 
-    The query is evaluated at the span's end, and looks back over its length.
     The matchers on ``container`` and ``image``
     leave out the cgroup series that already total the Pod's containers,
-    so that the sum does not count them twice.
+    so that a sum over the selected series does not count them twice.
     The label values are quoted as JSON strings,
     whose escapes PromQL also reads.
     """
-    selector = ",".join(
+    return ",".join(
         [
             f"namespace={json.dumps(span.namespace)}",
             f"pod={json.dumps(span.pod)}",
@@ -139,18 +151,42 @@ def _peak_query(span: _PodSpan) -> str:
             'image!=""',
         ]
     )
-    seconds = max(span.end - span.start, 1)
-    return f"max_over_time(sum(container_memory_working_set_bytes{{{selector}}})[{seconds}s:])"
 
 
-def measure_peak_memory(
+def _span_seconds(span: _PodSpan) -> int:
+    """Return *span*'s length in seconds, at least 1, as a PromQL range needs."""
+    return max(span.end - span.start, 1)
+
+
+def _peak_memory_query(span: _PodSpan) -> str:
+    """Build the PromQL for a Pod's peak working set over *span*."""
+    selector = _pod_selector(span)
+    return (
+        f"max_over_time(sum(container_memory_working_set_bytes{{{selector}}})"
+        f"[{_span_seconds(span)}s:])"
+    )
+
+
+def _cpu_time_query(span: _PodSpan) -> str:
+    """Build the PromQL for the CPU time a Pod used over *span*.
+
+    ``increase`` reads through a counter reset, such as a restarted container's,
+    but needs at least two samples of a series within *span*.
+    """
+    selector = _pod_selector(span)
+    return f"sum(increase(container_cpu_usage_seconds_total{{{selector}}}[{_span_seconds(span)}s]))"
+
+
+def _measure(
     documents: Iterable[dict[str, Any]],
     client: MetricsQuerier,
-) -> tuple[dict[SessionKey, float], MemoryTally]:
-    """Query the peak memory of each started session's Pod, in bytes.
+    build_query: Callable[[_PodSpan], str],
+) -> tuple[dict[SessionKey, float], PodTally]:
+    """Evaluate *build_query* for each started session's Pod.
 
-    Each session costs one query, over the span :func:`_pod_spans` gives it.
-    A session that names no Pod, or whose Pod has no samples in that span,
+    Each session costs one query, over the span :func:`_pod_spans` gives it,
+    evaluated at the span's end.
+    A session that names no Pod, or whose Pod has too few samples in that span,
     is left out of the mapping; the tally says which of the two it was.
 
     Raises:
@@ -158,13 +194,41 @@ def measure_peak_memory(
     """
     started, spans = _pod_spans(documents)
 
-    peaks: dict[SessionKey, float] = {}
+    values: dict[SessionKey, float] = {}
     for key, span in spans.items():
-        result = client.query(_peak_query(span), time=span.end)
+        result = client.query(build_query(span), time=span.end)
         if result:
-            peaks[key] = float(result[0]["value"][1])
+            values[key] = float(result[0]["value"][1])
 
-    tally = MemoryTally(
-        started=len(started), unnamed=len(started) - len(spans), measured=len(peaks)
+    tally = PodTally(
+        started=len(started), unnamed=len(started) - len(spans), measured=len(values)
     )
-    return peaks, tally
+    return values, tally
+
+
+def measure_peak_memory(
+    documents: Iterable[dict[str, Any]],
+    client: MetricsQuerier,
+) -> tuple[dict[SessionKey, float], PodTally]:
+    """Query the peak memory of each started session's Pod, in bytes.
+
+    See :func:`_measure` for which sessions the mapping leaves out.
+
+    Raises:
+        ExternalServiceError: If a query fails.
+    """
+    return _measure(documents, client, _peak_memory_query)
+
+
+def measure_cpu_time(
+    documents: Iterable[dict[str, Any]],
+    client: MetricsQuerier,
+) -> tuple[dict[SessionKey, float], PodTally]:
+    """Query the CPU time each started session's Pod used, in seconds.
+
+    See :func:`_measure` for which sessions the mapping leaves out.
+
+    Raises:
+        ExternalServiceError: If a query fails.
+    """
+    return _measure(documents, client, _cpu_time_query)

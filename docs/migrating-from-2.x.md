@@ -64,7 +64,7 @@ New in 3.0.0:
 - optional Elasticsearch flags and `--hub` for `get-new-users`,
   for when each new user first started a server
 - optional Prometheus flags for `get-new-activity`,
-  for each session's peak memory
+  for each session's peak memory and CPU time
 - `--limit` for `get-es-docs`
 
 The reports' layout has also changed; generate one to see it.

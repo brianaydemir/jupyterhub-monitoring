@@ -27,11 +27,11 @@ from app.usage.activity import (
     ActivitySummary,
     DocumentTally,
     SessionActivity,
-    SessionKey,
     SkipReason,
     summarize_activity,
 )
 from app.usage.new_users import UserTally
+from app.usage.pod_metrics import PodMetrics
 
 CHICAGO = ZoneInfo("America/Chicago")
 START = datetime(2026, 7, 1, tzinfo=CHICAGO)
@@ -59,6 +59,10 @@ GPU_NOTE = "A session counts as GPU when one of its spawn options names a GPU."
 STARTING_NOTE = (
     "Each row sums one user's server over the snapshots that showed it starting, "
     "before it had a start time."
+)
+CPU_TIME_NOTE = (
+    "CPU time is summed over all cores, so it can exceed Time; "
+    "n/a where the snapshots name no Pod or Prometheus holds too few samples."
 )
 MEMORY_NOTE = (
     "Max memory is the peak working set of the session's Pod, in GiB; "
@@ -1011,22 +1015,37 @@ def test_the_per_session_tables_right_align_their_duration(server: str) -> None:
     assert _aligned(_starting_table(report)) == ["Time"]
 
 
-def test_measured_memory_adds_a_column_of_gib_to_the_started_sessions() -> None:
+def test_pod_metrics_add_columns_to_the_started_sessions() -> None:
     """A session Prometheus could not measure reads n/a, not zero.
 
-    The figure is a number rather than text, so the workbook can sort it,
-    and the unit is stated once, in the table's notes.
+    Each figure is a number rather than text, so the workbook can sort it,
+    and its unit is stated once, in the table's notes.
     """
     measured = _session("a@x.edu", seconds=3600)
     unmeasured = _session("b@x.edu", seconds=60)
     report = _activity_report(
-        [measured, unmeasured], ActivitySummary(), max_memory={measured.key: 1.5 * 2**30}
+        [measured, unmeasured],
+        ActivitySummary(),
+        pod_metrics=PodMetrics(
+            cpu_time={measured.key: 5400.0}, peak_memory={measured.key: 1.5 * 2**30}
+        ),
     )
     table = _sessions_table(report)
-    assert table.headers == ["Started", "Time", "Institution", "ID", "GPU", "Max memory"]
-    assert [row[-1] for row in table.rows] == [Fixed(1.5, digits=2), "n/a"]
-    assert _aligned(table) == ["Time", "Max memory"]
-    assert _section(report, "User Activity").footnotes[-1] == MEMORY_NOTE
+    assert table.headers == [
+        "Started",
+        "Time",
+        "Institution",
+        "ID",
+        "GPU",
+        "CPU time",
+        "Max memory",
+    ]
+    assert [row[-2:] for row in table.rows] == [
+        [Duration(5400.0), Fixed(1.5, digits=2)],
+        ["n/a", "n/a"],
+    ]
+    assert _aligned(table) == ["Time", "CPU time", "Max memory"]
+    assert _section(report, "User Activity").footnotes[-2:] == [CPU_TIME_NOTE, MEMORY_NOTE]
 
 
 def test_user_totals_never_gain_a_server_column() -> None:
@@ -1301,7 +1320,7 @@ def _activity_report(
     tally: DocumentTally | None = None,
     detailed_usernames: bool = False,
     anonymize: bool = False,
-    max_memory: dict[SessionKey, float] | None = None,
+    pod_metrics: PodMetrics | None = None,
 ) -> Report:
     """Build an activity report over the standard window."""
     return build_activity_report(
@@ -1313,7 +1332,7 @@ def _activity_report(
         strftime_fmt="%Y-%m-%d %H:%M",
         detailed_usernames=detailed_usernames,
         anonymize=anonymize,
-        max_memory=max_memory,
+        pod_metrics=pod_metrics,
     )
 
 

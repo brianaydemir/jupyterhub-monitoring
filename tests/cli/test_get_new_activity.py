@@ -1,7 +1,7 @@
 """Tests for :mod:`app.cli.get_new_activity`.
 
-Accounting for the activity, measuring its memory, and assembling the report
-belong to :mod:`app.usage.activity`, :mod:`app.usage.memory`,
+Accounting for the activity, measuring its Pods, and assembling the report
+belong to :mod:`app.usage.activity`, :mod:`app.usage.pod_metrics`,
 and :mod:`app.reports.builders`, and are covered through those.
 What is left here is the query the command sends,
 how it wires the window, its output flags, and Prometheus into those modules,
@@ -23,7 +23,7 @@ from app.cli import get_new_activity
 from app.cli.get_new_activity import (
     _build_parser,
     _format_document_tally,
-    _format_memory_tally,
+    _format_pod_tally,
     _run,
 )
 from app.core.time_utils import DATETIME_FMT
@@ -38,7 +38,7 @@ from app.usage.activity import (
     summarize_activity,
     tally_documents,
 )
-from app.usage.memory import MemoryTally
+from app.usage.pod_metrics import PodMetrics, PodTally
 from tests.helpers.stub_clients import (
     PrometheusStubClient,
     QueryStubClient,
@@ -220,14 +220,14 @@ def test_the_report_on_stdout_is_the_builders_over_the_resolved_window(
     assert capsys.readouterr().out == f"---\n{render_text(expected)}\n---\n"
 
 
-def test_each_sessions_peak_memory_reaches_the_report(
+def test_each_sessions_pod_metrics_reach_the_report(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """The peak Prometheus reports for a Pod lands on that Pod's session.
+    """The figures Prometheus reports for a Pod land on that Pod's session.
 
-    The report is compared against one built with the same peaks,
-    so a peak attached to the wrong session would show up as a different report.
+    The report is compared against one built with the same figures,
+    so a figure attached to the wrong session would show up as a different report.
     The session whose snapshots name no Pod is counted on stderr instead.
     """
     pod = {"server.state.pod_name": "jupyter-a", "server.state.namespace": "jhub"}
@@ -239,6 +239,7 @@ def test_each_sessions_peak_memory_reaches_the_report(
     assert _report_on(monkeypatch, documents, *argv) == 0
 
     sessions = compute_activity(documents)
+    key = ("a@x.edu", "", "2026-08-05T14:00:00Z")
     expected = build_activity_report(
         sessions=sessions,
         summary=summarize_activity(sessions, documents, CHICAGO, WINDOW_START, WINDOW_END),
@@ -246,19 +247,21 @@ def test_each_sessions_peak_memory_reaches_the_report(
         start_time=WINDOW_START,
         end_time=WINDOW_END,
         strftime_fmt=DATETIME_FMT,
-        max_memory={("a@x.edu", "", "2026-08-05T14:00:00Z"): float(2**30)},
+        pod_metrics=PodMetrics(cpu_time={key: float(2**30)}, peak_memory={key: float(2**30)}),
     )
     captured = capsys.readouterr()
     assert captured.out == f"---\n{render_text(expected)}\n---\n"
-    tally = "Measured peak memory for 1 of 2 started sessions; 1 named no Pod."
-    assert tally in captured.err.splitlines()
+    errors = captured.err.splitlines()
+    assert "Measured CPU time for 1 of 2 started sessions; 1 named no Pod." in errors
+    assert "Measured peak memory for 1 of 2 started sessions; 1 named no Pod." in errors
 
 
-def test_the_memory_diagnostic_tells_its_two_gaps_apart() -> None:
-    """A missing token scope and a Prometheus without samples need different fixes."""
-    tally = MemoryTally(started=5, unnamed=1, measured=3)
-    assert _format_memory_tally(tally) == (
-        "Measured peak memory for 3 of 5 started sessions; 1 named no Pod, 1 had no samples."
+def test_the_pod_diagnostic_tells_its_two_gaps_apart() -> None:
+    """A missing token scope and a Prometheus short of samples need different fixes."""
+    tally = PodTally(started=5, unnamed=1, measured=3)
+    assert _format_pod_tally("peak memory", tally) == (
+        "Measured peak memory for 3 of 5 started sessions; "
+        "1 named no Pod, 1 had too few samples."
     )
 
 

@@ -64,23 +64,27 @@ that parses as a positive duration, is skipped.
 how many documents it retrieved, counted, and skipped,
 with the skips broken out by reason.
 
-## Memory
+## Memory and CPU
 
 With `--prometheus-endpoint`,
-`get-new-activity` also reports each started session's peak memory:
-the highest `container_memory_working_set_bytes`
+`get-new-activity` also reports each started session's
+peak memory and CPU time,
 summed over the containers of the Pod
 that the session's documents name in `server.state.*`.
+The peak memory is the highest `container_memory_working_set_bytes`,
+and the CPU time is the increase in `container_cpu_usage_seconds_total`.
 
-The peak is taken over the time the session's active time covers:
+Both are taken over the time the session's active time covers:
 from one `meta.interval` before its first counted document,
 but not before its `server.started`,
 to its last counted document.
 KubeSpawner reuses a server's Pod name each time the server starts,
 so stopping at `server.started`
-keeps the previous session's Pod out of the figure.
+keeps the previous session's Pod out of both figures.
 
 A session is not measured when no document names its Pod,
-or when Prometheus holds no samples for the Pod over that time.
-`get-new-activity` prints on standard error
+or when Prometheus holds too few samples for the Pod over that time:
+one for the peak memory, or two for the CPU time.
+`get-new-activity` prints on standard error,
+for each figure,
 how many sessions it measured and why it missed the rest.

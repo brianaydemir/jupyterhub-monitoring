@@ -1,11 +1,11 @@
-"""Tests for :mod:`app.usage.memory`."""
+"""Tests for :mod:`app.usage.pod_metrics`."""
 
 from datetime import datetime, timezone
 from typing import Any
 
 import pytest
 
-from app.usage.memory import MemoryTally, measure_peak_memory
+from app.usage.pod_metrics import PodTally, measure_cpu_time, measure_peak_memory
 from tests.helpers.stub_clients import PrometheusStubClient
 
 _GIB = 2**30
@@ -77,6 +77,29 @@ def test_a_session_is_measured_over_the_time_its_snapshots_cover(
     assert peaks == {("a@x.edu", "", started): 2.0 * _GIB}
 
 
+def test_cpu_time_is_the_increase_in_the_pods_cpu_counter_over_its_span() -> None:
+    """The query reads the counter's increase, not its latest value.
+
+    The counter totals the CPU time since its container started,
+    so its latest value would include time the report does not credit.
+    """
+    client = PrometheusStubClient({"jupyter-a": 300.0})
+    documents = [
+        _doc(started="2026-08-05T08:00:00Z", snapshot="2026-08-05T10:02:00Z"),
+        _doc(started="2026-08-05T08:00:00Z", snapshot="2026-08-05T10:07:00Z"),
+    ]
+
+    cpu_time, _ = measure_cpu_time(documents, client)
+
+    promql = (
+        "sum(increase(container_cpu_usage_seconds_total"
+        '{namespace="jhub",pod="jupyter-a",container!="",image!=""}'
+        "[600s]))"
+    )
+    assert client.requests == [(promql, _epoch("2026-08-05T10:07:00Z"))]
+    assert cpu_time == {("a@x.edu", "", "2026-08-05T08:00:00Z"): 300.0}
+
+
 def test_sessions_that_cannot_be_measured_are_tallied_by_reason() -> None:
     """A session naming no Pod and one without samples have different fixes.
 
@@ -95,6 +118,6 @@ def test_sessions_that_cannot_be_measured_are_tallied_by_reason() -> None:
     peaks, tally = measure_peak_memory(documents, client)
 
     assert list(peaks) == [("d@x.edu", "", "2026-08-05T10:00:00Z")]
-    assert tally == MemoryTally(started=3, unnamed=1, measured=1)
-    assert tally.no_samples == 1
+    assert tally == PodTally(started=3, unnamed=1, measured=1)
+    assert tally.too_few_samples == 1
     assert [promql for promql, _ in client.requests if "jupyter-a" in promql] == []

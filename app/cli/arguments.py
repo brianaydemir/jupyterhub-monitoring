@@ -110,7 +110,7 @@ def add_prometheus_argument_group(
         "--prometheus-endpoint",
         help=(
             "Prometheus server base URL (e.g., https://prometheus.example.com); "
-            "when given, the report adds each started session's peak memory"
+            "when given, the report adds each started session's peak memory and CPU time"
         ),
     )
     prometheus_group.add_argument(

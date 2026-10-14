@@ -23,13 +23,17 @@ from app.reports.builders import build_activity_report
 from app.reports.delivery import deliver_report
 from app.usage.activity import (
     DocumentTally,
-    SessionKey,
     SkipReason,
     compute_activity,
     summarize_activity,
     tally_documents,
 )
-from app.usage.memory import MemoryTally, measure_peak_memory
+from app.usage.pod_metrics import (
+    PodMetrics,
+    PodTally,
+    measure_cpu_time,
+    measure_peak_memory,
+)
 from app.usage.snapshots import build_query, select_hub
 
 # The data this report draws on.
@@ -71,9 +75,9 @@ Examples:
 
 Prometheus:
   Optional. Pass --prometheus-endpoint to also report each
-  started session's peak memory. The snapshots must name
-  each session's Pod, which push-servers records when its
-  JupyterHub token has the admin:server_state scope.
+  started session's peak memory and CPU time. The snapshots
+  must name each session's Pod, which push-servers records
+  when its JupyterHub token has the admin:server_state scope.
 
 Environment variables:
   ELASTICSEARCH_API_KEY  API key (when --es-api-key is
@@ -122,38 +126,38 @@ def _format_document_tally(tally: DocumentTally) -> str:
     return f"{retrieved}; counted {tally.counted}, skipped {skipped} ({reasons})."
 
 
-def _format_memory_tally(tally: MemoryTally) -> str:
-    """Render the measured/unmeasured session diagnostic for stderr.
+def _format_pod_tally(figure: str, tally: PodTally) -> str:
+    """Render the measured/unmeasured session diagnostic for *figure*, for stderr.
 
     The two gaps are named apart because each has its own fix:
     sessions naming no Pod point at the ``push-servers`` token's scopes,
-    and sessions with no samples at Prometheus's retention or labels.
+    and sessions with too few samples at Prometheus's retention or labels.
     """
     noun = "session" if tally.started == 1 else "sessions"
     if not tally.started:
-        return f"Measured peak memory for 0 started {noun}."
-    measured = f"Measured peak memory for {tally.measured} of {tally.started} started {noun}"
+        return f"Measured {figure} for 0 started {noun}."
+    measured = f"Measured {figure} for {tally.measured} of {tally.started} started {noun}"
     gaps: list[str] = []
     if tally.unnamed:
         gaps.append(f"{tally.unnamed} named no Pod")
-    if tally.no_samples:
-        gaps.append(f"{tally.no_samples} had no samples")
+    if tally.too_few_samples:
+        gaps.append(f"{tally.too_few_samples} had too few samples")
     if not gaps:
         return f"{measured}."
     return f"{measured}; {', '.join(gaps)}."
 
 
-def _query_max_memory(
+def _query_pod_metrics(
     args: argparse.Namespace,
     documents: list[dict[str, Any]],
-) -> dict[SessionKey, float] | None:
-    """Query Prometheus for each started session's peak memory.
+) -> PodMetrics | None:
+    """Query Prometheus for each started session's CPU time and peak memory.
 
     Returns:
-        Each measured session's peak memory, in bytes,
+        The measured figures,
         or ``None`` when ``--prometheus-endpoint`` was not given,
-        which leaves the report's memory column out
-        rather than filling it with ``"n/a"``.
+        which leaves the report's columns for them out
+        rather than filling them with ``"n/a"``.
 
     Raises:
         ExternalServiceError: If Prometheus querying fails.
@@ -161,9 +165,11 @@ def _query_max_memory(
     if args.prometheus_endpoint is None:
         return None
     with make_prometheus_client(args) as client:
-        peaks, tally = measure_peak_memory(documents, client)
-    print(_format_memory_tally(tally), file=sys.stderr)
-    return peaks
+        cpu_time, cpu_tally = measure_cpu_time(documents, client)
+        peak_memory, memory_tally = measure_peak_memory(documents, client)
+    print(_format_pod_tally("CPU time", cpu_tally), file=sys.stderr)
+    print(_format_pod_tally("peak memory", memory_tally), file=sys.stderr)
+    return PodMetrics(cpu_time=cpu_time, peak_memory=peak_memory)
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -171,7 +177,7 @@ def _run(args: argparse.Namespace) -> int:
 
     The document tally leads the report, and also goes to stderr,
     where a scheduled run's log keeps it apart from the report on stdout.
-    So does the memory tally, when Prometheus is consulted.
+    So do the CPU and memory tallies, when Prometheus is consulted.
 
     Raises:
         ExternalServiceError: If Elasticsearch or Prometheus querying fails.
@@ -190,7 +196,7 @@ def _run(args: argparse.Namespace) -> int:
     tally = tally_documents(documents)
     print(_format_document_tally(tally), file=sys.stderr)
 
-    max_memory = _query_max_memory(args, documents)
+    pod_metrics = _query_pod_metrics(args, documents)
 
     sessions = compute_activity(documents)
     summary = summarize_activity(sessions, documents, tz, start_time, end_time)
@@ -203,7 +209,7 @@ def _run(args: argparse.Namespace) -> int:
         strftime_fmt=DATETIME_FMT,
         detailed_usernames=args.detailed_usernames,
         anonymize=args.anonymize,
-        max_memory=max_memory,
+        pod_metrics=pod_metrics,
     )
     targets = make_output_targets(
         args,

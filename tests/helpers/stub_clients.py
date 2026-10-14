@@ -17,7 +17,7 @@ from typing import Any, Self
 
 import pytest
 
-# The Pod a peak-memory query selects.
+# The Pod a query selects.
 _POD_MATCHER = re.compile(r'pod="([^"]*)"')
 
 
@@ -48,24 +48,25 @@ class QueryStubClient(StubClient):
 
 
 class PrometheusStubClient(StubClient):
-    """Answers ``query`` with a prepared peak per Pod, recording each request.
+    """Answers ``query`` with a prepared value per Pod, recording each request.
 
-    A Pod with no prepared peak gets an empty result vector,
+    The value is the same whichever metric the query reads.
+    A Pod with no prepared value gets an empty result vector,
     which is how Prometheus answers for a Pod it holds no samples for.
     """
 
-    def __init__(self, peaks: dict[str, float]) -> None:
-        """Store the peak, in bytes, to answer for each Pod name."""
-        self.peaks = peaks
+    def __init__(self, values: dict[str, float]) -> None:
+        """Store the value to answer for each Pod name."""
+        self.values = values
         self.requests: list[tuple[str, int]] = []
 
     def query(self, promql: str, time: int) -> list[dict[str, Any]]:
         """Record the request and answer for the Pod it selects."""
         self.requests.append((promql, time))
         match = _POD_MATCHER.search(promql)
-        if match is None or match.group(1) not in self.peaks:
+        if match is None or match.group(1) not in self.values:
             return []
-        return [{"metric": {}, "value": [time, str(self.peaks[match.group(1)])]}]
+        return [{"metric": {}, "value": [time, str(self.values[match.group(1)])]}]
 
 
 def install_client(
