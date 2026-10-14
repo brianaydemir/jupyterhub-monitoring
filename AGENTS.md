@@ -61,8 +61,8 @@ It is organized into the following sub-packages:
   depend on nothing else in `app/cli`;
   `factories` imports `credentials`;
   `report_arguments` imports `arguments` and `validation`;
-  and the command modules import from every one of these
-  except `credentials`, which they reach through `factories`.
+  and the command modules import from these alone,
+  reaching `credentials` only through `factories`.
   Keep it that way,
   rather than deferring an import inside a function to break a cycle.
 

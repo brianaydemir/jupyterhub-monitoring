@@ -28,7 +28,8 @@ when upgrading from 2.x.
 
 ## Installation
 
-Python 3.14 or later is required.
+Python 3.14 or later is required,
+and [Poetry](https://python-poetry.org/) to install from source.
 
 ### From Source
 
@@ -70,7 +71,7 @@ docker run --rm \
 | 2    | Invalid command-line arguments, reported by the argument parser |
 
 A command exits 1 when a service call fails,
-when a credential is missing or unreadable,
+when a credential is empty or unreadable,
 when `push-servers` could not push at least one document,
 or when `--send-email` could not deliver the report.
 
