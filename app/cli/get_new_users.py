@@ -95,8 +95,6 @@ def _format_user_tally(tally: UserTally) -> str:
 
     The total is what tells a quiet window apart from an endpoint or token
     that reached a hub with few or no users on it.
-    Users with no creation time are mentioned only when there are some,
-    as ``get-new-activity`` mentions skipped documents.
     """
     noun = "user" if tally.retrieved == 1 else "users"
     retrieved = f"Retrieved {tally.retrieved} {noun}"
@@ -165,7 +163,7 @@ def _query_first_server(
     even if it occurred after the window closed.
     A snapshot taken before *start_time* is not visible.
 
-    ``--hub`` scopes the search the same way it does for ``get-new-activity``,
+    ``--hub`` scopes the search,
     so on a multi-hub index the column reports a user's first server
     on that hub rather than anywhere in the index.
 

@@ -1,6 +1,5 @@
 """Render report-domain models into plain text, HTML, CSV, and XLSX.
 
-Every format has exactly one entry point.
 Plain text and HTML return ``str``,
 because a caller goes on to print or embed them;
 CSV and XLSX return ``bytes``,

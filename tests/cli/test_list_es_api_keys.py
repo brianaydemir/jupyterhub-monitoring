@@ -1,6 +1,6 @@
 """Tests for :mod:`app.cli.list_es_api_keys`."""
 
-# This module exercises the command's formatting helpers directly.
+# This module exercises the command's internal helpers directly.
 # pyright: reportPrivateUsage=false
 
 # A stub client answers one call, so it has just one public method.

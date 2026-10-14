@@ -11,10 +11,9 @@ from app.core.errors import AppError, DataShapeError
 def prompt_password() -> str | None:
     """Prompt for a password interactively.
 
-    The username always arrives on the command line,
-    so the password is the one credential ever prompted for.
-    Returns *None* if the user cancels (Ctrl-C / EOF)
-    or enters nothing.
+    Returns:
+        The password, or *None* if the user cancels (Ctrl-C / EOF)
+        or enters nothing.
     """
     try:
         password = getpass.getpass("Password: ")
@@ -34,15 +33,17 @@ def read_optional_api_key(file: Path | None, env_var: str) -> str | None:
 
     Both sources are stripped: a key mounted from a Kubernetes secret
     or passed through ``--env-file`` usually carries a trailing newline.
-    Returns ``None`` when neither source supplies a key,
-    an unset variable and an empty one alike,
-    which is how a service that accepts anonymous requests is reached.
 
     Argument validation only checks that *file* exists,
     so a path that exists but cannot be read arrives here.
     That is an expected, user-facing failure, not an unexpected one,
     so it is reported as an :class:`AppError`
     rather than left to escape as an ``OSError``.
+
+    Returns:
+        The key, or ``None`` when neither source supplies one,
+        an unset variable and an empty one alike,
+        which is how a service that accepts anonymous requests is reached.
 
     Raises:
         AppError: If *file* cannot be read.

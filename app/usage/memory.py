@@ -51,7 +51,7 @@ class MemoryTally:
 
     @property
     def no_samples(self) -> int:
-        """Return how many sessions named a Pod but could not be measured."""
+        """How many sessions named a Pod but could not be measured."""
         return self.started - self.unnamed - self.measured
 
 

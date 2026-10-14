@@ -7,7 +7,7 @@ which decides what ``--debug`` excuses,
 and the exit code and sink its run chooses.
 """
 
-# This module exercises the command's parser and validator directly.
+# This module exercises the command's parser, validator, and runner directly.
 # pyright: reportPrivateUsage=false
 
 import argparse

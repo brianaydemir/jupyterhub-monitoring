@@ -109,15 +109,17 @@ class ElasticsearchClient:
         so a repeated id overwrites the document already there
         instead of conflicting with it.
 
-        Returns one result per document, in the order they were given,
-        each carrying that item's ``status``
-        and either a ``result`` or an ``error``.
         A document Elasticsearch rejects is described in its own result
         rather than raised, which is what lets a caller count it
         and still keep the rest of the batch.
         Only a failure of the request as a whole raises,
         and a request that times out may have been applied regardless,
         so a caller's count of what it stored is a lower bound.
+
+        Returns:
+            One result per document, in the order they were given,
+            each carrying that item's ``status``
+            and either a ``result`` or an ``error``.
 
         Raises:
             ExternalServiceError: If the request fails,

@@ -24,7 +24,7 @@ class Duration:
         (``"5:00"``, ``"123:45"``), and minutes are truncated
         rather than rounded.
         Because each value is truncated independently,
-        the displayed GPU and CPU times need not add up to the displayed total.
+        displayed parts need not add up to a displayed total.
 
         A negative span reads by sign and magnitude
         (``"-0:30"``, not ``"-1:30"``),
@@ -55,9 +55,8 @@ class Percent:
 class Fixed:
     """A number shown to a fixed number of decimal places.
 
-    The places travel with the value because they vary by row:
-    ``Mean sessions per user`` reads to one place
-    and the two concurrency means to two, which a bare ``float`` could not say.
+    The places travel with the value because they vary by row,
+    which a bare ``float`` could not say.
     """
 
     value: float

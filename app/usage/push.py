@@ -78,9 +78,11 @@ class DocumentSink(Protocol):
 
         A sink reports its own successes,
         so the pipeline never has to ask which kind of sink it is holding.
-        Returns one entry per document, in order:
-        ``None`` where the document was handled,
-        and the reason it was not otherwise.
+
+        Returns:
+            One entry per document, in order:
+            ``None`` where the document was handled,
+            and the reason it was not otherwise.
 
         Raises:
             ExternalServiceError: If the batch as a whole could not be sent;
@@ -92,8 +94,8 @@ class DocumentSink(Protocol):
 
 # pylint: enable=too-few-public-methods
 
-# Metadata keys this pipeline sets itself, so --metadata cannot supply them.
-# Kept next to the code that writes them in _snapshot_metadata.
+# Metadata keys that _snapshot_metadata sets,
+# so --metadata cannot supply them.
 _INTERVAL_KEY = "interval"
 _SNAPSHOT_TIME_KEY = "snapshot-time"
 _SNAPSHOT_TIME_ISO_KEY = "snapshot-time-iso"
@@ -241,7 +243,8 @@ class ElasticsearchSink:
 def _validate_interval(interval: str) -> timedelta:
     """Reject an interval that ``get-new-activity`` cannot add up.
 
-    Returns the parsed duration, which the run also measures itself against.
+    Returns:
+        The parsed duration, which the run also measures itself against.
 
     Raises:
         DataShapeError: If *interval* is not a positive duration.

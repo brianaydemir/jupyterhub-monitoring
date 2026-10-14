@@ -39,8 +39,9 @@ class PrometheusClient:
     def query(self, promql: str, time: int) -> list[dict[str, Any]]:
         """Evaluate an instant query at *time*, in epoch seconds.
 
-        Returns the result vector, one entry per series,
-        each carrying its ``metric`` labels and its ``value`` pair.
+        Returns:
+            The result vector, one entry per series,
+            each carrying its ``metric`` labels and its ``value`` pair.
 
         Raises:
             ExternalServiceError: If the request fails,

@@ -191,8 +191,7 @@ def test_snap_stops_at_the_last_midnight_that_has_passed(
     """A window ending now closes with the last day that finished.
 
     Reaching forwards to tomorrow's midnight would claim a day
-    the run is still in the middle of,
-    and would trip the future-end check in :mod:`app.cli.validation`.
+    the run is still in the middle of.
     """
     now = datetime(2026, 9, 3, 17, 48, tzinfo=CHICAGO)
     _, end = _snap_at(monkeypatch, now, datetime(2026, 9, 1, 8, 0, tzinfo=CHICAGO), now)
@@ -203,7 +202,11 @@ def test_snap_stops_at_the_last_midnight_that_has_passed(
 def test_snap_leaves_an_end_that_is_genuinely_future_in_the_future(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """That fallback must not launder a typo into an acceptable window."""
+    """An end on a later day is still in the future after the snap.
+
+    Falling back to its own midnight
+    must not launder a mistyped end into an acceptable window.
+    """
     now = datetime(2026, 9, 3, 17, 48, tzinfo=CHICAGO)
     _, end = _snap_at(
         monkeypatch,

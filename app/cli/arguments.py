@@ -26,13 +26,7 @@ _HEADERS = HeaderRegistry()
 def add_jupyterhub_argument_group(
     parser: argparse.ArgumentParser,
 ) -> ArgumentGroup:
-    """Add a "JupyterHub API" argument group and return it.
-
-    Every ``add_*_argument_group`` helper returns its group
-    so a command can add further arguments to it,
-    as the report commands do with :func:`add_hub_argument`.
-    Callers with nothing to add may ignore the return value.
-    """
+    """Add a "JupyterHub API" argument group and return it."""
     hub_group = parser.add_argument_group("JupyterHub API")
     hub_group.add_argument(
         "--jupyterhub-endpoint",

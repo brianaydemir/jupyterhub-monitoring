@@ -117,11 +117,13 @@ def parse_datetime(text: str, tz: tzinfo) -> datetime | None:
     via :func:`dateparser.parse`.
     A datetime with no explicit zone is interpreted in *tz*;
     one that carries its own offset is converted to *tz*.
-    Returns *None* if *text* cannot be parsed.
 
     The zone is applied here
     rather than through :mod:`dateparser`'s own timezone settings,
     which reject some of the offsets :func:`parse_timezone` accepts.
+
+    Returns:
+        The parsed datetime, or *None* if *text* cannot be parsed.
     """
     parsed = dateparser.parse(
         text,
@@ -154,10 +156,7 @@ def snap_to_whole_days(
     to its own midnight instead:
     the window closes with the last day that finished
     rather than reaching into one that has not.
-    That is what keeps ``--report-end "now"`` clear of the future-end check
-    in :func:`app.cli.validation.validate_query_arguments`;
-    an end that is genuinely ahead, such as ``"tomorrow"``,
-    still lands in the future and is still rejected there.
+    An *end* on a day still to come therefore stays in the future.
 
     Both midnights are found by calendar date in *tz*,
     not by adding or subtracting 24 hours,
@@ -195,8 +194,11 @@ def parse_iso_utc(text: object) -> datetime | None:
     A value carrying no offset is read as UTC
     rather than as the host's local time,
     which is how JupyterHub and Elasticsearch report times.
-    Returns *None* for anything that is not a parsable ISO 8601 string,
-    so callers can skip unusable records without catching exceptions.
+
+    Returns:
+        The parsed datetime, or *None* for anything
+        that is not a parsable ISO 8601 string,
+        so callers can skip unusable records without catching exceptions.
     """
     if not isinstance(text, str) or not text:
         return None
@@ -220,10 +222,11 @@ def parse_duration(duration_str: str) -> timedelta | None:
 
     Zero and negative durations parse successfully,
     so callers that need a positive one must check the sign themselves.
-    Returns *None* if *duration_str* cannot be parsed.
 
-    Results are cached, because the activity metrics parse
-    the same few ``meta.interval`` strings once per document.
+    Results are cached, because callers parse the same few strings repeatedly.
+
+    Returns:
+        The parsed duration, or *None* if *duration_str* cannot be parsed.
     """
     seconds = pytimeparse2.parse(duration_str)
     if seconds is None:

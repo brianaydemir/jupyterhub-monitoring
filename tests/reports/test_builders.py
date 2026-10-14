@@ -37,9 +37,8 @@ CHICAGO = ZoneInfo("America/Chicago")
 START = datetime(2026, 7, 1, tzinfo=CHICAGO)
 END = datetime(2026, 7, 8, tzinfo=CHICAGO)
 
-# Two identifiers at one institution whose pseudonyms collide.
-# Found by search over the 26 ** 3 label space;
-# see build_pseudonyms' docstring for how likely that is.
+# Two identifiers at one institution whose pseudonyms collide,
+# found by search over the 26 ** 3 label space.
 COLLIDING_UIDS = ("u138", "u223")
 
 # Two identifiers at one institution
@@ -945,9 +944,6 @@ def test_same_day_sessions_of_one_server_render_as_distinguishable_rows(
     """``Started`` carries the time of day, which is what separates them.
 
     The ``Server`` column cannot help here: both rows name the one server.
-    ``get-new-activity`` therefore takes no ``--date-format``,
-    since its ``date`` choice would leave these two rows
-    differing only in a duration.
     """
     sessions = [
         _session("a@x.edu", started="2026-07-02T14:00:00Z", seconds=1800, server=server),

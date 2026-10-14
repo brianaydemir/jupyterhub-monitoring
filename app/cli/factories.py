@@ -218,7 +218,5 @@ def get_strftime_fmt(args: argparse.Namespace) -> str:
     """Return the strftime format string for ``--date-format``.
 
     Only a command whose parser adds that argument may call this.
-    ``get-new-activity`` omits it and passes :data:`DATETIME_FMT` itself,
-    so ``get-new-users`` is the one caller.
     """
     return DATE_FMT if args.date_format == "date" else DATETIME_FMT

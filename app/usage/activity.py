@@ -52,7 +52,7 @@ class SessionActivity:
 
     @property
     def key(self) -> SessionKey:
-        """Return the key :func:`session_contributions` files this session under."""
+        """The key :func:`session_contributions` files this session under."""
         return (self.user, self.server_name, self.started)
 
 
@@ -542,9 +542,8 @@ def summarize_activity(
     and the figures measured against the window as a whole
     are derived from that same pair,
     so no two of them can describe different windows.
-    Both bounds are read in *tz*,
-    so a naive one is read against the host's clock;
-    the command rejects such a bound before it reaches here.
+    Both bounds are read in *tz*, so each must be timezone-aware;
+    a naive one would be read against the host's clock instead.
     """
     window = elapsed(start_time, end_time)
     users = aggregate_user_activity(sessions)

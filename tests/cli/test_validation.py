@@ -317,7 +317,7 @@ def _query_args(
 def _freeze(monkeypatch: pytest.MonkeyPatch) -> None:
     """Freeze both clocks a window is measured against, at :data:`NOW`.
 
-    The future-end check reads this module's,
+    The future-end check reads :mod:`app.cli.validation`'s,
     and the snap ``--whole-days`` applies reads :mod:`app.core.time_utils`'s,
     so a case that exercises both has to hold the two together.
     """

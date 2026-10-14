@@ -149,9 +149,11 @@ def _query_max_memory(
 ) -> dict[SessionKey, float] | None:
     """Query Prometheus for each started session's peak memory.
 
-    Returns ``None`` when ``--prometheus-endpoint`` was not given,
-    which leaves the report's memory column out
-    rather than filling it with ``"n/a"``.
+    Returns:
+        Each measured session's peak memory, in bytes,
+        or ``None`` when ``--prometheus-endpoint`` was not given,
+        which leaves the report's memory column out
+        rather than filling it with ``"n/a"``.
 
     Raises:
         ExternalServiceError: If Prometheus querying fails.

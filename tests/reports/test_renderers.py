@@ -37,7 +37,7 @@ Renderer = Callable[[Report], str]
 
 
 def _csv_text(built: Report) -> str:
-    """Decode the CSV rendering, which is the only entry point CSV has."""
+    """Render CSV as text, so that it fits the :data:`Renderer` signature."""
     return render_csv_bytes(built).decode("utf-8")
 
 

@@ -23,7 +23,7 @@ from app.cli.arguments import (
 
 
 def _parser() -> argparse.ArgumentParser:
-    """Return a parser that reports failures instead of exiting silently."""
+    """Return a bare parser for the helpers under test to populate."""
     return argparse.ArgumentParser(prog="cmd")
 
 
