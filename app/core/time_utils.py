@@ -12,10 +12,7 @@ from app.core.errors import DataShapeError
 
 _OFFSET_RE = re.compile(r"^([+-])(\d{1,2}):(\d{2})$")
 
-# Display formats for report timestamps, shared by the CLI layer
-# (which maps ``--date-format`` onto them,
-# and passes the datetime one for a command that takes no such option)
-# and the report builders.
+# Display formats for report timestamps.
 DATE_FMT = "%Y-%m-%d"
 DATETIME_FMT = "%Y-%m-%d %H:%M"
 
@@ -188,10 +185,6 @@ def last_instant(end: datetime) -> datetime:
     not by the day it stops at.
     Callers that name a window by a calendar figure step back
     through here first.
-
-    Everything that takes that step shares this one function,
-    so the default email subject and the last row of ``Activity by Day``
-    cannot disagree about which day a window ends on.
     """
     return end - _ONE_MICROSECOND
 

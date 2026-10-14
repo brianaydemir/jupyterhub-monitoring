@@ -18,8 +18,7 @@ from app.cli.report_arguments import (
     validate_report_arguments,
 )
 from app.cli.runtime import run_command
-from app.core.errors import DataShapeError
-from app.core.time_utils import DATETIME_FMT
+from app.core.time_utils import DATETIME_FMT, parse_timezone
 from app.reports.builders import build_activity_report
 from app.reports.delivery import deliver_report
 from app.usage.activity import (
@@ -89,7 +88,6 @@ Environment variables:
         sources=_SOURCES,
         subject_prefix=_SUBJECT_PREFIX,
         include_date_format=False,
-        include_anonymize=True,
     )
     add_hub_argument(query_group)
     return parser
@@ -174,13 +172,10 @@ def _run(args: argparse.Namespace) -> int:
     So does the memory tally, when Prometheus is consulted.
 
     Raises:
-        DataShapeError: If the reporting window is not timezone-aware.
         ExternalServiceError: If Elasticsearch or Prometheus querying fails.
     """
+    tz = parse_timezone(args.timezone)
     start_time, end_time = compute_report_time_range(args)
-    tz = start_time.tzinfo
-    if tz is None:
-        raise DataShapeError("start_time must be timezone-aware")
 
     with make_es_client(args) as client:
         query = build_query(

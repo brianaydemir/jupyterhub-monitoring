@@ -106,7 +106,6 @@ def configure_report_parser(
     sources: Sequence[ReportSource],
     subject_prefix: str,
     include_date_format: bool = True,
-    include_anonymize: bool = False,
 ) -> ArgumentGroup:
     """Configure shared report command argument groups.
 
@@ -115,24 +114,15 @@ def configure_report_parser(
     The "Query" group is returned so a command can extend it,
     as both report commands do with ``--hub``.
 
-    The ``include_*`` switches let a report command omit an optional argument,
-    which also means it must stop reading the corresponding attribute.
-    ``get-new-activity`` clears *include_date_format*,
-    since a bare date would leave its ``Started`` column naming no one session,
-    so only ``get-new-users``
-    reaches :func:`app.cli.factories.get_strftime_fmt`.
-    Both commands set *include_anonymize*,
-    so the builders read ``args.anonymize`` unconditionally.
+    *include_date_format* is passed through
+    to :func:`app.cli.arguments.add_output_argument_group`,
+    which says what clearing it entails.
     """
     for source in sources:
         source.add_arguments(parser)
 
     query_group = add_query_argument_group(parser)
-    add_output_argument_group(
-        parser,
-        include_date_format=include_date_format,
-        include_anonymize=include_anonymize,
-    )
+    add_output_argument_group(parser, include_date_format=include_date_format)
     add_email_argument_group(parser, subject_prefix=subject_prefix)
     return query_group
 

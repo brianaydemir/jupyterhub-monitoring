@@ -70,7 +70,6 @@ Environment variables:
         parser,
         sources=_SOURCES,
         subject_prefix=_SUBJECT_PREFIX,
-        include_anonymize=True,
     )
     add_hub_argument(query_group)
     return parser

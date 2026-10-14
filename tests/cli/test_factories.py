@@ -21,6 +21,7 @@ from app.cli.factories import (
     make_es_client,
     make_jupyterhub_client,
     make_output_targets,
+    make_prometheus_client,
 )
 from app.core import time_utils
 from app.core.errors import AuthCancelledError, DataShapeError
@@ -36,6 +37,7 @@ def without_ambient_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep the host's own API keys from deciding a case's outcome."""
     monkeypatch.delenv("JUPYTERHUB_API_KEY", raising=False)
     monkeypatch.delenv("ELASTICSEARCH_API_KEY", raising=False)
+    monkeypatch.delenv("PROMETHEUS_TOKEN", raising=False)
 
 
 def _recorder(recorded: list[dict[str, Any]]) -> Callable[..., object]:
@@ -150,6 +152,44 @@ def test_a_jupyterhub_client_reads_its_key_from_a_file(
             "endpoint": "https://hub.example.edu/hub/api",
             "api_key": "secret",
             "ca_cert": None,
+        }
+    ]
+
+
+#
+# make_prometheus_client
+#
+
+
+@pytest.mark.parametrize(
+    ("token", "expected"),
+    [(None, None), ("secret", "secret")],
+    ids=["anonymous", "bearer"],
+)
+def test_a_prometheus_client_is_built_with_or_without_a_token(
+    token: str | None,
+    expected: str | None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No token is an unauthenticated client, not a missing credential."""
+    if token is not None:
+        monkeypatch.setenv("PROMETHEUS_TOKEN", token)
+    recorded: list[dict[str, Any]] = []
+    monkeypatch.setattr(factories, "PrometheusClient", _recorder(recorded))
+
+    make_prometheus_client(
+        argparse.Namespace(
+            prometheus_endpoint="https://prometheus.example.edu",
+            prometheus_token=None,
+            prometheus_ca_cert=Path("/certs/ca.pem"),
+        )
+    )
+
+    assert recorded == [
+        {
+            "endpoint": "https://prometheus.example.edu",
+            "token": expected,
+            "ca_cert": Path("/certs/ca.pem"),
         }
     ]
 

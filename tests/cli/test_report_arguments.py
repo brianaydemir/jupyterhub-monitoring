@@ -41,18 +41,10 @@ def without_ambient_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ELASTICSEARCH_API_KEY", raising=False)
 
 
-def _parser(
-    *sources: ReportSource,
-    include_anonymize: bool = True,
-) -> argparse.ArgumentParser:
+def _parser(*sources: ReportSource) -> argparse.ArgumentParser:
     """Build a report parser drawing on *sources*."""
     parser = argparse.ArgumentParser(prog="cmd")
-    configure_report_parser(
-        parser,
-        sources=sources,
-        subject_prefix="Subject",
-        include_anonymize=include_anonymize,
-    )
+    configure_report_parser(parser, sources=sources, subject_prefix="Subject")
     return parser
 
 

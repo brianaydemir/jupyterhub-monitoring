@@ -214,7 +214,6 @@ def add_output_argument_group(
     parser: argparse.ArgumentParser,
     *,
     include_date_format: bool = True,
-    include_anonymize: bool = False,
 ) -> ArgumentGroup:
     """Add report output-format arguments and return the group.
 
@@ -262,16 +261,15 @@ def add_output_argument_group(
         action="store_true",
         help='Always show the "Login method" column in the output',
     )
-    if include_anonymize:
-        output_group.add_argument(
-            "--anonymize",
-            action="store_true",
-            help=(
-                "Replace within-institution identifiers with generic "
-                "pseudonyms; the institution is still shown. The pseudonyms "
-                "are an unkeyed hash of the username, not a privacy guarantee"
-            ),
-        )
+    output_group.add_argument(
+        "--anonymize",
+        action="store_true",
+        help=(
+            "Replace within-institution identifiers with generic "
+            "pseudonyms; the institution is still shown. The pseudonyms "
+            "are an unkeyed hash of the username, not a privacy guarantee"
+        ),
+    )
     return output_group
 
 

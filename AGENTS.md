@@ -187,8 +187,7 @@ The switches that `app/cli/arguments.py` and `app/cli/report_arguments.py`
 thread through are all exercised, and are not on that list:
 `push-servers` and `OPTIONAL_ELASTICSEARCH_SOURCE` pass `required=False`,
 `get-es-docs` passes `include_index=True`,
-`get-new-activity` passes `include_date_format=False`,
-and both report commands pass `include_anonymize=True`.
+and `get-new-activity` passes `include_date_format=False`.
 
 ## Conventions
 
