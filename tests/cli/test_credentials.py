@@ -26,6 +26,19 @@ def test_an_unreadable_api_key_file_is_an_expected_failure(tmp_path: Path) -> No
     assert "Errno" in message
 
 
+@pytest.mark.parametrize("contents", ["", "\n"])
+def test_an_empty_api_key_file_is_an_expected_failure(tmp_path: Path, contents: str) -> None:
+    """A secret mounted with no value is a mistake to report, not a key to send.
+
+    This holds for an optional key too:
+    the file was named, so an anonymous request is not what was asked for.
+    """
+    key_file = tmp_path / "key.txt"
+    key_file.write_text(contents, encoding="utf-8")
+    with pytest.raises(AppError, match="the file is empty"):
+        read_optional_api_key(key_file, "PROMETHEUS_TOKEN")
+
+
 def test_a_key_file_is_stripped_of_its_trailing_newline(tmp_path: Path) -> None:
     """A key mounted from a secret usually carries one."""
     key_file = tmp_path / "key.txt"

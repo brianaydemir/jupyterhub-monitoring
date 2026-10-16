@@ -58,12 +58,13 @@ def test_a_session_is_measured_over_the_time_its_snapshots_cover(
     KubeSpawner reuses a server's Pod name on every start,
     so a span reaching back past this session's start
     could report the previous session's peak as this one's.
+    The snapshots arrive out of order, as an unsorted search returns them.
     """
     client = PrometheusStubClient({"jupyter-a": 2 * _GIB})
     documents = [
-        _doc(started=started, snapshot="2026-08-05T10:02:00Z"),
         _doc(started=started, snapshot="2026-08-05T10:07:00Z"),
         _doc(started=started, snapshot="2026-08-05T10:12:00Z"),
+        _doc(started=started, snapshot="2026-08-05T10:02:00Z"),
     ]
 
     peaks, _ = measure_peak_memory(documents, client)

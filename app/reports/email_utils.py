@@ -174,8 +174,8 @@ def send_report_email(
 
     Returns:
         An exit code: 0 if the message was sent, 1 if it was not.
-        The failure is reported on stderr rather than raised,
-        so that file output already written is not discarded.
+        A relay that cannot be reached or refuses the message
+        is an expected failure, so it is reported on stderr rather than raised.
     """
     try:
         message = create_message(

@@ -102,15 +102,17 @@ Examples:
   %(prog)s --es-endpoint https://elastic.example.com:9200 \\
     --es-username elastic --name "my-api-key" --expiration "7d"
   %(prog)s --es-endpoint https://elastic.example.com:9200 \\
-    --es-api-key /path/to/key --expiration never --format json
+    --es-username elastic --expiration never --format json
 
 Expiration format:
   Elasticsearch time units: "1d", "7d", "30d", "12h".
   Pass "never" for a key that never expires.
 
-Environment variables:
-  ELASTICSEARCH_API_KEY  API key (when --es-api-key is
-                         not provided)
+Authentication:
+  Use --es-username. The new key carries the privileges of
+  the user who creates it, and Elasticsearch refuses to
+  create such a key for a request authenticated by another
+  API key.
         """,
     )
 

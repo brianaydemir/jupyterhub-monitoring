@@ -72,7 +72,7 @@ docker run --rm \
 
 A command exits 1 when a service call fails,
 when a credential is empty or unreadable,
-when `push-servers` could not push at least one document,
+when `push-servers` could not push every document,
 or when `--send-email` could not deliver the report.
 
 ## License

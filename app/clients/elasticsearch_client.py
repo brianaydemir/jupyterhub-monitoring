@@ -272,6 +272,8 @@ class ElasticsearchClient:
         Narrow such a key by creating it as an account
         that already holds only the privileges it needs,
         rather than as a superuser.
+        Elasticsearch refuses this request
+        when it is authenticated by another API key.
 
         Raises:
             ExternalServiceError: If the request fails.

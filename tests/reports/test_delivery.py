@@ -148,7 +148,7 @@ def test_deliver_report_reports_a_failed_send(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A refused or timed-out send is an exit code, not a traceback.
+    """A refused or timed-out send is reported as such, and exits 1.
 
     The files were written before the send was attempted,
     so they are not lost to it.
