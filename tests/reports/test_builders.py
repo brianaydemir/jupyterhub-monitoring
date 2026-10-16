@@ -896,7 +896,7 @@ def test_user_totals_of_an_idle_window_are_headers_alone() -> None:
 
 
 def test_user_totals_agree_with_the_summary() -> None:
-    """The table and the Summary are two views of one aggregation."""
+    """The table and the aggregate sections are two views of one aggregation."""
     sessions = [
         _session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=4800, gpu=True),
         _session("a@x.edu", started="2026-07-02T13:00:00Z", seconds=3000),

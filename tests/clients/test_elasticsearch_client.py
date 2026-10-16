@@ -308,7 +308,7 @@ def test_query_defaults_to_match_all() -> None:
 
 
 def test_query_wraps_a_query_string() -> None:
-    """Kibana-style syntax is wrapped in a ``query_string`` clause."""
+    """Lucene query-string syntax is wrapped in a ``query_string`` clause."""
     client, transport = _client([_page([])])
     list(client.query(index="i", query_string="status:200"))
     assert transport.search_kwargs["query"] == {"query_string": {"query": "status:200"}}

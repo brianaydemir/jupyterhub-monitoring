@@ -480,7 +480,7 @@ def test_the_echo_shows_the_snapped_window(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == (
-        "Reporting window: 2026-08-20 00:00 to 2026-09-03 00:00" " (America/Chicago, 14 days)\n"
+        "Reporting window: 2026-08-20 00:00 to 2026-09-03 00:00 (America/Chicago, 14 days)\n"
     )
 
 

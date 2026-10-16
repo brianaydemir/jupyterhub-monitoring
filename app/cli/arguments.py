@@ -225,7 +225,7 @@ def add_output_argument_group(
     output_group.add_argument(
         "--html-file",
         type=Path,
-        help="Write output as HTML to the specified file (suitable for email body)",
+        help="Write output as a standalone HTML document to the specified file",
     )
     output_group.add_argument(
         "--csv-file",

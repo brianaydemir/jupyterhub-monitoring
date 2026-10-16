@@ -13,7 +13,7 @@ from app.cli.validation import positive_int_or_error, validate_es_admin_argument
 def _build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for this command."""
     parser = argparse.ArgumentParser(
-        description="Query Elasticsearch for documents using a Kibana-style query string",
+        description="Query Elasticsearch for documents using a Lucene query string",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -35,7 +35,7 @@ Environment variables:
     parser.add_argument(
         "--query",
         required=True,
-        help='Kibana-style query string (e.g., "status:200", "field:value AND other:*")',
+        help='Lucene query string (e.g., "status:200", "field:value AND other:*")',
     )
     parser.add_argument(
         "--limit",

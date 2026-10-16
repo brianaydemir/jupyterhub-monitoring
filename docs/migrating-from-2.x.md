@@ -29,7 +29,7 @@ Pass `--send-email` to `get-new-activity` or `get-new-users` instead,
 with the same SMTP flags,
 and the run emails the report it just produced:
 its text and HTML renderings as the body,
-each of its tables as a CSV attachment,
+its user and session tables as CSV attachments,
 and the workbook when `--xlsx-file` is also given.
 Every email flag is an error without `--send-email`.
 

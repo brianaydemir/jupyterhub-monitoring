@@ -27,7 +27,7 @@ def _parser() -> argparse.ArgumentParser:
     return argparse.ArgumentParser(prog="cmd")
 
 
-def _missing_argument(
+def _usage_error(
     parser: argparse.ArgumentParser,
     argv: list[str],
     capsys: pytest.CaptureFixture[str],
@@ -195,7 +195,7 @@ def test_group_syntax_is_refused(value: str, capsys: pytest.CaptureFixture[str])
     """
     parser = _parser()
     add_email_arguments(parser, subject_prefix="Subject")
-    message = _missing_argument(parser, ["--recipient-email", value], capsys)
+    message = _usage_error(parser, ["--recipient-email", value], capsys)
     assert "group syntax is not supported" in message
 
 
@@ -231,5 +231,5 @@ def test_a_recipient_without_a_readable_address_is_refused(
     """
     parser = _parser()
     add_email_arguments(parser, subject_prefix="Subject")
-    message = _missing_argument(parser, ["--recipient-email", value], capsys)
+    message = _usage_error(parser, ["--recipient-email", value], capsys)
     assert "could not read a recipient" in message

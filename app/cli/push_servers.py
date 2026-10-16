@@ -133,7 +133,7 @@ def _run(args: argparse.Namespace) -> int:
 
     Raises:
         DataShapeError: If ``--metadata`` cannot be parsed.
-        ExternalServiceError: If client creation or server push fails.
+        ExternalServiceError: If the server list cannot be fetched.
     """
     metadata = parse_metadata(args.metadata)
     jupyterhub_client = make_jupyterhub_client(args)

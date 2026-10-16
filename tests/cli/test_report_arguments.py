@@ -264,11 +264,6 @@ COMMANDS = [
     pytest.param(build_users_parser, validate_users_arguments, USERS_ARGV, id="users"),
 ]
 
-PARSERS = [
-    pytest.param(build_activity_parser, ACTIVITY_ARGV, id="activity"),
-    pytest.param(build_users_parser, USERS_ARGV, id="users"),
-]
-
 
 @pytest.fixture
 def with_ambient_credentials(monkeypatch: pytest.MonkeyPatch) -> None:

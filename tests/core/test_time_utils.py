@@ -313,7 +313,8 @@ def test_parse_datetime_converts_an_explicit_offset() -> None:
     """A datetime with its own offset is converted, not relabeled."""
     parsed = parse_datetime("2026-07-01 15:00 +00:00", CHICAGO)
     assert parsed is not None
-    assert parsed.utcoffset() == timedelta(hours=-5)
+    assert parsed == datetime(2026, 7, 1, 10, 0, tzinfo=CHICAGO)
+    assert parsed.tzinfo is CHICAGO
 
 
 def test_parse_datetime_accepts_a_fixed_offset_zone() -> None:
