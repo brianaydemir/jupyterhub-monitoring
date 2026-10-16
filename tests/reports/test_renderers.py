@@ -209,9 +209,9 @@ def test_csv_escapes_every_formula_lead_character(lead: str) -> None:
 def test_csv_leaves_a_negative_duration_unescaped() -> None:
     """A number is not text anyone chose, and the sign is the figure's own."""
     built = sample_reports.report(
-        sections=[_section(rows=[["CPU active time", Duration(-1800)]])]
+        sections=[_section(rows=[["Non-GPU active time", Duration(-1800)]])]
     )
-    assert ["CPU active time", "-0:30"] in _csv_rows(render_csv_bytes(built))
+    assert ["Non-GPU active time", "-0:30"] in _csv_rows(render_csv_bytes(built))
 
 
 def test_csv_attachment_escapes_formula_like_text() -> None:

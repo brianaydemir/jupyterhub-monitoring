@@ -563,7 +563,7 @@ def test_statistics_rows_keep_a_fixed_order() -> None:
     assert list(_values(report, "Statistics")) == [
         "GPU active time",
         "GPU share of total",
-        "CPU active time",
+        "Non-GPU active time",
         "GPU users",
         "GPU sessions",
         "Mean time per user",
@@ -640,15 +640,15 @@ def test_collection_description_states_the_window() -> None:
     )
 
 
-def test_summary_splits_gpu_and_cpu_time() -> None:
-    """CPU time is the remainder, and each cell holds one quantity."""
+def test_summary_splits_gpu_and_non_gpu_time() -> None:
+    """Non-GPU time is the remainder, and each cell holds one quantity."""
     summary = ActivitySummary(total_seconds=4 * 3600, gpu_seconds=3600)
     report = _activity_report([], summary)
     assert _values(report, "Usage")["Total active time"] == Duration(4 * 3600)
     values = _values(report, "Statistics")
     assert values["GPU active time"] == Duration(3600)
     assert values["GPU share of total"] == Percent(0.25)
-    assert values["CPU active time"] == Duration(3 * 3600)
+    assert values["Non-GPU active time"] == Duration(3 * 3600)
     assert cell_text(values["GPU active time"]) == "1:00"
     assert cell_text(values["GPU share of total"]) == "25%"
 

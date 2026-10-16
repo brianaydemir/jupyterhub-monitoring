@@ -903,7 +903,7 @@ def _statistics_rows(summary: ActivitySummary) -> list[list[Cell]]:
     return [
         ["GPU active time", Duration(gpu)],
         ["GPU share of total", share],
-        ["CPU active time", Duration(total - gpu)],
+        ["Non-GPU active time", Duration(total - gpu)],
         ["GPU users", summary.gpu_users],
         ["GPU sessions", summary.gpu_sessions],
         ["Mean time per user", Duration(summary.mean_user_seconds)],
