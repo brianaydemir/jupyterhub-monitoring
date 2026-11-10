@@ -1,6 +1,13 @@
-"""Sample :mod:`app.reports.model` values for the report tests."""
+"""Sample report values for the renderer and delivery tests."""
 
-from app.reports.model import Cell, Duration, Report, ReportSection, TableBlock, TextBlock
+from jupyterhub_monitoring.reports.model import (
+    Cell,
+    Duration,
+    Report,
+    ReportSection,
+    TableBlock,
+    TextBlock,
+)
 
 
 def table_block(

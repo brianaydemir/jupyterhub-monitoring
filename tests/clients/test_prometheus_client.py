@@ -1,13 +1,13 @@
-"""Tests for :mod:`app.clients.prometheus_client`, with a stubbed session."""
+"""Tests for :mod:`jupyterhub_monitoring.clients.prometheus_client`."""
 
 from typing import Any
 
 import pytest
 import requests
 
-from app.clients import prometheus_client
-from app.clients.prometheus_client import PrometheusClient
-from app.core.errors import ExternalServiceError
+from jupyterhub_monitoring.clients import prometheus_client
+from jupyterhub_monitoring.clients.prometheus_client import PrometheusClient
+from jupyterhub_monitoring.core.errors import ExternalServiceError
 
 
 class _StubResponse:

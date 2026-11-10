@@ -7,7 +7,7 @@ which is why each one's ``make_es_client`` is replaced by :func:`install_client`
 and ``make_prometheus_client`` by :func:`install_prometheus_client`.
 """
 
-# A stub client answers one call, so it has just one public method.
+# A stub client answers one call, so it has at most one public method.
 # pylint: disable=too-few-public-methods
 
 import argparse

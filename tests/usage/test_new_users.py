@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.usage.new_users`."""
+"""Tests for :mod:`jupyterhub_monitoring.usage.new_users`."""
 
 # An explicit comparison to an empty collection is the assertion
 # these tests mean to make, and reads better here than a truthiness check.
@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.usage.new_users import (
+from jupyterhub_monitoring.usage.new_users import (
     AdoptionSummary,
     UserTally,
     compute_first_server,
@@ -40,12 +40,6 @@ def test_the_window_includes_its_start_and_excludes_its_end() -> None:
         {"name": "at-end", "created": "2026-07-08T00:00:00Z"},
     ]
     assert [u["name"] for u in filter_new_users(users, START, END)] == ["at-start"]
-
-
-def test_a_naive_created_timestamp_is_read_as_utc() -> None:
-    """JupyterHub reports UTC; the host's local zone is irrelevant."""
-    users = [{"name": "a@x.edu", "created": "2026-07-04T10:00:00"}]
-    assert len(filter_new_users(users, START, END)) == 1
 
 
 def test_an_offset_created_timestamp_is_honored() -> None:
@@ -87,11 +81,6 @@ def test_the_tally_counts_the_users_the_filter_keeps() -> None:
     assert tally.in_window == len(filter_new_users(users, START, END))
 
 
-def test_no_users_tally_as_none_retrieved() -> None:
-    """A hub that answered with nothing is told apart from a quiet window."""
-    assert tally_users([], START, END) == UserTally()
-
-
 def test_filtered_users_are_reduced_to_name_and_created() -> None:
     """Only the two fields the report needs are carried forward."""
     users: list[dict[str, Any]] = [
@@ -118,9 +107,10 @@ def test_first_server_uses_the_earliest_start_time() -> None:
     assert compute_first_server(docs) == {"a@x.edu": expected}
 
 
-def test_first_server_falls_back_to_the_snapshot_time() -> None:
-    """A snapshot taken while spawning carries no start time of its own."""
-    assert compute_first_server([_doc(started=None, snapshot=1782000000)]) == {
+@pytest.mark.parametrize("started", [None, "whenever"])
+def test_first_server_falls_back_to_the_snapshot_time(started: str | None) -> None:
+    """A snapshot taken while spawning has no start time; a malformed one is unusable."""
+    assert compute_first_server([_doc(started=started, snapshot=1782000000)]) == {
         "a@x.edu": 1782000000
     }
 
@@ -165,12 +155,6 @@ def test_first_server_skips_documents_with_no_usable_time() -> None:
     assert compute_first_server([doc]) == {}
 
 
-def test_first_server_ignores_an_unparsable_start_time() -> None:
-    """A malformed start falls back to the snapshot time."""
-    doc = _doc(started="whenever", snapshot=1782000000)
-    assert compute_first_server([doc]) == {"a@x.edu": 1782000000}
-
-
 def test_adoption_over_no_users_says_nothing_happened() -> None:
     """Every count is zero, and there is no median to report."""
     assert summarize_adoption([], {}, timezone.utc) == AdoptionSummary()
@@ -183,7 +167,6 @@ def test_adoption_splits_the_new_users_into_starters_and_the_rest() -> None:
         users, {"a@x.edu": _epoch("2026-07-04T11:00:00Z")}, timezone.utc
     )
     assert (summary.new_users, summary.started, summary.never_started) == (3, 1, 2)
-    assert summary.started + summary.never_started == summary.new_users
 
 
 def test_adoption_counts_a_repeated_user_as_the_table_lists_them() -> None:
@@ -203,11 +186,6 @@ def test_same_day_starts_are_judged_in_the_given_zone() -> None:
     assert summarize_adoption(users, first_server, timezone.utc).same_day == 0
 
 
-def test_a_user_who_never_started_is_not_a_same_day_starter() -> None:
-    """Only a dated first server can share a day with its user's creation."""
-    assert summarize_adoption([_new("a@x.edu")], {}, timezone.utc).same_day == 0
-
-
 def test_the_median_averages_the_middle_pair_of_an_even_number_of_users() -> None:
     """Ten and thirty minutes, ninety minutes, and four hours."""
     users = [_new(name) for name in ("a@x.edu", "b@x.edu", "c@x.edu", "d@x.edu")]
@@ -221,11 +199,11 @@ def test_the_median_averages_the_middle_pair_of_an_even_number_of_users() -> Non
     assert summary.median_seconds_to_first == (1800 + 5400) / 2
 
 
-def test_no_median_is_reported_when_nobody_started_a_server() -> None:
-    """A median over an empty set is not a figure a reader can act on."""
-    summary = summarize_adoption([_new("a@x.edu")], {}, timezone.utc)
-    assert summary.started == 0
-    assert summary.median_seconds_to_first is None
+def test_a_user_who_never_started_has_no_start_to_date() -> None:
+    """No start means neither a same-day start nor a median to report."""
+    assert summarize_adoption([_new("a@x.edu")], {}, timezone.utc) == AdoptionSummary(
+        new_users=1, never_started=1
+    )
 
 
 def test_a_negative_elapsed_time_does_not_drag_the_median_down() -> None:

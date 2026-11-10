@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.cli.create_es_api_key`."""
+"""Tests for :mod:`jupyterhub_monitoring.cli.create_es_api_key`."""
 
 # This module exercises the command's internal helpers directly.
 # pyright: reportPrivateUsage=false
@@ -12,15 +12,15 @@ from typing import Any
 
 import pytest
 
-from app.cli import create_es_api_key
-from app.cli.create_es_api_key import (
+from jupyterhub_monitoring.cli import create_es_api_key
+from jupyterhub_monitoring.cli.create_es_api_key import (
     _build_parser,
     _format_created_key_details,
     _format_created_key_json,
     _format_encoded_key,
     _run,
 )
-from app.core.errors import DataShapeError
+from jupyterhub_monitoring.core.errors import DataShapeError
 from tests.helpers.stub_clients import StubClient, install_client
 
 _RESULT: dict[str, Any] = {
@@ -175,7 +175,7 @@ def test_a_malformed_expiration_is_refused_before_the_key_exists(
     [("never", None), ("7d", "7d")],
     ids=["never", "duration"],
 )
-def test_the_expiration_reaches_the_client(
+def test_the_name_expiration_and_username_reach_the_client(
     argument: str,
     sent: str | None,
     monkeypatch: pytest.MonkeyPatch,
@@ -184,9 +184,10 @@ def test_the_expiration_reaches_the_client(
     """The sentinel is resolved by the parser, so the client never sees it."""
     client = _StubClient(_RESULT)
     install_client(monkeypatch, create_es_api_key, client)
-    assert _run(_parse("--expiration", argument)) == 0
+    argv = ["--expiration", argument, "--name", "my-key", "--es-username", "elastic"]
+    assert _run(_parse(*argv)) == 0
     capsys.readouterr()
-    assert client.request == (None, sent, None)
+    assert client.request == ("my-key", sent, "elastic")
 
 
 @pytest.mark.parametrize("name", ["key", "json", "full"])

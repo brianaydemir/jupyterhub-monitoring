@@ -1,6 +1,6 @@
-"""Tests for :mod:`app.core.dict_utils`."""
+"""Tests for :mod:`jupyterhub_monitoring.core.dict_utils`."""
 
-from app.core.dict_utils import flatten_dict
+from jupyterhub_monitoring.core.dict_utils import flatten_dict
 
 
 def test_flatten_dict_joins_nested_keys_with_dots() -> None:

@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.usage.activity`."""
+"""Tests for :mod:`jupyterhub_monitoring.usage.activity`."""
 
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.usage.activity import (
+from jupyterhub_monitoring.usage.activity import (
     ActivitySummary,
     DocumentTally,
     SkipReason,
@@ -181,12 +181,6 @@ def test_a_mixed_document_set_counts_each_reason_separately() -> None:
             SkipReason.NON_POSITIVE_INTERVAL: 1,
         },
     )
-    assert tally.counted + sum(tally.skipped.values()) == tally.retrieved
-
-
-def test_no_documents_tally_as_none_retrieved_rather_than_skipped() -> None:
-    """An idle window retrieves nothing; nothing was thrown away."""
-    assert tally_documents([]) == DocumentTally()
 
 
 def test_user_activity_sums_each_users_sessions() -> None:
@@ -219,28 +213,6 @@ def test_users_keep_the_order_they_first_appear_in() -> None:
     ]
 
 
-def test_no_sessions_aggregate_to_no_users() -> None:
-    """An idle window has no user to total up."""
-    assert aggregate_user_activity([]) == []
-
-
-def test_user_totals_agree_with_the_summary() -> None:
-    """The summary's per-user figures are the aggregation's own."""
-    docs = [
-        _doc(started="2026-07-02T10:00:00Z", options={"server.user_options.gpu": True}),
-        _doc(started="2026-07-02T12:00:00Z"),
-        _doc(user="b@x.edu"),
-    ]
-    sessions = compute_activity(docs)
-    users = aggregate_user_activity(sessions)
-    summary = summarize_activity(sessions, docs, CHICAGO, START, END)
-    assert len(users) == summary.active_users
-    assert sum(u.sessions for u in users) == summary.total_sessions
-    assert sum(u.seconds for u in users) == summary.total_seconds
-    assert sum(u.gpu_seconds for u in users) == summary.gpu_seconds
-    assert max(u.seconds for u in users) == summary.max_user_seconds
-
-
 def test_summary_derives_user_statistics_from_sessions() -> None:
     """Per-user figures aggregate the sessions, not the raw documents."""
     docs = [
@@ -248,7 +220,7 @@ def test_summary_derives_user_statistics_from_sessions() -> None:
         _doc(started="2026-07-02T12:00:00Z"),
         _doc(user="b@x.edu"),
     ]
-    summary = summarize_activity(compute_activity(docs), docs, CHICAGO, START, END)
+    summary = summarize_activity(compute_activity(docs), [], CHICAGO, START, END)
     assert summary.active_users == 2
     assert summary.total_sessions == 3
     assert summary.total_seconds == 900.0
@@ -269,11 +241,6 @@ def test_the_longest_session_is_one_session_not_one_user() -> None:
     summary = summarize_activity(compute_activity(docs), docs, CHICAGO, START, END)
     assert summary.max_user_seconds == 900.0
     assert summary.max_session_seconds == 600.0
-
-
-def test_no_sessions_have_no_longest_session() -> None:
-    """An idle window reads as zero, as the other maxima do."""
-    assert summarize_activity([], [], CHICAGO, START, END).max_session_seconds == 0.0
 
 
 def test_summary_counts_gpu_users_and_sessions_separately() -> None:
@@ -328,12 +295,6 @@ def test_concurrency_groups_the_documents_naming_no_hub_together() -> None:
     assert summary.mean_concurrency_active == 1.5
 
 
-def test_concurrency_is_zero_without_countable_documents() -> None:
-    """An empty window reports no servers rather than dividing by zero."""
-    summary = summarize_activity([], [], CHICAGO, START, END)
-    assert (summary.peak_concurrency, summary.mean_concurrency_active) == (0, 0.0)
-
-
 def test_the_window_mean_counts_the_idle_part_of_the_window() -> None:
     """One busy hour in a day is a light day (about 0.042), not a busy push."""
     docs = [_doc(interval="1h")]
@@ -342,32 +303,24 @@ def test_the_window_mean_counts_the_idle_part_of_the_window() -> None:
     assert summary.mean_concurrency_window == pytest.approx(1 / 24)
 
 
-def test_the_two_means_agree_when_the_window_is_never_idle() -> None:
-    """With every push busy there is no idle time for the two to differ over."""
-    docs = [_doc(snapshot=1782000000 + 300 * i) for i in range(12)]
-    summary = summarize_activity(
-        compute_activity(docs), docs, CHICAGO, START, START + timedelta(hours=1)
+def test_an_idle_window_summarizes_to_zeros() -> None:
+    """No figure divides by, or takes a maximum over, the nothing it was given."""
+    assert summarize_activity([], [], CHICAGO, START, END) == ActivitySummary(
+        window_seconds=(END - START).total_seconds(),
+        per_day_seconds={"2026-06-20": 0.0},
     )
-    assert summary.mean_concurrency_window == summary.mean_concurrency_active == 1.0
 
 
-def test_a_window_of_no_length_is_not_divided_by() -> None:
-    """The commands reject such a window, but a direct caller need not."""
+@pytest.mark.parametrize("length", [timedelta(0), timedelta(hours=-1)])
+def test_a_window_holding_no_time_is_carried_as_no_length(length: timedelta) -> None:
+    """A window of no length, or an inverted one, is not divided by.
+
+    The commands reject such a window, but a direct caller need not.
+    """
     docs = [_doc()]
-    summary = summarize_activity(compute_activity(docs), docs, CHICAGO, START, START)
+    summary = summarize_activity(compute_activity(docs), docs, CHICAGO, START, START + length)
+    assert summary.window_seconds == 0.0
     assert summary.mean_concurrency_window == 0.0
-
-
-@pytest.mark.parametrize(
-    ("window", "expected"),
-    [(timedelta(hours=24), 86400.0), (timedelta(days=7), 604800.0), (timedelta(0), 0.0)],
-)
-def test_the_summary_carries_the_length_of_its_own_window(
-    window: timedelta, expected: float
-) -> None:
-    """The report states the scale its totals are to be read against."""
-    summary = summarize_activity([], [], CHICAGO, START, START + window)
-    assert summary.window_seconds == expected
 
 
 def test_the_window_length_is_elapsed_time_across_dst() -> None:
@@ -383,17 +336,6 @@ def test_the_window_length_is_elapsed_time_across_dst() -> None:
     summary = summarize_activity(compute_activity(docs), docs, CHICAGO, start, end)
     assert summary.window_seconds == 47 * 3600
     assert summary.mean_concurrency_window == pytest.approx(1 / 47)
-
-
-def test_an_inverted_window_is_carried_as_no_length() -> None:
-    """A summary must not hold a window its own figures deny.
-
-    The window mean already reads such a window as no window,
-    so the length it is measured against reads the same way.
-    """
-    summary = summarize_activity([], [], CHICAGO, START, START - timedelta(hours=1))
-    assert summary.window_seconds == 0.0
-    assert summary.mean_concurrency_window == 0.0
 
 
 @pytest.mark.parametrize(

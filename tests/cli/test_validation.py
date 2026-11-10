@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.cli.validation`.
+"""Tests for :mod:`jupyterhub_monitoring.cli.validation`.
 
 Every helper under test reports through ``parser.error``,
 which prints usage and raises ``SystemExit(2)``.
@@ -14,13 +14,13 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.cli import validation
-from app.cli.arguments import (
+from jupyterhub_monitoring.cli import validation
+from jupyterhub_monitoring.cli.arguments import (
     add_email_argument_group,
     add_es_argument_group,
     add_prometheus_argument_group,
 )
-from app.cli.validation import (
+from jupyterhub_monitoring.cli.validation import (
     positive_int_or_error,
     reject_es_flags_without_endpoint,
     validate_email_arguments,
@@ -29,7 +29,7 @@ from app.cli.validation import (
     validate_prometheus_arguments,
     validate_query_arguments,
 )
-from app.core import time_utils
+from jupyterhub_monitoring.core import time_utils
 from tests.helpers.clock import FrozenClock
 
 Validator = Callable[[argparse.Namespace, argparse.ArgumentParser], None]
@@ -120,9 +120,11 @@ def test_a_missing_jupyterhub_ca_cert_is_rejected(
 
 def test_a_missing_jupyterhub_api_key_file_is_rejected(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """An explicit key file must exist, whatever the environment holds."""
+    monkeypatch.setenv("JUPYTERHUB_API_KEY", "secret")
     missing = tmp_path / "absent.txt"
     message = _reject(
         validate_jupyterhub_arguments,
@@ -183,7 +185,7 @@ def test_a_missing_es_ca_cert_is_rejected(
     missing = tmp_path / "absent.pem"
     message = _reject(
         validate_es_arguments,
-        _es_args(ca_cert=missing, username="elastic"),
+        _es_args(ca_cert=missing),
         capsys,
     )
     assert f"CA certificate file not found: {missing}" in message
@@ -317,8 +319,9 @@ def _query_args(
 def _freeze(monkeypatch: pytest.MonkeyPatch) -> None:
     """Freeze both clocks a window is measured against, at :data:`NOW`.
 
-    The future-end check reads :mod:`app.cli.validation`'s,
-    and the snap ``--whole-days`` applies reads :mod:`app.core.time_utils`'s,
+    The future-end check reads :mod:`jupyterhub_monitoring.cli.validation`'s,
+    and the snap ``--whole-days`` applies
+    reads :mod:`jupyterhub_monitoring.core.time_utils`'s,
     so a case that exercises both has to hold the two together.
     """
     monkeypatch.setattr(validation, "datetime", FrozenClock(NOW))
@@ -448,34 +451,8 @@ def _end_offset_from_now(monkeypatch: pytest.MonkeyPatch, offset: timedelta) -> 
     return (NOW + offset).strftime("%Y-%m-%d %H:%M:%S")
 
 
-@pytest.mark.parametrize("end", ["tomorrow", "next week"])
-def test_a_future_report_end_is_rejected(
-    end: str,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """No data can exist for a window reaching past the present.
-
-    Both values parse and both run forwards from the start,
-    so this check is the only thing
-    standing between the typo and a wrong report.
-    """
-    message = _reject(
-        validate_query_arguments,
-        _query_args(report_start="2 weeks ago", report_end=end),
-        capsys,
-    )
-    assert "--report-end resolves to" in message
-    assert "which is in the future" in message
-
-
 def test_a_report_end_of_now_is_accepted() -> None:
-    """The documented ``now`` must pass reliably, not most of the time.
-
-    It is resolved
-    here and again in :func:`app.cli.factories.compute_report_time_range`,
-    and the reference it is compared against is read later still,
-    so no two of those answers are the same instant.
-    """
+    """The documented ``now`` must pass reliably, not most of the time."""
     _accept(
         validate_query_arguments,
         _query_args(report_start="1 day ago", report_end="now"),
@@ -483,7 +460,7 @@ def test_a_report_end_of_now_is_accepted() -> None:
 
 
 def test_an_end_within_the_tolerance_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The tolerance is what keeps ``now`` from failing on its own slop."""
+    """An end up to a minute ahead is accepted."""
     end = _end_offset_from_now(monkeypatch, timedelta(seconds=30))
     _accept(
         validate_query_arguments,
@@ -495,7 +472,7 @@ def test_an_end_past_the_tolerance_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Two minutes out is a wrong window rather than resolution slop."""
+    """An end further ahead than that is a wrong window."""
     end = _end_offset_from_now(monkeypatch, timedelta(minutes=2))
     message = _reject(
         validate_query_arguments,

@@ -1,11 +1,15 @@
-"""Tests for :mod:`app.usage.pod_metrics`."""
+"""Tests for :mod:`jupyterhub_monitoring.usage.pod_metrics`."""
 
 from datetime import datetime, timezone
 from typing import Any
 
 import pytest
 
-from app.usage.pod_metrics import PodTally, measure_cpu_time, measure_peak_memory
+from jupyterhub_monitoring.usage.pod_metrics import (
+    PodTally,
+    measure_cpu_time,
+    measure_peak_memory,
+)
 from tests.helpers.stub_clients import PrometheusStubClient
 
 _GIB = 2**30
@@ -99,6 +103,17 @@ def test_cpu_time_is_the_increase_in_the_pods_cpu_counter_over_its_span() -> Non
     )
     assert client.requests == [(promql, _epoch("2026-08-05T10:07:00Z"))]
     assert cpu_time == {("a@x.edu", "", "2026-08-05T08:00:00Z"): 300.0}
+
+
+def test_a_span_with_no_length_is_still_a_valid_range() -> None:
+    """A snapshot taken the second its server started spans no time.
+
+    Prometheus rejects a zero-length range, which would fail the whole report.
+    """
+    client = PrometheusStubClient({"jupyter-a": 0.0})
+    instant = "2026-08-05T10:02:00Z"
+    measure_cpu_time([_doc(started=instant, snapshot=instant)], client)
+    assert client.requests[0][0].endswith("[1s]))")
 
 
 def test_sessions_that_cannot_be_measured_are_tallied_by_reason() -> None:

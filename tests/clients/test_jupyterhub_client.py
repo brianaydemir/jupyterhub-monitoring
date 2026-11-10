@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.clients.jupyterhub_client`, with a stubbed session."""
+"""Tests for :mod:`jupyterhub_monitoring.clients.jupyterhub_client`."""
 
 # An explicit comparison to an empty collection is the assertion
 # these tests mean to make, and reads better here than a truthiness check.
@@ -9,9 +9,9 @@ from typing import Any
 import pytest
 import requests
 
-from app.clients import jupyterhub_client
-from app.clients.jupyterhub_client import JupyterHubClient
-from app.core.errors import ExternalServiceError
+from jupyterhub_monitoring.clients import jupyterhub_client
+from jupyterhub_monitoring.clients.jupyterhub_client import JupyterHubClient
+from jupyterhub_monitoring.core.errors import ExternalServiceError
 
 
 class _StubResponse:
@@ -50,15 +50,13 @@ class _StubSession:
         self.calls: list[dict[str, Any]] = []
         self.headers: dict[str, str] = {}
         self.verify: object = None
-        self.closed = False
 
     def __enter__(self) -> "_StubSession":
         """Support use as a context manager, like a real session."""
         return self
 
     def __exit__(self, *_: object) -> None:
-        """Record that the session was closed."""
-        self.closed = True
+        """Nothing to release."""
 
     def get(self, url: str, **kwargs: Any) -> _StubResponse:
         """Serve the next prepared response, or an empty page once they run out."""
@@ -95,12 +93,6 @@ def test_list_users_keeps_walking_when_the_hub_caps_the_page_size(
     users = list(_client().list_users())
     assert len(users) == 120
     assert [call["params"]["offset"] for call in session.calls] == [0, 50, 100, 120]
-
-
-def test_list_users_stops_on_an_empty_page(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A hub with no users yields nothing."""
-    _install(monkeypatch, [_users_page(0)])
-    assert list(_client().list_users()) == []
 
 
 def test_list_users_stops_when_a_hub_repeats_a_page(

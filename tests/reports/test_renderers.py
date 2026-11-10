@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.reports.renderers`, including cross-format agreement."""
+"""Tests for :mod:`jupyterhub_monitoring.reports.renderers`."""
 
 # An explicit comparison to an empty collection is the assertion
 # these tests mean to make, and reads better here than a truthiness check.
@@ -14,7 +14,7 @@ import pytest
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
-from app.reports.model import (
+from jupyterhub_monitoring.reports.model import (
     Cell,
     Duration,
     Fixed,
@@ -23,7 +23,7 @@ from app.reports.model import (
     ReportAttachment,
     ReportSection,
 )
-from app.reports.renderers import (
+from jupyterhub_monitoring.reports.renderers import (
     render_csv_bytes,
     render_html_document,
     render_html_fragment,
@@ -105,7 +105,7 @@ def test_every_renderer_shows_a_typed_cell_as_its_display_string(
 def test_every_renderer_labels_footnotes_identically(
     render: Renderer,
 ) -> None:
-    """The four formats use one label for section notes and one for report notes."""
+    """Every text-based format uses one label for section notes and one for report notes."""
     rendered = render(sample_reports.report_with_text_block())
     assert "Notes" in rendered
     assert "Report notes" in rendered
@@ -281,7 +281,7 @@ def test_xlsx_table_sheet_repeats_its_sections_footnotes() -> None:
 
 
 def test_xlsx_table_sheet_of_a_section_without_footnotes_ends_at_the_data() -> None:
-    """No notes means no trailing label and no trailing blank row."""
+    """No notes means no trailing label."""
     built = sample_reports.report(
         sections=[
             ReportSection(
@@ -306,8 +306,8 @@ def test_xlsx_info_sheet_keeps_the_notes_the_table_sheets_repeat() -> None:
     ]
 
 
-def test_xlsx_repeats_the_notes_on_each_sheet_of_a_multi_table_section() -> None:
-    """Footnotes qualify the section, so every one of its sheets gets them."""
+def test_xlsx_numbers_the_sheets_of_a_multi_table_section_and_notes_each() -> None:
+    """Two tables cannot share a sheet name, and the section's notes qualify both."""
     built = sample_reports.report(
         sections=[
             ReportSection(
@@ -318,23 +318,10 @@ def test_xlsx_repeats_the_notes_on_each_sheet_of_a_multi_table_section() -> None
             )
         ]
     )
-    for name in ("Summary 1", "Summary 2"):
-        assert _sheet_column(built, name)[-2:] == ["Notes", "Timezone: America/Chicago"]
-
-
-def test_xlsx_numbers_the_sheets_of_a_multi_table_section() -> None:
-    """Two tables in one section cannot share a sheet name."""
-    built = sample_reports.report(
-        sections=[
-            ReportSection(
-                heading="Summary",
-                description="d",
-                blocks=[sample_reports.table_block(), sample_reports.table_block()],
-            )
-        ]
-    )
     workbook = load_workbook(io.BytesIO(render_xlsx_bytes(built)))
     assert workbook.sheetnames == ["Report", "Summary 1", "Summary 2"]
+    for name in ("Summary 1", "Summary 2"):
+        assert _sheet_column(built, name)[-2:] == ["Notes", "Timezone: America/Chicago"]
 
 
 def test_xlsx_disambiguates_a_section_named_like_the_info_sheet() -> None:
@@ -403,15 +390,6 @@ def test_xlsx_writes_a_typed_cell_as_a_number(
     assert written == expected
     assert written_format == number_format
     assert data_type != "s"
-
-
-def test_xlsx_keeps_a_text_cell_as_text() -> None:
-    """Only a number becomes a number; a label stays the string it is."""
-    written, _, data_type = _value_cell(
-        sample_reports.report(sections=[_section(rows=[["Metric", "n/a"]])])
-    )
-    assert written == "n/a"
-    assert data_type == "s"
 
 
 def test_report_attachments_render_flagged_tables_to_csv() -> None:

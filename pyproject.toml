@@ -16,13 +16,13 @@ repository = "https://github.com/brianaydemir/jupyterhub-monitoring"
 
 
 [project.scripts]
-create-es-api-key = "app.cli.create_es_api_key:main"
-delete-es-api-key = "app.cli.delete_es_api_key:main"
-get-es-docs = "app.cli.get_es_docs:main"
-get-new-activity = "app.cli.get_new_activity:main"
-get-new-users = "app.cli.get_new_users:main"
-list-es-api-keys = "app.cli.list_es_api_keys:main"
-push-servers = "app.cli.push_servers:main"
+create-es-api-key = "jupyterhub_monitoring.cli.create_es_api_key:main"
+delete-es-api-key = "jupyterhub_monitoring.cli.delete_es_api_key:main"
+get-es-docs = "jupyterhub_monitoring.cli.get_es_docs:main"
+get-new-activity = "jupyterhub_monitoring.cli.get_new_activity:main"
+get-new-users = "jupyterhub_monitoring.cli.get_new_users:main"
+list-es-api-keys = "jupyterhub_monitoring.cli.list_es_api_keys:main"
+push-servers = "jupyterhub_monitoring.cli.push_servers:main"
 
 
 #---------------------------------------------------------------------------
@@ -53,6 +53,7 @@ profile = "black"
 
 # Import discovery
 explicit_package_bases = true
+mypy_path = "src"
 follow_untyped_imports = true
 
 # Untyped definitions and calls
@@ -72,7 +73,7 @@ sqlite_cache = true
 
 [tool.poetry]
 package-mode = true
-packages = [{ include = "app" }]
+packages = [{ include = "jupyterhub_monitoring", from = "src" }]
 
 
 [tool.poetry.dependencies]

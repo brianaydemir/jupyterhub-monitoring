@@ -25,7 +25,7 @@ __pycache__/
 .typos.toml
 AGENTS.md
 Makefile
-app/
+src/
 poetry.lock
 pyproject.toml
 tests/

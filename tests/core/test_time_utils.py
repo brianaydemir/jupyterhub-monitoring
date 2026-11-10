@@ -1,12 +1,12 @@
-"""Tests for :mod:`app.core.time_utils`."""
+"""Tests for :mod:`jupyterhub_monitoring.core.time_utils`."""
 
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.core import time_utils
-from app.core.time_utils import (
+from jupyterhub_monitoring.core import time_utils
+from jupyterhub_monitoring.core.time_utils import (
     compute_time_range,
     elapsed,
     format_timezone,
@@ -74,6 +74,48 @@ def test_compute_time_range_anchor_steps_back_a_day_when_future(
     start, end = _range_at(monkeypatch, now, timedelta(days=1), "22:00")
     assert end == datetime(2026, 7, 3, 22, 0, tzinfo=CHICAGO)
     assert start == datetime(2026, 7, 2, 22, 0, tzinfo=CHICAGO)
+
+
+@pytest.mark.parametrize(
+    ("now", "time_str", "expected"),
+    [
+        pytest.param(
+            datetime(2026, 3, 8, 8, 15, tzinfo=timezone.utc),
+            "02:45",
+            datetime(2026, 3, 8, 7, 45, tzinfo=timezone.utc),
+            id="skipped-time-not-yet-reached",
+        ),
+        pytest.param(
+            datetime(2026, 11, 1, 7, 15, tzinfo=timezone.utc),
+            "01:30",
+            datetime(2026, 11, 1, 6, 30, tzinfo=timezone.utc),
+            id="repeated-time-between-its-occurrences",
+        ),
+        pytest.param(
+            datetime(2026, 11, 1, 7, 45, tzinfo=timezone.utc),
+            "01:30",
+            datetime(2026, 11, 1, 7, 30, tzinfo=timezone.utc),
+            id="repeated-time-after-both-occurrences",
+        ),
+    ],
+)
+def test_compute_time_range_anchor_is_never_ahead_across_dst(
+    now: datetime,
+    time_str: str,
+    expected: datetime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The anchor is the latest instant reading that time, not a later one.
+
+    Comparing wall clocks would put a skipped 02:45 half an hour ahead of
+    03:15, and would send a repeated 01:30 back a day
+    when its first occurrence has already passed.
+    """
+    _, end = _range_at(monkeypatch, now.astimezone(CHICAGO), timedelta(days=1), time_str)
+    # A datetime in a repeated hour equals none in another zone,
+    # so the two are compared in UTC.
+    assert end.astimezone(timezone.utc) == expected
+    assert expected <= now
 
 
 @pytest.mark.parametrize(
@@ -146,7 +188,7 @@ def _snap_at(
 def test_snap_widens_both_bounds_to_the_days_they_fall_in(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The documented two-week window, with its ragged edges squared off."""
+    """Each bound moves out to the midnight bounding its own day."""
     start, end = _snap_at(
         monkeypatch,
         datetime(2026, 9, 3, 17, 48, tzinfo=CHICAGO),
@@ -322,6 +364,19 @@ def test_parse_datetime_accepts_a_fixed_offset_zone() -> None:
     parsed = parse_datetime("2026-07-01 15:00", parse_timezone("+04:00"))
     assert parsed is not None
     assert parsed.utcoffset() == timedelta(hours=4)
+
+
+def test_parse_datetime_reads_now_as_the_present_in_a_repeated_hour(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The second pass of a repeated hour is not mistaken for the first."""
+    now = datetime(2026, 11, 1, 7, 30, tzinfo=timezone.utc)
+    monkeypatch.setattr(time_utils, "datetime", FrozenClock(now))
+    parsed = parse_datetime("now", CHICAGO)
+    assert parsed is not None
+    # A datetime in a repeated hour equals none in another zone,
+    # so the two are compared in UTC.
+    assert parsed.astimezone(timezone.utc) == now
 
 
 def test_parse_datetime_rejects_unparsable_text() -> None:

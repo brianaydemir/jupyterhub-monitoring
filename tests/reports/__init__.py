@@ -1,1 +1,1 @@
-"""Tests for :mod:`app.reports`."""
+"""Tests for :mod:`jupyterhub_monitoring.reports`."""

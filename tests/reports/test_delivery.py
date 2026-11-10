@@ -12,20 +12,24 @@ from zoneinfo import ZoneInfo
 import pytest
 from openpyxl import load_workbook
 
-from app.reports import email_utils
-from app.reports.builders import build_activity_report, build_new_users_report
-from app.reports.delivery import OutputTargets, deliver_report
-from app.reports.email_utils import EmailConfig, create_message, send_report_email
-from app.reports.model import ReportAttachment
-from app.reports.renderers import (
+from jupyterhub_monitoring.reports import email_utils
+from jupyterhub_monitoring.reports.builders import build_activity_report, build_new_users_report
+from jupyterhub_monitoring.reports.delivery import OutputTargets, deliver_report
+from jupyterhub_monitoring.reports.email_utils import (
+    EmailConfig,
+    create_message,
+    send_report_email,
+)
+from jupyterhub_monitoring.reports.model import ReportAttachment
+from jupyterhub_monitoring.reports.renderers import (
     render_csv_bytes,
     render_html_document,
     render_html_fragment,
     render_text,
     render_xlsx_bytes,
 )
-from app.usage.activity import ActivitySummary, DocumentTally, SessionActivity
-from app.usage.new_users import UserTally
+from jupyterhub_monitoring.usage.activity import ActivitySummary, DocumentTally, SessionActivity
+from jupyterhub_monitoring.usage.new_users import UserTally
 from tests.helpers import sample_reports
 
 CHICAGO = ZoneInfo("America/Chicago")
@@ -34,14 +38,19 @@ END = dt.datetime(2026, 7, 8, tzinfo=CHICAGO)
 
 
 class _RecordingSmtp:
-    """Captures the message a send would have transmitted."""
+    """Captures the message a send would have transmitted.
+
+    *refused* holds the addresses the relay turns away, as smtplib reports
+    them when it still accepted the message for at least one recipient.
+    """
 
     sent: list[tuple[str, list[str], Any]] = []
+    connections: list[tuple[str, int]] = []
+    refused: dict[str, tuple[int, bytes]] = {}
 
     def __init__(self, host: str, port: int, timeout: float) -> None:
         """Record the connection target."""
-        self.host = host
-        self.port = port
+        type(self).connections.append((host, port))
         self.timeout = timeout
 
     def __enter__(self) -> "_RecordingSmtp":
@@ -51,9 +60,12 @@ class _RecordingSmtp:
     def __exit__(self, *_: object) -> None:
         """Nothing to release."""
 
-    def send_message(self, message: Any, sender: str, recipients: list[str]) -> None:
+    def send_message(
+        self, message: Any, sender: str, recipients: list[str]
+    ) -> dict[str, tuple[int, bytes]]:
         """Record the message rather than transmitting it."""
         type(self).sent.append((sender, recipients, message))
+        return type(self).refused
 
 
 def test_deliver_report_prints_to_stdout(capsys: pytest.CaptureFixture[str]) -> None:
@@ -106,27 +118,29 @@ def test_deliver_report_names_each_file_it_wrote(
 def test_deliver_report_sends_email_with_the_table_attached(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The email carries both bodies and the flagged table as CSV."""
+    """The email carries both bodies and the flagged table as CSV.
+
+    Every setting reaches the message or the relay it is sent through.
+    """
     sent = _capture_smtp(monkeypatch)
     built = sample_reports.report()
     assert deliver_report(_targets(send_email=True), built) == 0
 
     sender, recipients, message = sent[0]
     assert (sender, recipients) == ("from@example.edu", ["to@example.org"])
+    assert (message["From"], message["Subject"]) == ("from@example.edu", "Test Report")
+    assert _RecordingSmtp.connections == [("smtp.example.edu", 465)]
     payloads = _payload_names(message)
     assert payloads == ["text/plain", "text/html", "summary.csv"]
 
 
-def test_the_workbook_is_attached_only_when_it_was_written(
+def test_a_written_workbook_is_attached(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     """``--xlsx-file`` produces the workbook, and the email carries that file."""
     sent = _capture_smtp(monkeypatch)
     built = sample_reports.report()
-
-    deliver_report(_targets(send_email=True), built)
-    assert "r.xlsx" not in _payload_names(sent[-1][2])
 
     written = tmp_path / "r.xlsx"
     deliver_report(_targets(send_email=True, xlsx_file=written), built)
@@ -163,6 +177,23 @@ def test_deliver_report_reports_a_failed_send(
     assert deliver_report(targets, sample_reports.report()) == 1
     assert "Error sending email" in capsys.readouterr().err
     assert written.exists()
+
+
+def test_a_partly_refused_send_is_a_failed_one(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """smtplib raises only when every recipient is refused.
+
+    A relay that turns some away would otherwise read as a delivered report.
+    """
+    _capture_smtp(monkeypatch)
+    monkeypatch.setattr(_RecordingSmtp, "refused", {"b@example.org": (550, b"no such user")})
+    config = _email(recipients=("a@example.org", "b@example.org"))
+    assert send_report_email(config, text_content="t", html_content="h", attachments=[]) == 1
+    err = capsys.readouterr().err
+    assert "Error sending email: the server refused b@example.org" in err
+    assert "sent successfully" not in err
 
 
 def test_email_uses_ssl_unless_it_is_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -272,66 +303,53 @@ def _addressed_to(recipients: list[str]) -> Any:
     )
 
 
-def test_every_recipient_reaches_the_envelope_and_the_header(
+@pytest.mark.parametrize(
+    ("recipients", "envelope", "header"),
+    [
+        pytest.param(
+            ("a@example.org", "b@example.org"),
+            ["a@example.org", "b@example.org"],
+            "a@example.org, b@example.org",
+            id="one-address-per-entry",
+        ),
+        pytest.param(
+            ("Ops <a@example.org>", "b@example.org"),
+            ["a@example.org", "b@example.org"],
+            "Ops <a@example.org>, b@example.org",
+            id="display-name",
+        ),
+        pytest.param(
+            ("Ops <a@example.org>, b@example.org",),
+            ["a@example.org", "b@example.org"],
+            "Ops <a@example.org>, b@example.org",
+            id="several-mailboxes-in-one-entry",
+        ),
+        pytest.param(
+            ('"Doe, Jane" <j@example.org>, dean@example.org',),
+            ["j@example.org", "dean@example.org"],
+            '"Doe, Jane" <j@example.org>, dean@example.org',
+            id="quoted-comma",
+        ),
+    ],
+)
+def test_every_mailbox_reaches_the_envelope_and_the_header(
+    recipients: tuple[str, ...],
+    envelope: list[str],
+    header: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A list of addresses is a list to smtplib, not one long address."""
-    sent = _capture_smtp(monkeypatch)
-    config = _email(recipients=("a@example.org", "b@example.org"))
-    assert send_report_email(config, text_content="t", html_content="h", attachments=[]) == 0
+    """The relay is given bare addresses; only the header carries the names.
 
-    _, recipients, message = sent[-1]
-    assert recipients == ["a@example.org", "b@example.org"]
-    assert message["To"] == "a@example.org, b@example.org"
-
-
-def test_a_display_name_reaches_the_header_but_not_the_envelope(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The relay is given addresses; only the header carries the names."""
-    sent = _capture_smtp(monkeypatch)
-    config = _email(recipients=("Ops <a@example.org>", "b@example.org"))
-    assert send_report_email(config, text_content="t", html_content="h", attachments=[]) == 0
-
-    _, recipients, message = sent[-1]
-    assert recipients == ["a@example.org", "b@example.org"]
-    assert message["To"] == "Ops <a@example.org>, b@example.org"
-
-
-def test_one_entry_may_carry_several_mailboxes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Entries are parsed, not counted, so a list in one reaches everyone.
-
-    ``--recipient-email`` accepts a list in a single occurrence,
-    which arrives here as one entry holding two mailboxes.
+    An entry is parsed as a ``To`` field, so it may hold several mailboxes,
+    and a comma inside a quoted name does not end one.
     """
     sent = _capture_smtp(monkeypatch)
-    config = _email(recipients=("Ops <a@example.org>, b@example.org",))
+    config = _email(recipients=recipients)
     assert send_report_email(config, text_content="t", html_content="h", attachments=[]) == 0
 
-    _, recipients, message = sent[-1]
-    assert recipients == ["a@example.org", "b@example.org"]
-    assert message["To"] == "Ops <a@example.org>, b@example.org"
-
-
-def test_a_quoted_comma_in_a_list_does_not_separate_mailboxes() -> None:
-    """The entry is parsed as a header field, so the quotes are honored."""
-    message = _addressed_to(['"Doe, Jane" <j@example.org>, dean@example.org'])
-    assert message["To"] == '"Doe, Jane" <j@example.org>, dean@example.org'
-
-
-def test_a_quoted_display_name_keeps_its_quotes_and_its_address(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The comma inside the name must not read as the end of the mailbox."""
-    sent = _capture_smtp(monkeypatch)
-    config = _email(recipients=('"Doe, Jane" <jane@example.org>',))
-    assert send_report_email(config, text_content="t", html_content="h", attachments=[]) == 0
-
-    _, recipients, message = sent[-1]
-    assert recipients == ["jane@example.org"]
-    assert message["To"] == '"Doe, Jane" <jane@example.org>'
+    _, sent_to, message = sent[-1]
+    assert sent_to == envelope
+    assert message["To"] == header
 
 
 def test_a_non_ascii_display_name_is_encoded_but_its_address_is_not() -> None:
@@ -463,6 +481,7 @@ def _email(
 def _capture_smtp(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, list[str], Any]]:
     """Replace both SMTP transports with a recorder and return its log."""
     _RecordingSmtp.sent = []
+    _RecordingSmtp.connections = []
     monkeypatch.setattr(email_utils.smtplib, "SMTP_SSL", _RecordingSmtp)
     monkeypatch.setattr(email_utils.smtplib, "SMTP", _RecordingSmtp)
     return _RecordingSmtp.sent

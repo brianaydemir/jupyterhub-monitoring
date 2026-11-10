@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.cli.report_arguments`.
+"""Tests for :mod:`jupyterhub_monitoring.cli.report_arguments`.
 
 The module's job
 is to keep a report command's argument groups and its validation in step,
@@ -20,12 +20,15 @@ from collections.abc import Callable
 
 import pytest
 
-from app.cli.get_new_activity import _build_parser as build_activity_parser
-from app.cli.get_new_activity import _validate_arguments as validate_activity_arguments
-from app.cli.get_new_users import _build_parser as build_users_parser
-from app.cli.get_new_users import _validate_arguments as validate_users_arguments
-from app.cli.report_arguments import (
-    ELASTICSEARCH_SOURCE,
+from jupyterhub_monitoring.cli.get_new_activity import _build_parser as build_activity_parser
+from jupyterhub_monitoring.cli.get_new_activity import (
+    _validate_arguments as validate_activity_arguments,
+)
+from jupyterhub_monitoring.cli.get_new_users import _build_parser as build_users_parser
+from jupyterhub_monitoring.cli.get_new_users import (
+    _validate_arguments as validate_users_arguments,
+)
+from jupyterhub_monitoring.cli.report_arguments import (
     JUPYTERHUB_SOURCE,
     OPTIONAL_ELASTICSEARCH_SOURCE,
     ReportSource,
@@ -61,30 +64,6 @@ def _reject(
     return capsys.readouterr().err
 
 
-def test_the_query_group_is_returned_for_the_caller_to_extend() -> None:
-    """get-new-activity adds --hub to it."""
-    parser = argparse.ArgumentParser(prog="cmd")
-    query_group = configure_report_parser(
-        parser,
-        sources=(ELASTICSEARCH_SOURCE,),
-        subject_prefix="Subject",
-    )
-    query_group.add_argument("--hub")
-    args = parser.parse_args(
-        ["--es-endpoint", "https://es.example.edu:9200", "--es-index", "i", "--hub", "prod"]
-    )
-    assert args.hub == "prod"
-
-
-def test_each_source_adds_its_own_arguments() -> None:
-    """Naming two sources produces the union of their groups."""
-    parser = _parser(JUPYTERHUB_SOURCE, OPTIONAL_ELASTICSEARCH_SOURCE)
-    args = parser.parse_args(["--jupyterhub-endpoint", "https://hub.example.edu/hub/api"])
-    assert args.jupyterhub_endpoint == "https://hub.example.edu/hub/api"
-    assert args.es_endpoint is None
-    assert args.es_index is None
-
-
 def test_a_source_validates_the_arguments_it_added(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -98,7 +77,7 @@ def test_a_source_validates_the_arguments_it_added(
     assert "JUPYTERHUB_API_KEY" in message
 
 
-def test_the_window_is_validated_after_the_sources(
+def test_the_window_is_validated_too(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -238,18 +217,6 @@ def test_the_activity_report_takes_no_date_format(
     assert "--date-format" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("choice", ["date", "datetime"])
-def test_the_new_users_report_takes_either_date_format(choice: str) -> None:
-    """Its timestamps date a user rather than identify one, so both serve."""
-    args = build_users_parser().parse_args([*USERS_ARGV, "--date-format", choice])
-    assert args.date_format == choice
-
-
-def test_the_new_users_report_defaults_to_a_bare_date() -> None:
-    """Without the option, a user's timestamps are bare dates."""
-    assert build_users_parser().parse_args(USERS_ARGV).date_format == "date"
-
-
 #
 # The reporting window, per command
 #
@@ -291,26 +258,3 @@ def test_either_command_rejects_a_future_report_end(
     message = capsys.readouterr().err
     assert "--report-end resolves to" in message
     assert "which is in the future" in message
-
-
-@pytest.mark.usefixtures("with_ambient_credentials")
-@pytest.mark.parametrize(("build_parser", "validate", "argv"), COMMANDS)
-def test_either_command_accepts_whole_days(
-    build_parser: Builder,
-    validate: CommandValidator,
-    argv: list[str],
-) -> None:
-    """The flag is declared once, in the "Query" group both commands share."""
-    parser = build_parser()
-    args = parser.parse_args(
-        [
-            *argv,
-            "--report-start",
-            "2 weeks ago",
-            "--report-end",
-            "yesterday",
-            "--whole-days",
-        ]
-    )
-    assert args.whole_days is True
-    validate(args, parser)

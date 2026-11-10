@@ -1,8 +1,8 @@
-"""Tests for :mod:`app.core.name_utils`."""
+"""Tests for :mod:`jupyterhub_monitoring.core.name_utils`."""
 
 import pytest
 
-from app.core.name_utils import parse_name, trailing_domain_key
+from jupyterhub_monitoring.core.name_utils import parse_name, trailing_domain_key
 
 
 @pytest.mark.parametrize(

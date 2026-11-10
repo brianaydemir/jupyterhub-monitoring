@@ -1,7 +1,7 @@
 # This Makefile provides targets for development-related tasks.
 
 IMAGE ?= hub.osg-htc.org/brian.aydemir/jupyterhub-monitoring
-PY_PACKAGE_SRC := app
+PY_PACKAGE_SRC := src
 PY_TEST_SRC := tests
 
 # Each linter below is prefixed with this, so that a local `make lint` runs

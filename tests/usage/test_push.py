@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.usage.push`."""
+"""Tests for :mod:`jupyterhub_monitoring.usage.push`."""
 
 # An explicit comparison to an empty collection is the assertion
 # these tests mean to make, and reads better here than a truthiness check.
@@ -14,9 +14,9 @@ from typing import Any
 
 import pytest
 
-from app.core.errors import DataShapeError, ExternalServiceError
-from app.usage import push
-from app.usage.push import (
+from jupyterhub_monitoring.core.errors import DataShapeError, ExternalServiceError
+from jupyterhub_monitoring.usage import push
+from jupyterhub_monitoring.usage.push import (
     ElasticsearchSink,
     PrintingSink,
     _make_doc_id,
@@ -228,7 +228,7 @@ def test_push_adds_metadata_and_timestamps_to_each_document() -> None:
 
 
 def test_every_document_in_a_run_shares_one_snapshot_time() -> None:
-    """Concurrency is computed by grouping on the snapshot time."""
+    """One run is one push, so every document carries the same snapshot time."""
     elasticsearch = _StubElasticsearch()
     push_servers(
         jupyterhub_client=_StubHub([{"user.name": f"u{i}@x.edu"} for i in range(3)]),
@@ -238,29 +238,18 @@ def test_every_document_in_a_run_shares_one_snapshot_time() -> None:
     assert len({d["meta.snapshot-time"] for d in elasticsearch.uploaded}) == 1
 
 
-def test_push_hands_the_limit_to_the_client() -> None:
-    """The cap reaches the fetch, so a capped run is a small one."""
+@pytest.mark.parametrize("limit", [2, None])
+def test_push_hands_the_limit_to_the_client(limit: int | None) -> None:
+    """The cap reaches the fetch as given, and no cap as no cap."""
     hub = _StubHub([{"user.name": f"u{i}@x.edu"} for i in range(5)])
-    push_servers(
-        jupyterhub_client=hub,
-        sink=PrintingSink(),
-        interval="5m",
-        limit=2,
-    )
-    assert hub.limits == [2]
+    push_servers(jupyterhub_client=hub, sink=PrintingSink(), interval="5m", limit=limit)
+    assert hub.limits == [limit]
 
 
-def test_push_without_a_limit_asks_for_everything() -> None:
-    """No cap is passed along as no cap, not as a number of its own."""
-    hub = _StubHub([{"user.name": "a@x.edu"}])
-    push_servers(jupyterhub_client=hub, sink=PrintingSink(), interval="5m")
-    assert hub.limits == [None]
-
-
-def test_the_printing_sink_pushes_nothing(
+def test_the_printing_sink_prints_the_stamped_document(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Nothing reaches Elasticsearch, and the document is valid JSON."""
+    """A printed document counts as handled, and is the stamped document as JSON."""
     successful, errors = push_servers(
         jupyterhub_client=_StubHub([{"user.name": "a@x.edu"}]),
         sink=PrintingSink(),
@@ -354,7 +343,10 @@ def test_a_document_keeps_its_number_across_batches(
 
 
 def test_every_document_in_a_batch_carries_its_own_id() -> None:
-    """A batch built before stamping would collapse onto one id, silently."""
+    """An id built before stamping would lack the snapshot time.
+
+    Each run would then overwrite what the last one stored.
+    """
     elasticsearch = _StubElasticsearch()
     push_servers(
         jupyterhub_client=_StubHub([{"user.name": f"u{i}@x.edu"} for i in range(3)]),
@@ -362,7 +354,6 @@ def test_every_document_in_a_batch_carries_its_own_id() -> None:
         interval="5m",
     )
     assert elasticsearch.doc_ids == [_make_doc_id(d) for d in elasticsearch.uploaded]
-    assert len(set(elasticsearch.doc_ids)) == 3
     assert not any(id_ and "unknown-snapshot" in id_ for id_ in elasticsearch.doc_ids)
 
 
@@ -400,14 +391,16 @@ def test_a_run_inside_its_interval_stays_quiet(
     assert capsys.readouterr().err == ""
 
 
-def test_an_unparsable_interval_is_rejected() -> None:
+def test_an_unparsable_interval_is_rejected_before_the_hub_is_fetched() -> None:
     """get-new-activity could only drop such a document at report time."""
+    hub = _StubHub([])
     with pytest.raises(DataShapeError, match="Invalid duration format"):
         push_servers(
-            jupyterhub_client=_StubHub([]),
+            jupyterhub_client=hub,
             sink=ElasticsearchSink(_StubElasticsearch(), _INDEX),
             interval="5 fortnights",
         )
+    assert hub.limits == []
 
 
 @pytest.mark.parametrize("interval", ["0s", "-5m"])
@@ -419,15 +412,3 @@ def test_a_non_positive_interval_is_rejected(interval: str) -> None:
             sink=ElasticsearchSink(_StubElasticsearch(), _INDEX),
             interval=interval,
         )
-
-
-def test_the_interval_is_checked_before_the_hub_is_fetched() -> None:
-    """A bad interval fails the run before the hub is contacted."""
-    hub = _StubHub([])
-    with pytest.raises(DataShapeError):
-        push_servers(
-            jupyterhub_client=hub,
-            sink=ElasticsearchSink(_StubElasticsearch(), _INDEX),
-            interval="5 fortnights",
-        )
-    assert hub.limits == []

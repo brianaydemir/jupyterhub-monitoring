@@ -22,9 +22,7 @@ with `--interval` set to that schedule's period.
 Every command documents its options under `--help`.
 
 See [docs/snapshots.md](docs/snapshots.md)
-for what `push-servers` records and how the reports count it,
-and [docs/migrating-from-2.x.md](docs/migrating-from-2.x.md)
-when upgrading from 2.x.
+for what `push-servers` records and how the reports count it.
 
 ## Installation
 

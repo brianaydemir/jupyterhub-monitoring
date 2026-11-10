@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.cli.delete_es_api_key`."""
+"""Tests for :mod:`jupyterhub_monitoring.cli.delete_es_api_key`."""
 
 # This module exercises the command's parser and internal helpers directly.
 # pyright: reportPrivateUsage=false
@@ -11,8 +11,8 @@ from typing import Any
 
 import pytest
 
-from app.cli import delete_es_api_key
-from app.cli.delete_es_api_key import _build_parser, _error_detail, _run
+from jupyterhub_monitoring.cli import delete_es_api_key
+from jupyterhub_monitoring.cli.delete_es_api_key import _build_parser, _error_detail, _run
 from tests.helpers.stub_clients import StubClient, install_client
 
 
@@ -54,7 +54,7 @@ def _run_with(
 
 
 #
-# The parser
+# The request
 #
 
 
@@ -120,6 +120,23 @@ def test_no_matching_keys_is_not_an_error(
     assert "No matching API keys found." in capsys.readouterr().out
 
 
+def test_a_key_that_could_not_be_invalidated_is_not_reported_as_no_match(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The key matched; saying none did would contradict the error beside it."""
+    code, _ = _run_with(
+        monkeypatch,
+        {"error_count": 1, "error_details": [{"type": "exception", "reason": "failed"}]},
+        "--id",
+        "abc123",
+    )
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "No matching API keys found." not in captured.out
+    assert "Errors: 1" in captured.err
+
+
 def test_reported_errors_exit_one_with_their_details(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -130,7 +147,9 @@ def test_reported_errors_exit_one_with_their_details(
         {
             "invalidated_api_keys": ["abc123"],
             "error_count": 1,
-            "error_details": [{"type": "security_exception", "reason": "not permitted"}],
+            "error_details": [
+                {"type": "security_exception", "reason": "not permitted", "extra": "ignored"}
+            ],
         },
         "--name",
         "my-key",
@@ -145,12 +164,6 @@ def test_reported_errors_exit_one_with_their_details(
 #
 # _error_detail
 #
-
-
-def test_an_error_detail_names_its_type_and_reason() -> None:
-    """Those two fields are what identify the failure."""
-    detail = {"type": "security_exception", "reason": "not permitted", "extra": "ignored"}
-    assert _error_detail(detail) == "security_exception: not permitted"
 
 
 def test_an_error_detail_falls_back_when_fields_are_missing() -> None:

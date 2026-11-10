@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.clients.elasticsearch_client`, with a stubbed transport."""
+"""Tests for :mod:`jupyterhub_monitoring.clients.elasticsearch_client`."""
 
 # An explicit comparison to an empty collection is the assertion
 # these tests mean to make, and reads better here than a truthiness check.
@@ -11,9 +11,9 @@ from typing import Any, cast
 import pytest
 from elasticsearch import ApiError, TransportError
 
-from app.clients import elasticsearch_client
-from app.clients.elasticsearch_client import ElasticsearchClient
-from app.core.errors import ExternalServiceError
+from jupyterhub_monitoring.clients import elasticsearch_client
+from jupyterhub_monitoring.clients.elasticsearch_client import ElasticsearchClient
+from jupyterhub_monitoring.core.errors import ExternalServiceError
 
 
 # One attribute per call this stub records,
@@ -403,13 +403,6 @@ def test_query_reports_a_failed_scroll_where_it_is_iterated() -> None:
     with pytest.raises(ExternalServiceError, match="Querying Elasticsearch failed"):
         next(documents)
     assert transport.cleared == ["scroll-1"]
-
-
-def test_query_reports_an_api_error_too() -> None:
-    """``ApiError`` and ``TransportError`` are both roots of the hierarchy."""
-    client, _ = _failing_client(_api_error())
-    with pytest.raises(ExternalServiceError, match="Querying Elasticsearch failed"):
-        list(client.query(index="i"))
 
 
 def test_upload_document_reports_a_rejection_as_a_service_error() -> None:

@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.cli.runtime`.
+"""Tests for :mod:`jupyterhub_monitoring.cli.runtime`.
 
 Every command's ``main`` is one call to :func:`run_command`,
 so the exit codes documented in the README are decided here.
@@ -10,7 +10,7 @@ from collections.abc import Callable
 
 import pytest
 
-from app.cli import (
+from jupyterhub_monitoring.cli import (
     create_es_api_key,
     delete_es_api_key,
     get_es_docs,
@@ -19,8 +19,8 @@ from app.cli import (
     list_es_api_keys,
     push_servers,
 )
-from app.cli.runtime import parse_and_validate, run_command
-from app.core.errors import AppError, ExternalServiceError
+from jupyterhub_monitoring.cli.runtime import parse_and_validate, run_command
+from jupyterhub_monitoring.core.errors import AppError, ExternalServiceError
 
 
 def _build_parser() -> argparse.ArgumentParser:

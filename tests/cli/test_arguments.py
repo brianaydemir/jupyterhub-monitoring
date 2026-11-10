@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.cli.arguments`.
+"""Tests for :mod:`jupyterhub_monitoring.cli.arguments`.
 
 The helpers only declare arguments, so the tests parse with a real parser
 and assert on what came back.
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from app.cli.arguments import (
+from jupyterhub_monitoring.cli.arguments import (
     add_email_argument_group,
     add_email_arguments,
     add_es_connection_argument_group,
@@ -95,7 +95,7 @@ def test_file_arguments_parse_as_paths_and_the_port_as_an_integer() -> None:
 
 
 def test_the_query_group_defaults_to_central_time() -> None:
-    """Every other window argument is unset until the command is run."""
+    """Every other window argument is unset unless given."""
     parser = _parser()
     add_query_argument_group(parser)
     args = parser.parse_args([])
@@ -135,15 +135,19 @@ def test_recipients_can_be_repeated() -> None:
         "ops@example.edu (Ops Team)",
         '"Ops: Team" <ops@example.edu>',
         '"Doe; Jane" <jane@example.edu>',
+        "a@example.edu, b@example.edu",
+        "Ops Team <ops@example.edu>, dean@example.edu",
+        '"Doe, Jane" <jane@example.edu>, dean@example.edu',
     ],
 )
-def test_a_recipient_may_be_written_as_a_to_header_writes_one(value: str) -> None:
-    """The value reaches the namespace unchanged; app.reports renders it.
+def test_a_recipient_may_be_written_as_a_to_header_writes_it(value: str) -> None:
+    """The value reaches the namespace unchanged, a list as one unsplit entry.
 
-    The last two hold a group's punctuation inside a quoted display name,
-    where it is ordinary text.
-    They are accepted because the group check parses the value
+    A group's punctuation inside a quoted display name is ordinary text,
+    accepted because the group check parses the value
     rather than scanning it for a ``:`` or a ``;``.
+    A comma inside a quoted display name separates nothing,
+    which is why a list is not split here.
     """
     parser = _parser()
     add_email_arguments(parser, subject_prefix="Subject")
@@ -157,26 +161,6 @@ def test_surrounding_whitespace_is_dropped() -> None:
     add_email_arguments(parser, subject_prefix="Subject")
     args = parser.parse_args(["--recipient-email", "  ops@example.edu  "])
     assert args.recipient_email == ["ops@example.edu"]
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        "a@example.edu, b@example.edu",
-        "Ops Team <ops@example.edu>, dean@example.edu",
-        '"Doe, Jane" <jane@example.edu>, dean@example.edu',
-    ],
-)
-def test_one_occurrence_may_name_several_recipients(value: str) -> None:
-    """A list is one entry, unsplit; app.reports parses it out again.
-
-    The last case is why the entry is not split here:
-    the comma inside the quoted display name separates nothing.
-    """
-    parser = _parser()
-    add_email_arguments(parser, subject_prefix="Subject")
-    args = parser.parse_args(["--recipient-email", value])
-    assert args.recipient_email == [value]
 
 
 @pytest.mark.parametrize(

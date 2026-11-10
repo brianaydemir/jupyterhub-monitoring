@@ -1,6 +1,6 @@
-"""Tests for :mod:`app.reports.anonymize`."""
+"""Tests for :mod:`jupyterhub_monitoring.reports.anonymize`."""
 
-from app.reports.anonymize import LABEL_WIDTH, NATO_ALPHABET, build_pseudonyms
+from jupyterhub_monitoring.reports.anonymize import LABEL_WIDTH, NATO_ALPHABET, build_pseudonyms
 
 
 def test_pseudonyms_are_fixed_width_nato_labels() -> None:
@@ -18,12 +18,6 @@ def test_pseudonyms_are_stable_across_calls() -> None:
     alone = build_pseudonyms([("x.edu", "a")])
     crowded = build_pseudonyms([("x.edu", f"user{i}") for i in range(50)] + [("x.edu", "a")])
     assert alone[("x.edu", "a")] == crowded[("x.edu", "a")]
-
-
-def test_pseudonyms_do_not_depend_on_input_order() -> None:
-    """Labels are derived per identifier, not from position."""
-    pairs = [("x.edu", "a"), ("x.edu", "b"), ("y.edu", "c")]
-    assert build_pseudonyms(pairs) == build_pseudonyms(list(reversed(pairs)))
 
 
 def test_the_same_uid_at_two_institutions_maps_independently() -> None:

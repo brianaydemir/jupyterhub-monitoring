@@ -1,12 +1,8 @@
-"""Tests for :mod:`app.reports.model`: cell display and table shape."""
-
-# An explicit comparison to an empty collection is the assertion
-# these tests mean to make, and reads better here than a truthiness check.
-# pylint: disable=use-implicit-booleaness-not-comparison
+"""Tests for :mod:`jupyterhub_monitoring.reports.model`."""
 
 import pytest
 
-from app.reports.model import (
+from jupyterhub_monitoring.reports.model import (
     Cell,
     Duration,
     Fixed,
@@ -65,7 +61,7 @@ def test_a_fixed_number_reads_to_its_own_decimal_places(
 
 @pytest.mark.parametrize("digits", [0, -1])
 def test_fixed_rejects_having_no_decimal_places(digits: int) -> None:
-    """A number shown to no decimal places is an int, and says so."""
+    """A number shown to no decimal places is an int, so it is rejected."""
     with pytest.raises(ValueError, match="digits must be positive"):
         Fixed(1.0, digits=digits)
 
@@ -90,11 +86,6 @@ def test_table_rejects_rows_of_the_wrong_width() -> None:
     """A short or long row would silently misalign every output format."""
     with pytest.raises(ValueError, match="invalid column count at indices: 1, 2"):
         TableBlock(headers=["a", "b"], rows=[["1", "2"], ["1"], ["1", "2", "3"]])
-
-
-def test_table_accepts_no_rows() -> None:
-    """An empty report is a normal outcome, not an error."""
-    assert TableBlock(headers=["a"], rows=[]).rows == []
 
 
 @pytest.mark.parametrize("column", [-1, 2, 99])

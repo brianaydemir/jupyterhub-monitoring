@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.cli.get_es_docs`."""
+"""Tests for :mod:`jupyterhub_monitoring.cli.get_es_docs`."""
 
 # This module exercises the command's parser, validator, and runner
 # directly.
@@ -10,8 +10,8 @@ from typing import Any
 
 import pytest
 
-from app.cli import get_es_docs
-from app.cli.get_es_docs import _build_parser, _run, _validate_arguments
+from jupyterhub_monitoring.cli import get_es_docs
+from jupyterhub_monitoring.cli.get_es_docs import _build_parser, _run, _validate_arguments
 from tests.helpers.stub_clients import QueryStubClient, install_client
 
 

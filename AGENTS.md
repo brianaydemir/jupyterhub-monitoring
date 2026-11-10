@@ -39,13 +39,14 @@ Do not guess or pick an answer in these situations.
 This project is a CLI toolkit for monitoring JupyterHub usage
 and generating reports from that data.
 
+The package is `src/jupyterhub_monitoring`,
+and the paths below are relative to it.
 It is organized into the following sub-packages:
 
-- `app/cli` -- command entry points,
+- `cli` -- command entry points,
   `runtime` (the parse/validate/run wrapper every command's `main` uses),
   and the helpers those commands share:
-  `arguments` (the `add_*` argument builders,
-  plus `configure_es_admin_parser`),
+  `arguments` (the `add_*` argument builders),
   `validation` (the post-parse validators,
   which report through `parser.error`),
   `report_arguments` (`ReportSource` and the whole-command
@@ -58,7 +59,7 @@ It is organized into the following sub-packages:
 
   Imports among these flow one way:
   `arguments`, `validation`, `credentials`, and `runtime`
-  depend on nothing else in `app/cli`;
+  depend on nothing else in `cli`;
   `factories` imports `credentials`;
   `report_arguments` imports `arguments` and `validation`;
   and the command modules import from these alone,
@@ -66,24 +67,22 @@ It is organized into the following sub-packages:
   Keep it that way,
   rather than deferring an import inside a function to break a cycle.
 
-- `app/clients` -- thin wrappers around the JupyterHub, Elasticsearch,
+- `clients` -- thin wrappers around the JupyterHub, Elasticsearch,
   and Prometheus APIs
 
-- `app/core` -- shared errors and utilities that are tied to no service:
+- `core` -- shared errors and utilities that are tied to no service:
   `errors` (the project's exception types),
-  `dataclass_defaults` (the typed empty-collection factories
-  that dataclass fields use as their `default_factory`),
   and `dict_utils`, `name_utils`, and `time_utils`
 
-- `app/reports` -- turning usage data into a delivered report:
+- `reports` -- turning usage data into a delivered report:
   `model` (the rendering types),
-  `builders` (assembling a report from `app/usage` data),
+  `builders` (assembling a report from `usage` data),
   `anonymize` (the pseudonyms `--anonymize` substitutes),
   `renderers` (text, HTML, CSV, and XLSX output),
   `delivery` (writing the files and sending the mail),
   and `email_utils` (composing and sending one message)
 
-- `app/usage` -- the JupyterHub usage domain:
+- `usage` -- the JupyterHub usage domain:
   `snapshots` (the Elasticsearch query for active server documents,
   the exact `--hub` match its results go through,
   and the accessors for a snapshot's hub and timestamps),
@@ -96,7 +95,7 @@ It is organized into the following sub-packages:
   first-server times, and adoption),
   and `push` (the pipeline behind `push-servers`)
 
-A client in `app/clients` raises the exception types in `app/core/errors.py`,
+A client in `clients` raises the exception types in `core/errors.py`,
 never its library's own.
 Each method names the operation that failed
 (for example, `Querying Elasticsearch failed: ...`),
@@ -110,11 +109,11 @@ rather than raised, which is what lets `push-servers` count it
 without losing the rest of the batch;
 only a failure of the request as a whole raises.
 
-`app/usage` is named for the subject the project reports on,
+`usage` is named for the subject the project reports on,
 not for any one report, because it covers new users and the push pipeline
 as well as activity accounting.
 Its modules take plain data and return plain data,
-which is what lets a command module in `app/cli`
+which is what lets a command module in `cli`
 hold little more than its docstring, `_build_parser`, `_validate_arguments`,
 `_run`, and `main`.
 The two report commands add a module-level `_SOURCES`,
@@ -135,17 +134,17 @@ not in a command module.
 
 The domain types a report is built from,
 `SessionActivity` and `ActivitySummary`,
-sit in `app/usage/activity.py` beside the code that produces them.
-`app/reports` imports from `app/usage`, never the reverse.
+sit in `usage/activity.py` beside the code that produces them.
+`reports` imports from `usage`, never the reverse.
 
 Report delivery is configured
 with the typed `OutputTargets` and `EmailConfig` objects
-that `app/cli` builds from its parsed arguments,
-so nothing under `app/reports` reads an `argparse.Namespace`.
+that `cli` builds from its parsed arguments,
+so nothing under `reports` reads an `argparse.Namespace`.
 
-Tests live in `tests`, whose sub-packages mirror those of `app`,
+Tests live in `tests`, whose sub-packages mirror those of the package,
 so that a test module's path names the module it covers:
-`tests/cli/test_validation.py` covers `app/cli/validation.py`.
+`tests/cli/test_validation.py` covers `cli/validation.py`.
 Every directory carries an `__init__.py`,
 which is what keeps two same-named test modules in different sub-packages
 from colliding.
@@ -158,14 +157,13 @@ for the command and usage tests).
 Most modules have a test module of their own.
 These do not, and are covered through the code that uses them:
 
-- `app/reports/email_utils.py` -- `tests/reports/test_delivery.py`
+- `reports/email_utils.py` -- `tests/reports/test_delivery.py`
 
-- `app/core/errors.py` and `app/core/dataclass_defaults.py` --
-  exercised by everything that raises or declares them;
+- `core/errors.py` -- exercised by everything that raises its types;
   a test asserting that an empty exception subclass exists would assert nothing
 
 - each `__init__.py` -- a docstring,
-  plus the re-exports in `app/core` and `app/clients`
+  plus the re-exports in `core` and `clients`
   that are extension points (see below)
 
 Give a module a test module of its own once it grows logic of its own,
@@ -176,18 +174,17 @@ in the `[project.scripts]` section.
 
 Some of the code deliberately keeps surface that nothing currently calls:
 `TextBlock`, `Report.footnotes`, and `ReportSection.attachments`
-in `app/reports/model.py`,
-the re-exports in `app/core/__init__.py` and `app/clients/__init__.py`,
+in `reports/model.py`,
+the re-exports in `core/__init__.py` and `clients/__init__.py`,
 `ElasticsearchClient.upload_document`,
 the `state` parameter of `JupyterHubClient.list_users`,
 and the `required` switch of `add_email_arguments`.
 Each says so in its docstring.
 Treat them as extension points, not as oversights to clean up.
 
-The switches that `app/cli/arguments.py` and `app/cli/report_arguments.py`
+The switches that `cli/arguments.py` and `cli/report_arguments.py`
 thread through are all exercised, and are not on that list:
 `push-servers` and `OPTIONAL_ELASTICSEARCH_SOURCE` pass `required=False`,
-`get-es-docs` passes `include_index=True`,
 and `get-new-activity` passes `include_date_format=False`.
 
 ## Conventions
@@ -212,7 +209,7 @@ A flag that does nothing unless some other flag is also given is an error
 when given without it, rather than silently ignored:
 for example, `--es-index` without `--es-endpoint`,
 or `--subject` without `--send-email`.
-Report it from a validator in `app/cli/validation.py`.
+Report it from a validator in `src/jupyterhub_monitoring/cli/validation.py`.
 
 ### Documentation
 

@@ -1,12 +1,16 @@
-"""Tests for :mod:`app.cli.credentials`."""
+"""Tests for :mod:`jupyterhub_monitoring.cli.credentials`."""
 
 from pathlib import Path
 
 import pytest
 
-from app.cli import credentials
-from app.cli.credentials import prompt_password, read_api_key, read_optional_api_key
-from app.core.errors import AppError, DataShapeError
+from jupyterhub_monitoring.cli import credentials
+from jupyterhub_monitoring.cli.credentials import (
+    prompt_password,
+    read_api_key,
+    read_optional_api_key,
+)
+from jupyterhub_monitoring.core.errors import AppError, DataShapeError
 
 
 def test_an_unreadable_api_key_file_is_an_expected_failure(tmp_path: Path) -> None:
@@ -39,11 +43,18 @@ def test_an_empty_api_key_file_is_an_expected_failure(tmp_path: Path, contents: 
         read_optional_api_key(key_file, "PROMETHEUS_TOKEN")
 
 
-def test_a_key_file_is_stripped_of_its_trailing_newline(tmp_path: Path) -> None:
-    """A key mounted from a secret usually carries one."""
+def test_a_key_file_is_stripped_and_outranks_the_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A key mounted from a secret usually carries a trailing newline.
+
+    The file was named explicitly, so the variable is only its fallback.
+    """
+    monkeypatch.setenv("ELASTICSEARCH_API_KEY", "from-env")
     key_file = tmp_path / "key.txt"
-    key_file.write_text("secret\n", encoding="utf-8")
-    assert read_api_key(key_file, "ELASTICSEARCH_API_KEY") == "secret"
+    key_file.write_text("from-file\n", encoding="utf-8")
+    assert read_api_key(key_file, "ELASTICSEARCH_API_KEY") == "from-file"
 
 
 def test_the_environment_variable_is_the_fallback(monkeypatch: pytest.MonkeyPatch) -> None:

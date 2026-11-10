@@ -36,8 +36,8 @@ jobs:
 
       - name: Check formatting and spelling
         run: |
-          poetry run isort --check-only app tests
-          poetry run black --check app tests
+          poetry run isort --check-only src tests
+          poetry run black --check src tests
           poetry run mdformat --check .
           poetry run typos --sort .
 
@@ -73,5 +73,5 @@ jobs:
         run: |
           set -eux
           wheel=$(ls dist/*.whl)
-          unzip -l "$wheel" | grep -q 'app/py.typed'
+          unzip -l "$wheel" | grep -q 'jupyterhub_monitoring/py.typed'
           unzip -p "$wheel" '*.dist-info/METADATA' | grep -qE '^Requires-Python: >=3\.14'

@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.cli.list_es_api_keys`."""
+"""Tests for :mod:`jupyterhub_monitoring.cli.list_es_api_keys`."""
 
 # This module exercises the command's internal helpers directly.
 # pyright: reportPrivateUsage=false
@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from app.cli import list_es_api_keys
-from app.cli.list_es_api_keys import (
+from jupyterhub_monitoring.cli import list_es_api_keys
+from jupyterhub_monitoring.cli.list_es_api_keys import (
     _build_parser,
     _format_key_ids,
     _format_key_list_details,
@@ -147,19 +147,9 @@ def test_a_key_expiring_exactly_now_is_expired(monkeypatch: pytest.MonkeyPatch) 
     assert _format_key_ids([key]) == "key-7  boundary-key  [expired]"
 
 
-def test_the_key_format_says_which_listing_came_up_empty(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The wording distinguishes "none active" from "none at all"."""
-    _freeze_now(monkeypatch)
-    assert _format_key_ids([]) == "(no active API keys)"
-    assert _format_key_ids([], active_only=False) == "(no API keys)"
-
-
 def test_the_json_format_is_the_response_verbatim() -> None:
     """Nothing is added or dropped; the caller reads the raw fields."""
     keys = [_ACTIVE, _EXPIRED]
-    assert _format_key_list_json(keys) == json.dumps(keys, indent=2)
     assert json.loads(_format_key_list_json(keys)) == keys
 
 

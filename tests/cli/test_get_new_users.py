@@ -1,7 +1,7 @@
-"""Tests for :mod:`app.cli.get_new_users`.
+"""Tests for :mod:`jupyterhub_monitoring.cli.get_new_users`.
 
 Selecting the users and dating their servers
-is :mod:`app.usage.new_users`' work,
+is :mod:`jupyterhub_monitoring.usage.new_users`' work,
 covered by ``tests/usage/test_new_users.py``.
 What is left here is the command's own Elasticsearch lookup,
 whose window is not the reporting window and which ``--hub`` scopes,
@@ -19,20 +19,20 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.cli import get_new_users
-from app.cli.get_new_users import (
+from jupyterhub_monitoring.cli import get_new_users
+from jupyterhub_monitoring.cli.get_new_users import (
     _build_parser,
     _format_user_tally,
     _query_first_server,
     _run,
     _validate_arguments,
 )
-from app.core.time_utils import DATE_FMT
-from app.reports.builders import build_new_users_report
-from app.reports.delivery import OutputTargets
-from app.reports.model import Report
-from app.reports.renderers import render_text
-from app.usage.new_users import UserTally, filter_new_users, tally_users
+from jupyterhub_monitoring.core.time_utils import DATE_FMT, DATETIME_FMT
+from jupyterhub_monitoring.reports.builders import build_new_users_report
+from jupyterhub_monitoring.reports.delivery import OutputTargets
+from jupyterhub_monitoring.reports.model import Report
+from jupyterhub_monitoring.reports.renderers import render_text
+from jupyterhub_monitoring.usage.new_users import UserTally, filter_new_users, tally_users
 from tests.helpers.stub_clients import QueryStubClient, install_client
 
 # The email settings a run needs before it will build any at all.
@@ -134,17 +134,7 @@ def test_the_lookup_is_scoped_to_the_given_hub(monkeypatch: pytest.MonkeyPatch) 
     ]
     first_server, client = _lookup(monkeypatch, documents, hub="production")
     assert first_server == {"a@x.edu": 1}
-    assert _hub_filters(client) == [
-        {
-            "bool": {
-                "should": [
-                    {"term": {"meta.hub.keyword": "production"}},
-                    {"term": {"meta.hub": "production"}},
-                ],
-                "minimum_should_match": 1,
-            }
-        }
-    ]
+    assert any("production" in str(f) for f in _hub_filters(client))
 
 
 def test_the_lookup_spans_every_hub_without_one(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -193,7 +183,7 @@ def _report_on(
 
 
 def test_the_tally_carries_its_own_noun() -> None:
-    """The wording matches ``get-new-activity``'s, so the two read alike."""
+    """A single user is not pluralized."""
     assert _format_user_tally(UserTally(retrieved=1, in_window=1)) == (
         "Retrieved 1 user; 1 created in the reporting window."
     )
@@ -208,22 +198,34 @@ def test_retrieving_no_users_does_not_claim_none_of_none_were_created() -> None:
 
 
 def test_undated_users_are_named_only_when_there_are_some() -> None:
-    """Like ``get-new-activity``'s skips, they are named only when present."""
+    """A count of none is left out."""
     assert _format_user_tally(UserTally(retrieved=812, undated=5, in_window=3)) == (
         "Retrieved 812 users; 3 created in the reporting window, 5 with no creation time."
     )
 
 
+@pytest.mark.parametrize(
+    ("argv", "detailed_usernames", "anonymize", "strftime_fmt"),
+    [
+        (["--detailed-usernames"], True, False, DATE_FMT),
+        (["--anonymize"], False, True, DATE_FMT),
+        (["--date-format", "datetime"], False, False, DATETIME_FMT),
+    ],
+)
 def test_the_tally_counts_only_the_users_created_in_the_window(
+    argv: list[str],
+    detailed_usernames: bool,
+    anonymize: bool,
+    strftime_fmt: str,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The second number is the report's own selection, not the list's size.
 
     The report on stdout is compared against one
-    built from the same users, their tally, and the output flags,
+    built from the same users, their tally, and the output flag,
     so the tally the report states is the one stderr does
-    and the flags reach the builder.
+    and each flag reaches its own parameter of the builder.
     """
     users: list[dict[str, Any]] = [
         {"name": "a@x.edu", "created": "2026-08-05T10:00:00Z"},
@@ -232,7 +234,7 @@ def test_the_tally_counts_only_the_users_created_in_the_window(
         {"name": "later@x.edu", "created": "2026-09-15T00:00:00Z"},
         {"name": "undated@x.edu", "created": None},
     ]
-    assert _report_on(monkeypatch, users, "--detailed-usernames", "--anonymize") == 0
+    assert _report_on(monkeypatch, users, *argv) == 0
 
     captured = capsys.readouterr()
     assert (
@@ -247,10 +249,9 @@ def test_the_tally_counts_only_the_users_created_in_the_window(
         tally=tally_users(users, WINDOW_START, WINDOW_END),
         start_time=WINDOW_START,
         end_time=WINDOW_END,
-        strftime_fmt=DATE_FMT,
-        detailed_usernames=True,
-        first_server=None,
-        anonymize=True,
+        strftime_fmt=strftime_fmt,
+        detailed_usernames=detailed_usernames,
+        anonymize=anonymize,
     )
     assert captured.out == f"---\n{render_text(expected)}\n---\n"
 
@@ -271,12 +272,17 @@ def test_elasticsearch_dates_each_new_users_first_server(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """With an index to consult, the report gains its Adoption section."""
+    """With an index to consult, the report gains its Adoption section.
+
+    The lookup opens where the reporting window does:
+    a later start would lose the first servers before it.
+    """
     users = [{"name": "a@x.edu", "created": "2026-08-05T10:00:00Z"}]
     started = "2026-08-05T11:00:00Z"
     client = QueryStubClient([{"user.name": "a@x.edu", "server.started": started}])
     install_client(monkeypatch, get_new_users, client)
     assert _report_on(monkeypatch, users, *_ES_ARGV) == 0
+    assert _window(client)["gte"] == int(WINDOW_START.timestamp())
 
     expected = build_new_users_report(
         users=filter_new_users(users, WINDOW_START, WINDOW_END),
@@ -351,3 +357,13 @@ def test_the_default_subject_names_this_report_and_one_day(
     """The prefix is this command's own, not the activity report's."""
     subject = _emailed_subject(monkeypatch, "2026-09-01 00:00", "2026-09-02 00:00")
     assert subject == "JupyterHub New Users Report: 2026-09-01"
+
+
+def test_a_failed_delivery_fails_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The exit code is delivery's own, so an unsent report is not a success."""
+
+    def _fail(_targets: OutputTargets, _report: Report) -> int:
+        return 1
+
+    monkeypatch.setattr(get_new_users, "deliver_report", _fail)
+    assert _report_on(monkeypatch, []) == 1

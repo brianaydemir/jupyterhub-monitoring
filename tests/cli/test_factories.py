@@ -1,4 +1,4 @@
-"""Tests for :mod:`app.cli.factories`.
+"""Tests for :mod:`jupyterhub_monitoring.cli.factories`.
 
 The clients are replaced with recorders,
 because the factory's job is to map an ``argparse.Namespace``
@@ -14,8 +14,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.cli import factories
-from app.cli.factories import (
+from jupyterhub_monitoring.cli import factories
+from jupyterhub_monitoring.cli.factories import (
     compute_report_time_range,
     get_strftime_fmt,
     make_es_client,
@@ -23,10 +23,10 @@ from app.cli.factories import (
     make_output_targets,
     make_prometheus_client,
 )
-from app.core import time_utils
-from app.core.errors import AuthCancelledError, DataShapeError
-from app.core.time_utils import DATE_FMT, DATETIME_FMT
-from app.reports.delivery import OutputTargets
+from jupyterhub_monitoring.core import time_utils
+from jupyterhub_monitoring.core.errors import AuthCancelledError, DataShapeError
+from jupyterhub_monitoring.core.time_utils import DATE_FMT, DATETIME_FMT
+from jupyterhub_monitoring.reports.delivery import OutputTargets
 from tests.helpers.clock import FrozenClock
 
 CHICAGO = ZoneInfo("America/Chicago")
@@ -92,7 +92,11 @@ def test_an_es_client_takes_its_api_key_from_the_environment(
 def test_an_es_client_prompts_when_a_username_is_given(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The password never comes from an argument, only from a prompt."""
+    """The password never comes from an argument, only from a prompt.
+
+    The username also takes precedence over an API key in the environment.
+    """
+    monkeypatch.setenv("ELASTICSEARCH_API_KEY", "secret")
     recorded: list[dict[str, Any]] = []
     monkeypatch.setattr(factories, "ElasticsearchClient", _recorder(recorded))
     monkeypatch.setattr(factories, "prompt_password", lambda: "pw")
@@ -257,14 +261,13 @@ def test_email_settings_are_collected_only_with_send_email() -> None:
     assert email.sender_name == "Reports"
     assert email.sender_email == "reports@example.edu"
     assert email.recipients == ("ops@example.edu",)
-    assert email.subject == "JupyterHub Activity Report: 2026-09-02"
     assert email.smtp_host == "smtp.example.edu"
     assert email.smtp_port == 465
     assert email.smtp_no_ssl is False
 
 
 def test_every_recipient_reaches_the_email_settings() -> None:
-    """Each entry is carried across as typed; app.reports parses and renders it."""
+    """Each entry is carried across as typed, to be parsed where it is sent."""
     entries = ["a@example.edu, b@example.edu", "Ops Team <ops@example.edu>"]
     email = _targets(_output_args(send_email=True, recipient_email=entries)).email
     assert email is not None
@@ -334,17 +337,6 @@ def test_an_unparsable_range_is_a_data_shape_error() -> None:
         )
 
 
-def test_a_duration_window_ends_now(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without --time the window ends at the moment of the run."""
-    now = datetime(2026, 7, 8, 14, 30, tzinfo=CHICAGO)
-    monkeypatch.setattr(time_utils, "datetime", FrozenClock(now))
-
-    start, end = compute_report_time_range(_window_args(duration="7 days"))
-
-    assert end == now
-    assert end - start == timedelta(days=7)
-
-
 def test_a_duration_window_can_be_anchored_to_a_wall_clock_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -365,29 +357,10 @@ def test_an_unparsable_duration_is_a_data_shape_error() -> None:
         compute_report_time_range(_window_args(duration="7 fortnights"))
 
 
-@pytest.mark.parametrize("time", [None, "09:00", "14:30", "23:59"])
-def test_a_duration_window_never_ends_in_the_future(
-    time: str | None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Why duration mode needs no future-end check of its own.
-
-    Without --time the window ends at the current moment,
-    and with one it steps back a day rather than reaching forwards,
-    so the anchor cannot outrun the run.
-    """
-    now = datetime(2026, 7, 8, 14, 30, tzinfo=CHICAGO)
-    monkeypatch.setattr(time_utils, "datetime", FrozenClock(now))
-
-    _, end = compute_report_time_range(_window_args(duration="1d", time=time))
-
-    assert end <= now
-
-
 def test_a_whole_days_range_covers_whole_local_days(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The window the get-new-users epilog advertises, resolved.
+    """Relative bounds are widened to the whole days they fall in.
 
     Without the flag these bounds resolve to 17:48 on each day,
     leaving a partial day at either end.

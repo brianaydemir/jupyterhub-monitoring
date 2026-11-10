@@ -1,11 +1,16 @@
-"""Tests for :mod:`app.usage.snapshots`."""
+"""Tests for :mod:`jupyterhub_monitoring.usage.snapshots`."""
 
 from datetime import datetime, timezone
 from typing import Any
 
 import pytest
 
-from app.usage.snapshots import build_query, select_hub, snapshot_seconds, started_seconds
+from jupyterhub_monitoring.usage.snapshots import (
+    build_query,
+    select_hub,
+    snapshot_seconds,
+    started_seconds,
+)
 
 
 def test_query_window_is_half_open() -> None:
