@@ -291,6 +291,28 @@ def test_a_prometheus_flag_without_an_endpoint_is_rejected(
     assert f"{argv[0]} requires --prometheus-endpoint" in message
 
 
+@pytest.mark.parametrize(
+    ("flag", "problem"),
+    [
+        ("--prometheus-ca-cert", "CA certificate file not found"),
+        ("--prometheus-token", "Token file not found"),
+    ],
+)
+def test_a_missing_prometheus_file_is_rejected(
+    flag: str,
+    problem: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A path that does not exist fails before anything is queried."""
+    parser = argparse.ArgumentParser(prog="cmd")
+    add_prometheus_argument_group(parser)
+    missing = tmp_path / "absent"
+    argv = ["--prometheus-endpoint", "https://prometheus.example.edu", flag, str(missing)]
+    message = _reject(validate_prometheus_arguments, parser.parse_args(argv), capsys)
+    assert f"{problem}: {missing}" in message
+
+
 #
 # validate_query_arguments
 #
@@ -444,8 +466,8 @@ def _end_offset_from_now(monkeypatch: pytest.MonkeyPatch, offset: timedelta) -> 
     """Freeze the clock at :data:`NOW` and spell *offset* from it as an end.
 
     The result is an absolute datetime,
-    so only the reference the check reads is frozen;
-    parsing the bound itself consults no clock.
+    whose parse does not depend on the clock,
+    so only the reference the check reads is frozen.
     """
     monkeypatch.setattr(validation, "datetime", FrozenClock(NOW))
     return (NOW + offset).strftime("%Y-%m-%d %H:%M:%S")

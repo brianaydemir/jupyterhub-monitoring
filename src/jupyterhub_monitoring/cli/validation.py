@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, tzinfo
 
 from jupyterhub_monitoring.core.time_utils import (
     DATETIME_FMT,
+    elapsed,
     parse_datetime,
     parse_duration,
     parse_timezone,
@@ -209,7 +210,7 @@ def _validate_report_range(
             parser.error(
                 "--whole-days leaves no whole day between --report-start and --report-end"
             )
-    if end - datetime.now(tz) > _FUTURE_END_TOLERANCE:
+    if elapsed(datetime.now(tz), end) > _FUTURE_END_TOLERANCE:
         parser.error(
             f"--report-end resolves to {end.strftime(DATETIME_FMT)}, which is in the future"
         )

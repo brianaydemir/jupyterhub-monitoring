@@ -12,7 +12,12 @@ from typing import Any
 import pytest
 
 from jupyterhub_monitoring.cli import delete_es_api_key
-from jupyterhub_monitoring.cli.delete_es_api_key import _build_parser, _error_detail, _run
+from jupyterhub_monitoring.cli.delete_es_api_key import (
+    _build_parser,
+    _error_detail,
+    _run,
+    _validate_arguments,
+)
 from tests.helpers.stub_clients import StubClient, install_client
 
 
@@ -73,6 +78,24 @@ def test_the_named_key_reaches_the_client(
     _, client = _run_with(monkeypatch, {"invalidated_api_keys": ["abc123"]}, flag, value)
     capsys.readouterr()
     assert client.request == expected
+
+
+@pytest.mark.parametrize("flag", ["--id", "--name"])
+@pytest.mark.parametrize("value", ["", "  "])
+def test_a_blank_selector_is_a_usage_error(
+    flag: str,
+    value: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A blank name reads as no name, which selects every key the user owns."""
+    monkeypatch.setenv("ELASTICSEARCH_API_KEY", "secret")
+    parser = _build_parser()
+    args = parser.parse_args(["--es-endpoint", "https://elastic.example.com:9200", flag, value])
+    with pytest.raises(SystemExit) as exit_info:
+        _validate_arguments(args, parser)
+    assert exit_info.value.code == 2
+    assert f"{flag} must not be blank" in capsys.readouterr().err
 
 
 #

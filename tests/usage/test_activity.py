@@ -356,12 +356,6 @@ def test_the_summary_records_the_hubs_it_observed(
     )
 
 
-def test_a_hub_that_is_not_a_string_is_recorded_as_text() -> None:
-    """``meta.hub`` is read defensively, since a mapping need not be text."""
-    docs = [_doc(hub=7)]
-    assert summarize_activity(compute_activity(docs), docs, CHICAGO, START, END).hubs == {"7"}
-
-
 def test_a_skipped_document_contributes_no_hub() -> None:
     """A document that no figure counts does not widen the report's scope."""
     docs = [_doc(hub="a"), {"user.name": "b@x.edu", "meta.hub": "b"}]

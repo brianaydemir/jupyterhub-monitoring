@@ -296,19 +296,22 @@ class ElasticsearchClient:
     ) -> dict[str, Any]:
         """Invalidate an Elasticsearch API key.
 
-        Exactly one of *key_id* or *key_name* must be provided.
+        Exactly one of *key_id* or *key_name* must be provided, and not blank.
         The request is scoped to the authenticated user's own keys
-        (``owner=True``).
+        (``owner=True``), which is also why a blank value is refused:
+        Elasticsearch reads a blank name as no name at all,
+        and the scope alone selects every key the user owns.
 
         Raises:
             ValueError: If neither or both of *key_id* / *key_name*
-                are provided.
+                are provided, or the one provided is blank.
             ExternalServiceError: If the request fails.
         """
-        if key_id is None and key_name is None:
-            raise ValueError("Either key_id or key_name must be provided")
-        if key_id is not None and key_name is not None:
-            raise ValueError("Only one of key_id or key_name may be provided")
+        selectors = [value for value in (key_id, key_name) if value is not None]
+        if len(selectors) != 1:
+            raise ValueError("Exactly one of key_id or key_name must be provided")
+        if not selectors[0].strip():
+            raise ValueError("key_id or key_name must not be blank")
         with _translating("Invalidating API key"):
             response = self._client.security.invalidate_api_key(
                 id=key_id,

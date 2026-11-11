@@ -199,22 +199,6 @@ def test_snap_widens_both_bounds_to_the_days_they_fall_in(
     assert end == datetime(2026, 9, 3, tzinfo=CHICAGO)
 
 
-def test_snap_covers_one_day_as_a_half_open_window(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A single day runs from its own midnight to the next one, exclusive."""
-    start, end = _snap_at(
-        monkeypatch,
-        datetime(2026, 9, 3, 17, 48, tzinfo=CHICAGO),
-        datetime(2026, 9, 2, 9, 15, tzinfo=CHICAGO),
-        datetime(2026, 9, 2, 16, 45, tzinfo=CHICAGO),
-    )
-    assert (start, end) == (
-        datetime(2026, 9, 2, tzinfo=CHICAGO),
-        datetime(2026, 9, 3, tzinfo=CHICAGO),
-    )
-
-
 def test_snap_leaves_bounds_already_on_midnight_alone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

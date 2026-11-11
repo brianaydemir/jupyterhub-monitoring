@@ -427,6 +427,27 @@ def test_api_key_requests_are_scoped_to_the_callers_own_keys() -> None:
 
 
 @pytest.mark.parametrize(
+    "selector",
+    [
+        {},
+        {"key_id": "abc", "key_name": "k"},
+        {"key_id": ""},
+        {"key_name": ""},
+        {"key_name": "  "},
+    ],
+    ids=["neither", "both", "blank-id", "empty-name", "blank-name"],
+)
+def test_delete_api_key_requires_exactly_one_selector_that_is_not_blank(
+    selector: dict[str, str],
+) -> None:
+    """A blank name reads as no name, which selects every key the user owns."""
+    client, transport = _client([])
+    with pytest.raises(ValueError, match="key_id or key_name"):
+        client.delete_api_key(**selector)
+    assert transport.security.calls == []
+
+
+@pytest.mark.parametrize(
     ("username", "expected"),
     [("elastic", "api-key-elastic"), (None, "api-key")],
 )

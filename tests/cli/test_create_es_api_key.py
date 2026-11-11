@@ -142,6 +142,14 @@ def test_the_full_format_marks_missing_fields() -> None:
     ]
 
 
+def test_the_expiration_has_to_be_given(capsys: pytest.CaptureFixture[str]) -> None:
+    """Omitting it must not quietly mint a key that never expires."""
+    with pytest.raises(SystemExit) as exit_info:
+        _build_parser().parse_args(["--es-endpoint", "https://elastic.example.com:9200"])
+    assert exit_info.value.code == 2
+    assert "--expiration" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("spelling", ["never", "NEVER", "Never", " never "])
 def test_never_asks_for_a_key_with_no_expiry(spelling: str) -> None:
     """None is what omits the field, which is how Elasticsearch is told."""

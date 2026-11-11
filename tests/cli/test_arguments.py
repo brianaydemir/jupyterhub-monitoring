@@ -18,6 +18,7 @@ from jupyterhub_monitoring.cli.arguments import (
     add_es_connection_argument_group,
     add_jupyterhub_argument_group,
     add_output_argument_group,
+    add_prometheus_argument_group,
     add_query_argument_group,
 )
 
@@ -49,6 +50,7 @@ def test_file_arguments_parse_as_paths_and_the_port_as_an_integer() -> None:
     parser = _parser()
     add_jupyterhub_argument_group(parser)
     add_es_connection_argument_group(parser, required=False)
+    add_prometheus_argument_group(parser)
     add_output_argument_group(parser)
     add_email_argument_group(parser, subject_prefix="Subject")
     args = parser.parse_args(
@@ -63,6 +65,10 @@ def test_file_arguments_parse_as_paths_and_the_port_as_an_integer() -> None:
             "/keys/es.txt",
             "--es-ca-cert",
             "/certs/es.pem",
+            "--prometheus-token",
+            "/keys/prometheus.txt",
+            "--prometheus-ca-cert",
+            "/certs/prometheus.pem",
             "--text-file",
             "out.txt",
             "--html-file",
@@ -80,6 +86,8 @@ def test_file_arguments_parse_as_paths_and_the_port_as_an_integer() -> None:
         "jupyterhub_ca_cert",
         "es_api_key",
         "es_ca_cert",
+        "prometheus_token",
+        "prometheus_ca_cert",
         "text_file",
         "html_file",
         "csv_file",

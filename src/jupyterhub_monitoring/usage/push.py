@@ -214,8 +214,8 @@ class ElasticsearchSink:
         """Upload *documents* in one request, then report each outcome.
 
         Every document keeps the deterministic id that names its snapshot,
-        so a re-run overwrites what it pushed before
-        rather than duplicating it.
+        so a request the client retries overwrites
+        what its first attempt stored rather than duplicating it.
         A document Elasticsearch rejects is returned as its reason;
         only a failure of the request as a whole is raised.
         """

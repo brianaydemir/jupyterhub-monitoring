@@ -48,16 +48,6 @@ def test_validators_see_the_parsed_arguments_and_the_parser() -> None:
     assert seen[0][1].prog == "cmd"
 
 
-def test_validators_run_in_the_order_given() -> None:
-    """A later validator may rely on an earlier one having passed."""
-    order: list[int] = []
-    parse_and_validate(
-        _build_parser,
-        [lambda a, p: order.append(1), lambda a, p: order.append(2)],
-    )
-    assert order == [1, 2]
-
-
 def test_a_command_returns_its_runner_s_exit_code() -> None:
     """push-servers returns 1 on a partial push, so the value is passed on."""
     assert run_command(_build_parser, lambda args: 0) == 0

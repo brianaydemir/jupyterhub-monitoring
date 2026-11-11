@@ -66,18 +66,7 @@ class _StubSession:
         return self.pages.pop(0)
 
 
-def test_list_users_walks_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Paging continues until an empty page ends the walk."""
-    session = _install(
-        monkeypatch,
-        [_users_page(100), _users_page(100, offset=100), _users_page(3, offset=200)],
-    )
-    users = list(_client().list_users())
-    assert len(users) == 203
-    assert [call["params"]["offset"] for call in session.calls] == [0, 100, 200, 203]
-
-
-def test_list_users_keeps_walking_when_the_hub_caps_the_page_size(
+def test_list_users_walks_until_an_empty_page(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A page shorter than asked for may be the hub's cap, not the end.

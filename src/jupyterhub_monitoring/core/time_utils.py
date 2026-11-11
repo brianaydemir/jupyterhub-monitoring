@@ -135,6 +135,10 @@ def parse_datetime(text: str, tz: tzinfo) -> datetime | None:
     via :func:`dateparser.parse`.
     A datetime with no explicit zone is interpreted in *tz*;
     one that carries its own offset is converted to *tz*.
+    A relative phrase is resolved on the wall clock,
+    so ``"1 day ago"`` is the same time of day yesterday,
+    and a phrase finer than a day (``"2 hours ago"``) is an hour off
+    when a DST transition falls inside it.
 
     The zone is applied here
     rather than through :mod:`dateparser`'s own timezone settings,

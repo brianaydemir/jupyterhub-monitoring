@@ -197,23 +197,27 @@ def _format_reporting_window(start: datetime, end: datetime, tz: tzinfo) -> str:
     return (
         f"Reporting window: {start.strftime(DATETIME_FMT)}"
         f" to {end.strftime(DATETIME_FMT)}"
-        f" ({format_timezone(tz)}, {_format_window_length(elapsed(start, end))})"
+        f" ({format_timezone(tz)}, {_format_window_length(start, end)})"
     )
 
 
-def _format_window_length(length: timedelta) -> str:
+def _format_window_length(start: datetime, end: datetime) -> str:
     """Render a window's length in whole days, or otherwise in hours.
 
-    A length within an hour of a whole number of days reads as those days,
-    so a window of whole local days that spans a daylight-saving transition
-    is not reported as 23 or 25 hours.
+    A window spans whole days when its elapsed time is a multiple of 24 hours,
+    or when its bounds, which share a zone, read the same time of day:
+    whole local days that span a daylight-saving transition
+    are an hour short or long, and are still named by their days.
     Any other length borrows the ``H:MM`` rendering
     of :class:`jupyterhub_monitoring.reports.model.Duration`
     rather than growing a duration formatter of its own.
     """
-    days = round(length / timedelta(days=1))
-    if days >= 1 and abs(length - timedelta(days=days)) <= timedelta(hours=1):
-        return f"{days} day" if days == 1 else f"{days} days"
+    length = elapsed(start, end)
+    wall_clock = end.replace(tzinfo=None) - start.replace(tzinfo=None)
+    for span in (length, wall_clock):
+        days, remainder = divmod(span, timedelta(days=1))
+        if days >= 1 and not remainder:
+            return f"{days} day" if days == 1 else f"{days} days"
     return f"{Duration(length.total_seconds()).display()} hours"
 
 

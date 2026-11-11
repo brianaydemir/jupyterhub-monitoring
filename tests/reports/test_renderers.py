@@ -78,13 +78,26 @@ def test_xlsx_handles_a_report_with_no_rows() -> None:
 
 
 @pytest.mark.parametrize("render", _RENDERERS)
-def test_every_renderer_includes_the_data(
+def test_every_renderer_includes_every_part_of_a_report(
     render: Renderer,
 ) -> None:
-    """A cell's text reaches every text-based format."""
-    rendered = render(sample_reports.report(sections=[_section(rows=[["Widgets", 42]])]))
-    assert "Widgets" in rendered
-    assert "42" in rendered
+    """No text-based format drops a part, and all label the notes alike.
+
+    Text blocks are an extension point, so they are held to the same rule.
+    """
+    rendered = render(sample_reports.report_with_text_block())
+    for part in [
+        "Test Report",
+        "Narrative",
+        "A section mixing prose and a table.",
+        "A free-form remark.",
+        "Total active time",
+        "Notes",
+        "A section note.",
+        "Report notes",
+        "A report-wide note.",
+    ]:
+        assert part in rendered
 
 
 @pytest.mark.parametrize("render", _RENDERERS)
@@ -101,34 +114,11 @@ def test_every_renderer_shows_a_typed_cell_as_its_display_string(
     assert "1.111" not in rendered
 
 
-@pytest.mark.parametrize("render", _RENDERERS)
-def test_every_renderer_labels_footnotes_identically(
-    render: Renderer,
-) -> None:
-    """Every text-based format uses one label for section notes and one for report notes."""
-    rendered = render(sample_reports.report_with_text_block())
-    assert "Notes" in rendered
-    assert "Report notes" in rendered
-
-
-def test_xlsx_labels_footnotes_identically() -> None:
-    """The workbook's info sheet uses the same footnote labels."""
+def test_xlsx_info_sheet_holds_the_text_blocks_and_the_report_notes() -> None:
+    """Neither belongs to a table sheet; the labels match the other formats."""
     cells = _info_sheet_column(sample_reports.report_with_text_block())
-    assert "Notes" in cells
-    assert "Report notes" in cells
-
-
-@pytest.mark.parametrize("render", _RENDERERS)
-def test_every_renderer_includes_a_text_block(
-    render: Renderer,
-) -> None:
-    """Text blocks are an extension point, so no format may drop them."""
-    assert "A free-form remark." in render(sample_reports.report_with_text_block())
-
-
-def test_xlsx_includes_a_text_block() -> None:
-    """The workbook keeps text blocks on its info sheet."""
-    assert "A free-form remark." in _info_sheet_column(sample_reports.report_with_text_block())
+    assert "A free-form remark." in cells
+    assert cells[-2:] == ["Report notes", "A report-wide note."]
 
 
 def test_html_fragment_has_no_document_wrapper() -> None:
@@ -150,8 +140,7 @@ def test_html_document_declares_a_doctype_and_charset() -> None:
 def test_html_dark_mode_rules_target_the_classes_the_cells_carry() -> None:
     """The light colors are inline, so dark mode needs a rule per cell class.
 
-    The stylesheet and the cells spell those classes independently,
-    and a rule naming a class no cell carries,
+    A cell class with no rule,
     or a declaration without the ``!important`` that outranks an inline style,
     would leave dark mode silently unapplied.
     """

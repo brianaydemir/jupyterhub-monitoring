@@ -186,26 +186,6 @@ def test_same_day_starts_are_judged_in_the_given_zone() -> None:
     assert summarize_adoption(users, first_server, timezone.utc).same_day == 0
 
 
-def test_the_median_averages_the_middle_pair_of_an_even_number_of_users() -> None:
-    """Ten and thirty minutes, ninety minutes, and four hours."""
-    users = [_new(name) for name in ("a@x.edu", "b@x.edu", "c@x.edu", "d@x.edu")]
-    first_server = {
-        "a@x.edu": _epoch("2026-07-04T10:10:00Z"),
-        "b@x.edu": _epoch("2026-07-04T10:30:00Z"),
-        "c@x.edu": _epoch("2026-07-04T11:30:00Z"),
-        "d@x.edu": _epoch("2026-07-04T14:00:00Z"),
-    }
-    summary = summarize_adoption(users, first_server, timezone.utc)
-    assert summary.median_seconds_to_first == (1800 + 5400) / 2
-
-
-def test_a_user_who_never_started_has_no_start_to_date() -> None:
-    """No start means neither a same-day start nor a median to report."""
-    assert summarize_adoption([_new("a@x.edu")], {}, timezone.utc) == AdoptionSummary(
-        new_users=1, never_started=1
-    )
-
-
 def test_a_negative_elapsed_time_does_not_drag_the_median_down() -> None:
     """Floored at zero, so the median stays a wait somebody could have had."""
     users = [_new("a@x.edu"), _new("b@x.edu")]

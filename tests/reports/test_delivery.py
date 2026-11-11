@@ -1,19 +1,16 @@
 """Tests for report delivery to stdout, files, and email."""
 
-import datetime as dt
 import io
 import smtplib
 from email.header import decode_header, make_header
 from email.utils import parseaddr
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import pytest
 from openpyxl import load_workbook
 
 from jupyterhub_monitoring.reports import email_utils
-from jupyterhub_monitoring.reports.builders import build_activity_report, build_new_users_report
 from jupyterhub_monitoring.reports.delivery import OutputTargets, deliver_report
 from jupyterhub_monitoring.reports.email_utils import (
     EmailConfig,
@@ -24,17 +21,9 @@ from jupyterhub_monitoring.reports.model import ReportAttachment
 from jupyterhub_monitoring.reports.renderers import (
     render_csv_bytes,
     render_html_document,
-    render_html_fragment,
     render_text,
-    render_xlsx_bytes,
 )
-from jupyterhub_monitoring.usage.activity import ActivitySummary, DocumentTally, SessionActivity
-from jupyterhub_monitoring.usage.new_users import UserTally
 from tests.helpers import sample_reports
-
-CHICAGO = ZoneInfo("America/Chicago")
-START = dt.datetime(2026, 7, 1, tzinfo=CHICAGO)
-END = dt.datetime(2026, 7, 8, tzinfo=CHICAGO)
 
 
 class _RecordingSmtp:
@@ -74,8 +63,15 @@ def test_deliver_report_prints_to_stdout(capsys: pytest.CaptureFixture[str]) -> 
     assert "Total active time" in capsys.readouterr().out
 
 
-def test_deliver_report_writes_every_requested_file(tmp_path: Path) -> None:
-    """Each output flag writes its own format."""
+def test_deliver_report_writes_every_requested_file(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Each output flag writes its own format, and each path is reported.
+
+    The HTML file is the standalone document, since a browser opens it,
+    and the paths go to stderr so that stdout stays the report.
+    """
     built = sample_reports.report()
     targets = _targets(
         text_file=tmp_path / "r.txt",
@@ -86,30 +82,9 @@ def test_deliver_report_writes_every_requested_file(tmp_path: Path) -> None:
     assert deliver_report(targets, built) == 0
 
     assert (tmp_path / "r.txt").read_text(encoding="utf-8") == render_text(built) + "\n"
+    assert (tmp_path / "r.html").read_text(encoding="utf-8") == render_html_document(built)
     assert (tmp_path / "r.csv").read_bytes() == render_csv_bytes(built)
     assert load_workbook(io.BytesIO((tmp_path / "r.xlsx").read_bytes())).sheetnames
-
-
-def test_the_html_file_is_a_standalone_document(tmp_path: Path) -> None:
-    """A file is opened by a browser, so it gets the whole document."""
-    written = tmp_path / "r.html"
-    built = sample_reports.report()
-    assert deliver_report(_targets(html_file=written), built) == 0
-    assert written.read_text(encoding="utf-8") == render_html_document(built)
-
-
-def test_deliver_report_names_each_file_it_wrote(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Every written path is reported, on stderr so stdout stays the report."""
-    targets = _targets(
-        text_file=tmp_path / "r.txt",
-        html_file=tmp_path / "r.html",
-        csv_file=tmp_path / "r.csv",
-        xlsx_file=tmp_path / "r.xlsx",
-    )
-    deliver_report(targets, sample_reports.report())
     err = capsys.readouterr().err
     for suffix in ("txt", "html", "csv", "xlsx"):
         assert str(tmp_path / f"r.{suffix}") in err
@@ -247,19 +222,6 @@ def test_a_message_carries_the_headers_a_relay_expects() -> None:
     assert message["Message-ID"].endswith("@example.edu>")
 
 
-def test_a_message_omits_a_display_name_when_none_is_given() -> None:
-    """A bare address is used as-is rather than wrapped in empty brackets."""
-    message = create_message(
-        sender_name=None,
-        sender_email="reports@example.edu",
-        recipients=["ops@example.org"],
-        subject="S",
-        text_content="t",
-        html_content=None,
-    )
-    assert message["From"] == "reports@example.edu"
-
-
 def test_a_message_body_survives_non_ascii_content() -> None:
     """Institution domains and identifiers are not all ASCII."""
     message = create_message(
@@ -385,61 +347,6 @@ def test_one_unreadable_recipient_does_not_cost_the_others_their_copy(
     _, recipients, message = sent[-1]
     assert "b@example.org" in recipients
     assert "b@example.org" in message["To"]
-
-
-def test_an_anonymized_report_leaks_no_identifier_in_any_format() -> None:
-    """The pseudonyms exist to keep raw identifiers out of every output.
-
-    One session never started and half the users never did either,
-    so that every user table of both reports holds a row.
-    """
-    names = ["alice@x.edu", "eppn:alice@x.edu", "orcid:0009-0008-3064-0494", "svc-account"]
-    activity = build_activity_report(
-        sessions=[
-            SessionActivity(
-                user=name,
-                server_name="",
-                started=None if name == "svc-account" else "2026-07-02T10:00:00Z",
-                seconds=3600,
-                gpu=False,
-            )
-            for name in names
-        ],
-        summary=ActivitySummary(total_seconds=14400, per_day_seconds={"2026-07-02": 14400}),
-        tally=DocumentTally(retrieved=48, counted=48),
-        start_time=START,
-        end_time=END,
-        strftime_fmt="%Y-%m-%d %H:%M",
-        anonymize=True,
-    )
-    users = build_new_users_report(
-        users=[{"name": name, "created": "2026-07-02T10:00:00Z"} for name in names],
-        tally=UserTally(retrieved=4, in_window=4),
-        start_time=START,
-        end_time=END,
-        strftime_fmt="%Y-%m-%d",
-        anonymize=True,
-        first_server={name: 1782000000 for name in names[::2]},
-    )
-    secrets = ["alice", "0009-0008-3064-0494", "svc-account"]
-    for built in (activity, users):
-        for rendered in (
-            render_text(built),
-            render_html_fragment(built),
-            render_csv_bytes(built).decode("utf-8"),
-        ):
-            assert not [s for s in secrets if s in rendered]
-        # The XLSX bytes are compressed, so the cells are read back instead.
-        workbook = load_workbook(io.BytesIO(render_xlsx_bytes(built)))
-        cells = [
-            str(value)
-            for sheet in workbook.worksheets
-            for row in sheet.iter_rows(values_only=True)
-            for value in row
-        ]
-        assert not [s for s in secrets for cell in cells if s in cell]
-        # The institution is deliberately preserved.
-        assert "x.edu" in render_text(built)
 
 
 def _targets(

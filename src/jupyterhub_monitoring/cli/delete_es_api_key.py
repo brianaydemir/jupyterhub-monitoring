@@ -51,8 +51,16 @@ def _validate_arguments(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
 ) -> None:
-    """Run post-parse argument validation."""
+    """Run post-parse argument validation.
+
+    A blank ``--id`` or ``--name`` is rejected here,
+    because Elasticsearch reads a blank name as no name at all
+    and would then invalidate every key the user owns.
+    """
     validate_es_arguments(args, parser)
+    for flag, value in [("--id", args.key_id), ("--name", args.key_name)]:
+        if value is not None and not value.strip():
+            parser.error(f"{flag} must not be blank")
 
 
 def _run(args: argparse.Namespace) -> int:

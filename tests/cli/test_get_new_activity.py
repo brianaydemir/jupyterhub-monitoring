@@ -130,7 +130,6 @@ def _emailed_subject(
     monkeypatch: pytest.MonkeyPatch,
     report_start: str,
     report_end: str,
-    *argv: str,
 ) -> str:
     """Run the command over that window and return the subject it sends.
 
@@ -157,7 +156,6 @@ def _emailed_subject(
             "--report-end",
             report_end,
             *_EMAIL_ARGV,
-            *argv,
         ]
     )
     assert _run(args) == 0
@@ -326,22 +324,6 @@ def test_the_default_subject_names_this_report_and_one_day(
     """A daily send is told apart in an inbox list by its date alone."""
     subject = _emailed_subject(monkeypatch, "2026-09-01 00:00", "2026-09-02 00:00")
     assert subject == "JupyterHub Activity Report: 2026-09-01"
-
-
-def test_the_diagnostic_goes_to_stderr_and_leaves_stdout_to_the_report(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """The report stays safe to pipe, so the diagnostic joins the window echo."""
-    documents = [_document("a@x.edu"), {"user.name": "b@x.edu"}]
-    assert _report_on(monkeypatch, documents) == 0
-
-    captured = capsys.readouterr()
-    diagnostic = "Retrieved 2 documents; counted 1, skipped 1 (no meta.interval: 1)."
-    assert diagnostic in captured.err.splitlines()
-    assert "Reporting window:" in captured.err
-    assert "Retrieved" not in captured.out
-    assert captured.out.startswith("---\n")
 
 
 def test_the_diagnostic_does_not_change_the_command_exit_code(

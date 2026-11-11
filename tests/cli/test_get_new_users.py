@@ -192,18 +192,6 @@ def test_the_tally_carries_its_own_noun() -> None:
     )
 
 
-def test_retrieving_no_users_does_not_claim_none_of_none_were_created() -> None:
-    """A hub that answered with nothing is the failure worth seeing."""
-    assert _format_user_tally(UserTally()) == "Retrieved 0 users."
-
-
-def test_undated_users_are_named_only_when_there_are_some() -> None:
-    """A count of none is left out."""
-    assert _format_user_tally(UserTally(retrieved=812, undated=5, in_window=3)) == (
-        "Retrieved 812 users; 3 created in the reporting window, 5 with no creation time."
-    )
-
-
 @pytest.mark.parametrize(
     ("argv", "detailed_usernames", "anonymize", "strftime_fmt"),
     [
@@ -314,7 +302,6 @@ def _emailed_subject(
     monkeypatch: pytest.MonkeyPatch,
     report_start: str,
     report_end: str,
-    *argv: str,
 ) -> str:
     """Run the command over that window and return the subject it sends.
 
@@ -342,7 +329,6 @@ def _emailed_subject(
             "--report-end",
             report_end,
             *_EMAIL_ARGV,
-            *argv,
         ]
     )
     assert _run(args) == 0

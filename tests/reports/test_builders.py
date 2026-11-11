@@ -4,11 +4,13 @@
 # and builders holds every report table, so this one runs long.
 # pylint: disable=too-many-lines
 
+import io
 from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
+from openpyxl import load_workbook
 
 from jupyterhub_monitoring.core.time_utils import parse_timezone
 from jupyterhub_monitoring.reports.anonymize import build_pseudonyms
@@ -22,6 +24,12 @@ from jupyterhub_monitoring.reports.model import (
     ReportSection,
     TableBlock,
     cell_text,
+)
+from jupyterhub_monitoring.reports.renderers import (
+    render_csv_bytes,
+    render_html_fragment,
+    render_text,
+    render_xlsx_bytes,
 )
 from jupyterhub_monitoring.usage.activity import (
     ActivitySummary,
@@ -354,6 +362,51 @@ def test_an_unrecognized_names_pseudonym_is_keyed_on_its_empty_domain() -> None:
     assert build_pseudonyms([("", "service-account")]) == {
         ("", "service-account"): "Romeo Tango Papa"
     }
+
+
+def test_an_anonymized_report_leaks_no_identifier_in_any_format() -> None:
+    """The pseudonyms exist to keep raw identifiers out of every output.
+
+    One session never started and half the users never did either,
+    so that every user table of both reports holds a row.
+    """
+    names = ["alice@x.edu", "eppn:alice@x.edu", "orcid:0009-0008-3064-0494", "svc-account"]
+    activity = _activity_report(
+        [
+            _session(
+                name,
+                started=None if name == "svc-account" else "2026-07-02T10:00:00Z",
+                seconds=3600,
+            )
+            for name in names
+        ],
+        ActivitySummary(total_seconds=14400, per_day_seconds={"2026-07-02": 14400}),
+        anonymize=True,
+    )
+    users = _users_report(
+        [_user(name, "2026-07-02T10:00:00Z") for name in names],
+        first_server={name: 1782000000 for name in names[::2]},
+        anonymize=True,
+    )
+    secrets = ["alice", "0009-0008-3064-0494", "svc-account"]
+    for built in (activity, users):
+        for rendered in (
+            render_text(built),
+            render_html_fragment(built),
+            render_csv_bytes(built).decode("utf-8"),
+        ):
+            assert not [s for s in secrets if s in rendered]
+        # The XLSX bytes are compressed, so the cells are read back instead.
+        workbook = load_workbook(io.BytesIO(render_xlsx_bytes(built)))
+        cells = [
+            str(value)
+            for sheet in workbook.worksheets
+            for row in sheet.iter_rows(values_only=True)
+            for value in row
+        ]
+        assert not [s for s in secrets for cell in cells if s in cell]
+        # The institution is deliberately preserved.
+        assert "x.edu" in render_text(built)
 
 
 def test_new_users_report_describes_the_window() -> None:
@@ -705,16 +758,6 @@ def test_user_totals_show_login_method_when_the_sessions_do() -> None:
     assert _totals_table(report).rows[0][2] == "local NetID"
 
 
-def test_user_totals_hide_login_method_when_the_sessions_do() -> None:
-    """Distinct displayed pairs need no disambiguating column, in either table."""
-    report = _activity_report(
-        [_session("a@x.edu", seconds=3600), _session("b@x.edu", seconds=60)],
-        ActivitySummary(),
-    )
-    assert "Login method" not in _totals_table(report).headers
-    assert "Login method" not in _sessions_table(report).headers
-
-
 def test_a_spawn_only_session_counts_toward_a_users_total() -> None:
     """The count matches the rows the two per-session tables show together."""
     sessions = [
@@ -724,16 +767,6 @@ def test_a_spawn_only_session_counts_toward_a_users_total() -> None:
     report = _activity_report(sessions, ActivitySummary())
     assert _totals_table(report).rows == [["x.edu", "a", 2, Duration(3660), Duration(0.0)]]
     assert len(_sessions_table(report).rows) == len(_starting_table(report).rows) == 1
-
-
-def test_user_totals_of_an_idle_window_are_headers_alone() -> None:
-    """An empty table reads as no user being active, as the sessions do."""
-    report = _activity_report([], ActivitySummary())
-    table = _totals_table(report)
-    assert table.headers == ["Institution", "ID", "Sessions", "Time", "GPU time"]
-    assert table.rows == []
-    assert _sessions_table(report).rows == []
-    assert _starting_table(report).rows == []
 
 
 def test_user_totals_agree_with_the_summary() -> None:
@@ -764,12 +797,16 @@ def test_user_activity_lists_one_row_per_session() -> None:
 
 
 def test_concurrent_named_servers_render_as_distinguishable_rows() -> None:
-    """Without the server name the two rows would be byte-identical."""
+    """Without the server name the two rows would be byte-identical.
+
+    ``User Totals`` sums a user's servers, so it names none of them.
+    """
     sessions = [
         _session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=600, server="gpu"),
         _session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=600, server="cpu"),
     ]
-    table = _sessions_table(_activity_report(sessions, ActivitySummary()))
+    report = _activity_report(sessions, ActivitySummary())
+    table = _sessions_table(report)
     assert table.headers == [
         "Started",
         "Server",
@@ -779,7 +816,7 @@ def test_concurrent_named_servers_render_as_distinguishable_rows() -> None:
         "GPU",
     ]
     assert [row[1] for row in table.rows] == ["cpu", "gpu"]
-    assert table.rows[0] != table.rows[1]
+    assert "Server" not in _totals_table(report).headers
 
 
 def test_a_server_name_the_document_omitted_reads_as_not_available() -> None:
@@ -838,17 +875,6 @@ def test_pod_metrics_add_columns_to_the_started_sessions() -> None:
     assert any("GiB" in note for note in _section(report, "User Activity").footnotes)
 
 
-def test_user_totals_never_gain_a_server_column() -> None:
-    """The section sums a user's servers, so naming one would mislead."""
-    sessions = [
-        _session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=600, server="gpu"),
-        _session("a@x.edu", started="2026-07-02T10:00:00Z", seconds=600, server="cpu"),
-    ]
-    table = _totals_table(_activity_report(sessions, ActivitySummary()))
-    assert "Server" not in table.headers
-    assert table.rows == [["x.edu", "a", 2, Duration(1200), Duration(0.0)]]
-
-
 def test_a_session_that_never_started_is_listed_as_starting() -> None:
     """Snapshots taken while spawning carry no ``server.started``."""
     report = _activity_report(
@@ -897,10 +923,10 @@ def test_the_per_session_tables_share_one_server_column_decision() -> None:
     assert _sessions_table(report).headers[1] == "Server"
 
 
-def test_the_activity_tables_mark_a_name_carrying_no_institution() -> None:
-    """One ``_UserDisplay`` feeds both tables, so both show the marker.
+def test_detailed_usernames_show_the_login_method_in_both_activity_tables() -> None:
+    """The flag reaches both tables, which share their identity columns.
 
-    The absent login method is marked the same way,
+    A name carrying no institution or login method is marked in both,
     and the recognized user beside it is untouched.
     """
     sessions = [

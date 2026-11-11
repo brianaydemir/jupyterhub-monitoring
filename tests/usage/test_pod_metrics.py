@@ -82,6 +82,32 @@ def test_a_session_is_measured_over_the_time_its_snapshots_cover(
     assert peaks == {("a@x.edu", "", started): 2.0 * _GIB}
 
 
+def test_two_sessions_sharing_a_pod_name_are_measured_apart() -> None:
+    """A restarted server keeps its Pod name, so the name is not the session.
+
+    Each session is queried over its own span,
+    and the later one's stops at its own start
+    rather than reaching back into the earlier one's.
+    """
+    client = PrometheusStubClient({"jupyter-a": 2 * _GIB})
+    first, second = "2026-08-05T08:00:00Z", "2026-08-05T10:00:00Z"
+    documents = [
+        _doc(started=first, snapshot="2026-08-05T09:02:00Z"),
+        _doc(started=second, snapshot="2026-08-05T10:02:00Z"),
+        _doc(started=first, snapshot="2026-08-05T09:07:00Z"),
+    ]
+
+    peaks, tally = measure_peak_memory(documents, client)
+
+    assert set(peaks) == {("a@x.edu", "", first), ("a@x.edu", "", second)}
+    assert tally == PodTally(started=2, unnamed=0, measured=2)
+    spans = {time: promql.rsplit("[", 1)[1] for promql, time in client.requests}
+    assert spans == {
+        _epoch("2026-08-05T09:07:00Z"): "600s:])",
+        _epoch("2026-08-05T10:02:00Z"): "120s:])",
+    }
+
+
 def test_cpu_time_is_the_increase_in_the_pods_cpu_counter_over_its_span() -> None:
     """The query reads the counter's increase, not its latest value.
 

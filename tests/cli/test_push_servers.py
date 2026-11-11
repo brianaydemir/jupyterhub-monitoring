@@ -130,14 +130,6 @@ def test_malformed_metadata_is_reported_as_a_usage_error(
     assert "Invalid metadata format 'hub'" in _reject(argv, capsys)
 
 
-def test_reserved_metadata_keys_are_reported_as_a_usage_error(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """The command sets these itself, so a caller cannot also supply them."""
-    argv = _HUB + _ES + ["--interval", "5m", "--metadata", "interval=5m"]
-    assert "reserved and set automatically: interval" in _reject(argv, capsys)
-
-
 class _RecordingUploader(StubClient):  # pylint: disable=too-few-public-methods
     """Accepts every bulk upload, recording the index it names."""
 

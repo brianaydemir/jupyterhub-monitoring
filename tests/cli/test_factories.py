@@ -462,7 +462,9 @@ def test_the_echo_shows_the_snapped_window(
     [
         ("2026-07-01 00:45", "0:45 hours"),
         ("2026-07-01 12:00", "12:00 hours"),
+        ("2026-07-01 23:00", "23:00 hours"),
         ("2026-07-02 00:00", "1 day"),
+        ("2026-07-02 01:00", "25:00 hours"),
         ("2026-07-02 12:00", "36:00 hours"),
         ("2026-07-08 00:00", "7 days"),
     ],
@@ -474,7 +476,8 @@ def test_the_echoed_length_reads_in_days_or_in_hours(
 ) -> None:
     """Only a whole number of days reads as days; anything else reads H:MM.
 
-    Rounding a day and a half up to ``2 days`` would misstate the window.
+    Rounding to the nearest day would misstate the window,
+    whether by an hour or by half a day.
     """
     compute_report_time_range(
         _window_args(report_start="2026-07-01 00:00", report_end=report_end)
@@ -494,7 +497,7 @@ def test_the_echoed_length_is_elapsed_time_across_dst(
     """Spring-forward makes a half day eleven hours, and a whole day still a day.
 
     The whole day is 23 hours of elapsed time,
-    which is close enough to a day to be named as one.
+    and is still named as a day, since it runs from midnight to midnight.
     """
     compute_report_time_range(
         _window_args(report_start="2026-03-08 00:00", report_end=report_end)

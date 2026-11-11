@@ -143,24 +143,28 @@ def test_reserved_metadata_keys_are_rejected(key: str) -> None:
 
 
 def test_a_document_id_identifies_one_server_at_one_snapshot() -> None:
-    """The id makes a re-push of the same snapshot idempotent."""
-    doc_id = _make_doc_id(
-        {
-            "meta.hub": "production",
-            "user.name": "a@x.edu",
-            "server.name": "gpu",
-            "server.started": "2026-07-02T10:00:00Z",
-            "meta.snapshot-time": 1782000000,
-        }
-    )
-    assert doc_id == "production|a@x.edu|gpu|2026-07-02T10:00:00Z|1782000000"
+    """Two documents sharing an id would overwrite one another in the index.
 
-
-def test_a_document_id_fills_in_missing_fields() -> None:
-    """Every component is present, so ids stay comparable."""
-    assert _make_doc_id({}) == (
-        "unknown-hub|unknown-user|default|unknown-started|unknown-snapshot"
-    )
+    The same document always gets the same id,
+    which is what lets a retried request overwrite rather than duplicate.
+    """
+    server: dict[str, Any] = {
+        "meta.hub": "production",
+        "user.name": "a@x.edu",
+        "server.name": "gpu",
+        "server.started": "2026-07-02T10:00:00Z",
+        "meta.snapshot-time": 1782000000,
+    }
+    others = [
+        server | {"meta.hub": "staging"},
+        server | {"user.name": "b@x.edu"},
+        server | {"server.name": ""},
+        server | {"server.started": "2026-07-02T11:00:00Z"},
+        server | {"meta.snapshot-time": 1782000300},
+    ]
+    ids = {_make_doc_id(document) for document in [server, *others]}
+    assert len(ids) == 1 + len(others)
+    assert _make_doc_id(dict(server)) == _make_doc_id(server)
 
 
 def test_the_elasticsearch_sink_uploads_and_reports_the_outcome(
